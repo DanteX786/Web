@@ -1,45 +1,49 @@
 import React, { useState } from 'react';
 import { Search, Plus, Edit2, Trash2, X, AlertTriangle, ChevronDown } from 'lucide-react';
+import { OrdenPedido } from '../types';
 
 export default function OrdenesPedido() {
-  const [ordenes, setOrdenes] = useState([
+  const [ordenes, setOrdenes] = useState<OrdenPedido[]>([
     { id: 'ORDP-001', remision: 'REM-001', fecha: '2026-06-24', estado: 'PENDIENTE' },
     { id: 'ORDP-002', remision: 'REM-002', fecha: '2026-06-29', estado: 'EN PROCESO' },
     { id: 'ORDP-003', remision: 'REM-003', fecha: '2026-06-30', estado: 'COMPLETADA' },
   ]);
 
-  const [search, setSearch] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [currentOrder, setCurrentOrder] = useState(null);
+  const [search, setSearch] = useState<string>('');
+  const [modalOpen, setModalOpen] = useState<boolean>(false);
+  const [editModalOpen, setEditModalOpen] = useState<boolean>(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState<boolean>(false);
+  const [currentOrder, setCurrentOrder] = useState<OrdenPedido | null>(null);
 
-  const [formData, setFormData] = useState({ remision: 'REM-001', fecha: '2026-09-19', estado: 'PENDIENTE' });
+  const [formData, setFormData] = useState<Omit<OrdenPedido, 'id'>>({ remision: 'REM-001', fecha: '2026-09-19', estado: 'PENDIENTE' });
 
-  const handleSaveNew = (e) => {
+  const handleSaveNew = (e: React.FormEvent) => {
     e.preventDefault();
     const newId = `ORDP-00${ordenes.length + 1}`;
     setOrdenes([...ordenes, { id: newId, ...formData }]);
     setModalOpen(false);
   };
 
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
-    setOrdenes(ordenes.map(o => o.id === currentOrder.id ? currentOrder : o));
-    setEditModalOpen(false);
+    if (currentOrder) {
+      setOrdenes(ordenes.map(o => o.id === currentOrder.id ? currentOrder : o));
+      setEditModalOpen(false);
+    }
   };
 
   const handleDelete = () => {
-    setOrdenes(ordenes.filter(o => o.id !== currentOrder.id));
-    setDeleteModalOpen(false);
+    if (currentOrder) {
+      setOrdenes(ordenes.filter(o => o.id !== currentOrder.id));
+      setDeleteModalOpen(false);
+    }
   };
 
-  const handleEstadoChange = (id, nuevoEstado) => {
+  const handleEstadoChange = (id: string, nuevoEstado: 'PENDIENTE' | 'EN PROCESO' | 'COMPLETADA' | 'CANCELADA') => {
     setOrdenes(ordenes.map(o => o.id === id ? { ...o, estado: nuevoEstado } : o));
   };
 
-  // Función para obtener los estilos dinámicos de color según el estado
-  const getEstadoStyle = (estado) => {
+  const getEstadoStyle = (estado: string) => {
     switch (estado) {
       case 'PENDIENTE':
         return 'bg-[#2a2312] text-[#FACC15] border border-[#3f3213]';
@@ -104,7 +108,7 @@ export default function OrdenesPedido() {
                   <div className="relative inline-block">
                     <select
                       value={ord.estado}
-                      onChange={(e) => handleEstadoChange(ord.id, e.target.value)}
+                      onChange={(e) => handleEstadoChange(ord.id, e.target.value as any)}
                       className={`appearance-none px-3.5 py-1.5 pr-8 rounded-full text-xs font-bold cursor-pointer outline-none transition-all ${getEstadoStyle(ord.estado)}`}
                     >
                       <option value="PENDIENTE" className="bg-[#181818] text-[#FACC15]">PENDIENTE</option>
@@ -156,7 +160,7 @@ export default function OrdenesPedido() {
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">ESTADO</label>
-                <select value={formData.estado} onChange={(e)=>setFormData({...formData, estado: e.target.value})} className="w-full bg-[#222] border border-[#333] rounded-xl px-3 py-2 text-sm focus:border-[#FACC15] outline-none">
+                <select value={formData.estado} onChange={(e)=>setFormData({...formData, estado: e.target.value as any})} className="w-full bg-[#222] border border-[#333] rounded-xl px-3 py-2 text-sm focus:border-[#FACC15] outline-none">
                   <option value="PENDIENTE">PENDIENTE</option>
                   <option value="EN PROCESO">EN PROCESO</option>
                   <option value="COMPLETADA">COMPLETADA</option>
@@ -196,7 +200,7 @@ export default function OrdenesPedido() {
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">ESTADO</label>
-                <select value={currentOrder.estado} onChange={(e)=>setCurrentOrder({...currentOrder, estado: e.target.value})} className="w-full bg-[#222] border border-[#333] rounded-xl px-3 py-2 text-sm focus:border-[#FACC15] outline-none">
+                <select value={currentOrder.estado} onChange={(e)=>setCurrentOrder({...currentOrder, estado: e.target.value as any})} className="w-full bg-[#222] border border-[#333] rounded-xl px-3 py-2 text-sm focus:border-[#FACC15] outline-none">
                   <option value="PENDIENTE">PENDIENTE</option>
                   <option value="EN PROCESO">EN PROCESO</option>
                   <option value="COMPLETADA">COMPLETADA</option>

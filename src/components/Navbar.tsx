@@ -1,10 +1,13 @@
 import React from 'react';
 import { Menu, Search, Bell, Sun, ChevronDown } from 'lucide-react';
 
-export default function Navbar({ onToggleSidebar }) {
+interface NavbarProps {
+  onToggleSidebar: () => void;
+}
+
+export default function Navbar({ onToggleSidebar }: NavbarProps) {
   return (
     <header className="h-16 bg-[#181818] border-b border-[#2a2a2a] px-6 flex items-center justify-between sticky top-0 z-30 shadow-md">
-      {/* Parte izquierda: Botón menú colapsable y Buscador */}
       <div className="flex items-center gap-4">
         <button 
           onClick={onToggleSidebar}
@@ -23,7 +26,6 @@ export default function Navbar({ onToggleSidebar }) {
         </div>
       </div>
 
-      {/* Parte derecha: Notificaciones, Modo Claro/Oscuro y Perfil */}
       <div className="flex items-center gap-3">
         <button className="w-10 h-10 bg-[#121212] border border-[#2c2c2c] rounded-full flex items-center justify-center text-gray-400 hover:text-white hover:border-[#FACC15] transition-all">
           <Bell size={16} />

@@ -5,8 +5,8 @@ import Proveedores from './components/Proveedores';
 import OrdenesPedido from './components/OrdenesPedido';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('proveedores');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [currentView, setCurrentView] = useState<string>('proveedores');
+  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true);
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
@@ -14,14 +14,12 @@ export default function App() {
 
   return (
     <div className="flex bg-[#121212] min-h-screen font-sans text-white">
-      {/* Sidebar con estado de visibilidad */}
       <Sidebar 
         currentView={currentView} 
         setCurrentView={setCurrentView} 
         isOpen={isSidebarOpen} 
       />
 
-      {/* Contenedor principal */}
       <div className="flex-1 flex flex-col min-w-0">
         <Navbar onToggleSidebar={toggleSidebar} />
         

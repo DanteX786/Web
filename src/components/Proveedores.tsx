@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
 import { Search, Plus, Edit2, Trash2, X, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Proveedor } from '../types';
 
 export default function Proveedores() {
-  const [proveedores, setProveedores] = useState([
+  const [proveedores, setProveedores] = useState<Proveedor[]>([
     { id: 'PROV-001', nit: '1923091231', nombre: 'TextilsCOL', contacto: 'Andres Cadavid', telefono: '23032193', estado: 'ACTIVO' },
     { id: 'PROV-002', nit: '1923091231', nombre: 'INSUMOMED', contacto: 'Axebiel Gayvils', telefono: '31239903', estado: 'ACTIVO' },
     { id: 'PROV-003', nit: '1923091231', nombre: 'HILOSAS', contacto: 'Emerson Aguemaya', telefono: '39138913', estado: 'INACTIVO' },
   ]);
 
-  const [search, setSearch] = useState('');
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [currentProv, setCurrentProv] = useState(null);
+  const [search, setSearch] = useState<string>('');
+  const [modalOpen, setModalOpen] = useState<boolean>(false);
+  const [editModalOpen, setEditModalOpen] = useState<boolean>(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState<boolean>(false);
+  const [currentProv, setCurrentProv] = useState<Proveedor | null>(null);
 
-  const [formData, setFormData] = useState({ nit: '', nombre: '', contacto: '', telefono: '', estado: 'ACTIVO' });
+  const [formData, setFormData] = useState<Omit<Proveedor, 'id'>>({ nit: '', nombre: '', contacto: '', telefono: '', estado: 'ACTIVO' });
 
-  const handleSaveNew = (e) => {
+  const handleSaveNew = (e: React.FormEvent) => {
     e.preventDefault();
     const newId = `PROV-00${proveedores.length + 1}`;
     setProveedores([...proveedores, { id: newId, ...formData }]);
@@ -24,18 +25,22 @@ export default function Proveedores() {
     setFormData({ nit: '', nombre: '', contacto: '', telefono: '', estado: 'ACTIVO' });
   };
 
-  const handleSaveEdit = (e) => {
+  const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
-    setProveedores(proveedores.map(p => p.id === currentProv.id ? currentProv : p));
-    setEditModalOpen(false);
+    if (currentProv) {
+      setProveedores(proveedores.map(p => p.id === currentProv.id ? currentProv : p));
+      setEditModalOpen(false);
+    }
   };
 
   const handleDelete = () => {
-    setProveedores(proveedores.filter(p => p.id !== currentProv.id));
-    setDeleteModalOpen(false);
+    if (currentProv) {
+      setProveedores(proveedores.filter(p => p.id !== currentProv.id));
+      setDeleteModalOpen(false);
+    }
   };
 
-  const handleEstadoChange = (id, nuevoEstado) => {
+  const handleEstadoChange = (id: string, nuevoEstado: 'ACTIVO' | 'INACTIVO') => {
     setProveedores(proveedores.map(p => p.id === id ? { ...p, estado: nuevoEstado } : p));
   };
 
@@ -93,7 +98,7 @@ export default function Proveedores() {
                   <div className="relative inline-block">
                     <select
                       value={prov.estado}
-                      onChange={(e) => handleEstadoChange(prov.id, e.target.value)}
+                      onChange={(e) => handleEstadoChange(prov.id, e.target.value as 'ACTIVO' | 'INACTIVO')}
                       className={`appearance-none px-3.5 py-1.5 pr-8 rounded-full text-xs font-bold cursor-pointer outline-none transition-all ${
                         prov.estado === 'ACTIVO' 
                           ? 'bg-[#132e1d] text-[#4ade80] border border-[#1e462d]' 
@@ -151,7 +156,7 @@ export default function Proveedores() {
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">ESTADO</label>
-                <select value={formData.estado} onChange={(e)=>setFormData({...formData, estado: e.target.value})} className="w-full bg-[#222] border border-[#333] rounded-xl px-3 py-2 text-sm focus:border-[#FACC15] outline-none">
+                <select value={formData.estado} onChange={(e)=>setFormData({...formData, estado: e.target.value as 'ACTIVO' | 'INACTIVO'})} className="w-full bg-[#222] border border-[#333] rounded-xl px-3 py-2 text-sm focus:border-[#FACC15] outline-none">
                   <option value="ACTIVO">Activo</option>
                   <option value="INACTIVO">Inactivo</option>
                 </select>
@@ -193,7 +198,7 @@ export default function Proveedores() {
               </div>
               <div>
                 <label className="text-xs text-gray-400 block mb-1">ESTADO</label>
-                <select value={currentProv.estado} onChange={(e)=>setCurrentProv({...currentProv, estado: e.target.value})} className="w-full bg-[#222] border border-[#333] rounded-xl px-3 py-2 text-sm focus:border-[#FACC15] outline-none">
+                <select value={currentProv.estado} onChange={(e)=>setCurrentProv({...currentProv, estado: e.target.value as 'ACTIVO' | 'INACTIVO'})} className="w-full bg-[#222] border border-[#333] rounded-xl px-3 py-2 text-sm focus:border-[#FACC15] outline-none">
                   <option value="ACTIVO">Activo</option>
                   <option value="INACTIVO">Inactivo</option>
                 </select>
