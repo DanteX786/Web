@@ -112,10 +112,18 @@ export default function Proveedores() {
                   </div>
                 </td>
                 <td className="p-4 flex justify-center gap-2">
-                  <button onClick={() => { setCurrentProv(prov); setEditModalOpen(true); }} className="p-2 border border-[#333] rounded-full hover:border-[#FACC15] text-[#FACC15] transition-all">
+                  <button 
+                    onClick={() => { setCurrentProv(prov); setEditModalOpen(true); }} 
+                    className="p-2 border border-[#FACC15] rounded-full hover:bg-[#FACC15]/10 text-[#FACC15] transition-all"
+                    title="Editar"
+                  >
                     <Edit2 size={14} />
                   </button>
-                  <button onClick={() => { setCurrentProv(prov); setDeleteModalOpen(true); }} className="p-2 border border-[#333] rounded-full hover:border-red-500 text-red-400 transition-all">
+                  <button 
+                    onClick={() => { setCurrentProv(prov); setDeleteModalOpen(true); }} 
+                    className="p-2 border border-[#FACC15] rounded-full hover:bg-[#FACC15]/10 text-[#FACC15] transition-all"
+                    title="Eliminar"
+                  >
                     <Trash2 size={14} />
                   </button>
                 </td>

@@ -46,15 +46,15 @@ export default function OrdenesPedido() {
   const getEstadoStyle = (estado: string) => {
     switch (estado) {
       case 'PENDIENTE':
-        return 'bg-[#2a2312] text-[#FACC15] border border-[#3f3213]';
+        return 'bg-[#152338] text-[#3b82f6] border border-[#1e3a8a]'; // Azul
       case 'EN PROCESO':
-        return 'bg-[#152338] text-[#3b82f6] border border-[#1e3a8a]';
+        return 'bg-[#2a2312] text-[#f97316] border border-[#7c2d12]'; // Naranja
       case 'COMPLETADA':
-        return 'bg-[#132e1d] text-[#4ade80] border border-[#1e462d]';
+        return 'bg-[#132e1d] text-[#4ade80] border border-[#1e462d]'; // Verde
       case 'CANCELADA':
-        return 'bg-[#3b1515] text-[#f87171] border border-[#521d1d]';
+        return 'bg-[#3b1515] text-[#f87171] border border-[#521d1d]'; // Rojo
       default:
-        return 'bg-[#2a2312] text-[#FACC15] border border-[#3f3213]';
+        return 'bg-[#152338] text-[#3b82f6] border border-[#1e3a8a]';
     }
   };
 
@@ -111,8 +111,8 @@ export default function OrdenesPedido() {
                       onChange={(e) => handleEstadoChange(ord.id, e.target.value as any)}
                       className={`appearance-none px-3.5 py-1.5 pr-8 rounded-full text-xs font-bold cursor-pointer outline-none transition-all ${getEstadoStyle(ord.estado)}`}
                     >
-                      <option value="PENDIENTE" className="bg-[#181818] text-[#FACC15]">PENDIENTE</option>
-                      <option value="EN PROCESO" className="bg-[#181818] text-[#3b82f6]">EN PROCESO</option>
+                      <option value="PENDIENTE" className="bg-[#181818] text-[#3b82f6]">PENDIENTE</option>
+                      <option value="EN PROCESO" className="bg-[#181818] text-[#f97316]">EN PROCESO</option>
                       <option value="COMPLETADA" className="bg-[#181818] text-[#4ade80]">COMPLETADA</option>
                       <option value="CANCELADA" className="bg-[#181818] text-[#f87171]">CANCELADA</option>
                     </select>
@@ -120,10 +120,18 @@ export default function OrdenesPedido() {
                   </div>
                 </td>
                 <td className="p-4 flex justify-center gap-2">
-                  <button onClick={() => { setCurrentOrder(ord); setEditModalOpen(true); }} className="p-2 border border-[#333] rounded-full hover:border-[#FACC15] text-[#FACC15] transition-all">
+                  <button 
+                    onClick={() => { setCurrentOrder(ord); setEditModalOpen(true); }} 
+                    className="p-2 border border-[#FACC15] rounded-full hover:bg-[#FACC15]/10 text-[#FACC15] transition-all"
+                    title="Editar"
+                  >
                     <Edit2 size={14} />
                   </button>
-                  <button onClick={() => { setCurrentOrder(ord); setDeleteModalOpen(true); }} className="p-2 border border-[#333] rounded-full hover:border-red-500 text-red-400 transition-all">
+                  <button 
+                    onClick={() => { setCurrentOrder(ord); setDeleteModalOpen(true); }} 
+                    className="p-2 border border-[#FACC15] rounded-full hover:bg-[#FACC15]/10 text-[#FACC15] transition-all"
+                    title="Eliminar"
+                  >
                     <Trash2 size={14} />
                   </button>
                 </td>
@@ -237,4 +245,3 @@ export default function OrdenesPedido() {
     </div>
   );
 }
-
