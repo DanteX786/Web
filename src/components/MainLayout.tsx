@@ -9,6 +9,10 @@ import {
   User, Sliders
 } from "lucide-react";
 
+// Importamos los logos subiendo un nivel desde 'components' hacia 'assets'
+import logoBlanco from '../assets/logo blanco.jpg';
+import logoNegro from '../assets/logo negro.jpg';
+
 interface MainLayoutProps {
   children: React.ReactNode;
   currentView: string;
@@ -34,10 +38,11 @@ export default function MainLayout({
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   
-  // Grupos colapsables del sidebar (agregamos 'parametros' independiente)
+  // Grupos colapsables del sidebar
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    produccion: true,
-    parametros: true,
+    inventario: true,
+    produccion: false,
+    parametros: false,
     comercial: false,
     configuracion: false
   });
@@ -141,7 +146,7 @@ export default function MainLayout({
             fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
             color: `${GOLD}80`, paddingLeft: 12, marginTop: 8, marginBottom: 4
           }}>
-            {groupKey === 'produccion' ? 'Producción' : groupKey === 'parametros' ? 'Configuración' : groupKey === 'comercial' ? 'Comercial' : 'Sistema'}
+            {groupKey === 'inventario' ? 'Inventario' : groupKey === 'produccion' ? 'Producción' : groupKey === 'parametros' ? 'Configuración' : groupKey === 'comercial' ? 'Comercial' : 'Sistema'}
           </div>
         )}
         
@@ -206,20 +211,32 @@ export default function MainLayout({
           {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        <div style={{ padding: '20px 16px 16px', borderBottom: `1px solid ${GOLD}20`, display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* LOGO SECTION - Altura ampliada para hacer el logo más grande */}
+        <div style={{ padding: '16px 8px', borderBottom: `1px solid ${GOLD}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 85 }}>
           {collapsed ? (
             <div style={{
-              width: 32, height: 32, borderRadius: '50%', background: `${GOLD}15`,
-              color: GOLD, fontWeight: 800, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto'
+              width: 40, height: 40, borderRadius: '50%', background: `${GOLD}15`,
+              color: GOLD, fontWeight: 800, fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
               E
             </div>
           ) : (
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 800, color: fg, letterSpacing: '0.05em' }}>ESLABÓN</div>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 700, color: GOLD, marginTop: 2 }}>
-                Taller CDS
-              </div>
+            <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              {dark ? (
+                // Logo para Modo Dark (más grande)
+                <img 
+                  src={logoNegro} 
+                  alt="Stitcher Taller CDS" 
+                  style={{ width: '100%', maxHeight: 65, objectFit: 'contain' }} 
+                />
+              ) : (
+                // Logo para Modo Light (más grande)
+                <img 
+                  src={logoBlanco} 
+                  alt="Stitcher Taller CDS" 
+                  style={{ width: '100%', maxHeight: 65, objectFit: 'contain' }} 
+                />
+              )}
             </div>
           )}
         </div>
@@ -231,17 +248,18 @@ export default function MainLayout({
           {renderNavBtn("dashboard", "Dashboard", LayoutDashboard)}
 
           {/* Grupo INVENTARIO */}
-          {!collapsed && <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: `${GOLD}80`, paddingLeft: 12, marginTop: 8, marginBottom: 4 }}>Inventario</div>}
-          {renderNavBtn("tipoInsumos", "Tipo de Insumo", Tag)}
-          {renderNavBtn("insumos", "Insumos", Package)}
-          {renderNavBtn("compras", "Compras", ShoppingCart)}
+          {renderAccordionGroup("inventario", "Inventario", Package, [
+            { id: "tipoInsumos", label: "Tipo de Insumo", icon: Tag },
+            { id: "insumos", label: "Insumos", icon: Package },
+            { id: "compras", label: "Compras", icon: ShoppingCart },
+          ])}
 
-          {/* Grupo PRODUCCIÓN (Solo Gestión Producción) */}
+          {/* Grupo PRODUCCIÓN */}
           {renderAccordionGroup("produccion", "Producción", Factory, [
             { id: "produccion", label: "Gestión Producción", icon: Factory },
           ])}
 
-          {/* Grupo ADM. DE PARÁMETROS (Separado e independiente con Tipo de Pieza y Tipo de Máquina) */}
+          {/* Grupo ADM. DE PARÁMETROS */}
           {renderAccordionGroup("parametros", "Adm. de Parámetros", Sliders, [
             { id: "catalogoPiezas", label: "Tipo de Pieza", icon: Scissors },
             { id: "tiposMaquinaria", label: "Tipo de Máquina", icon: Wrench },

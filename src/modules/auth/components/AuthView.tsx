@@ -82,16 +82,15 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
       <div style={{ width: '100%', maxWidth: 480 }}>
         
-        {/* LOGO SUPERIOR */}
-        <div style={{ textAlign: 'center', marginBottom: 20 }}>
-          <div style={{
-            display: 'inline-block', background: '#FFFFFF', borderRadius: 12,
-            border: '1px solid rgba(201,162,39,0.3)', padding: '12px 16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-          }}>
-            <h2 style={{ margin: 0, fontSize: 22, fontWeight: 900, color: '#121212', letterSpacing: 1.5 }}>ESLABÓN</h2>
-          </div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: 8 }}>
-            Sistema de Gestión — Taller CDS
+        {/* LOGO SUPERIOR EXTRA GRANDE Y LIMPIO */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <img 
+            src="/logo blanco.jpg" 
+            alt="Logo Stitcher" 
+            style={{ height: 100, width: 'auto', display: 'inline-block', objectFit: 'contain' }} 
+          />
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#6B6B6B', textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 10 }}>
+            Sistema de Gestión — Stitcher
           </div>
         </div>
 
@@ -122,7 +121,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
                     <Mail size={15} color="#6B6B6B" style={{ position: 'absolute', left: 12 }} />
                     <input 
                       type="email" 
-                      placeholder="admin@eslabon.com"
+                      placeholder="admin@stitcher.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       style={{ width: '100%', padding: '10px 12px 10px 38px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)', background: '#F3F3F5', fontSize: 14, outline: 'none' }}
@@ -175,7 +174,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
 
               <div style={{ marginTop: 20, background: '#C9A22708', border: '1px dashed #C9A22730', borderRadius: 8, padding: 12 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: GOLD, textTransform: 'uppercase', marginBottom: 4 }}>Acceso demo</div>
-                <div style={{ fontSize: 12, color: '#6B6B6B' }}>admin@eslabon.com / Admin123</div>
+                <div style={{ fontSize: 12, color: '#6B6B6B' }}>admin@stitcher.com / Admin123</div>
               </div>
             </div>
           )}

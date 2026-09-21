@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { Toaster } from 'sonner';
 import MainLayout from './components/MainLayout';
-import {AuthView} from './modules/auth/components/AuthView';
-import {ProduccionView} from './modules/produccion/ProduccionView';
+import { AuthView } from './modules/auth/components/AuthView';
+import { ProduccionView } from './modules/produccion/ProduccionView';
 import TiposPieza from './modules/parametros/TiposPieza';
 import TiposMaquinaria from './modules/parametros/TiposMaquinaria';
+import { TipoInsumoView } from './modules/inventario/Tipo_Insumo_view';
+import { InsumosView } from './modules/inventario/Insumo_view';
+import { ComprasView } from './modules/inventario/Compras_View';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -32,8 +35,13 @@ export default function App() {
     >
       <Toaster position="top-right" richColors />
       
-      {/* Módulo de Producción - CORREGIDO */}
+      {/* Módulo de Producción */}
       {currentView === 'produccion' && <ProduccionView dark={dark} />}
+
+      {/* Módulos de Inventario (Nuevos) */}
+      {currentView === 'tipoInsumos' && <TipoInsumoView dark={dark} />}
+      {currentView === 'insumos' && <InsumosView dark={dark} />}
+      {currentView === 'compras' && <ComprasView dark={dark} />}
 
       {/* Módulo: Administración de Parámetros */}
       {currentView === 'catalogoPiezas' && <TiposPieza dark={dark} />}
