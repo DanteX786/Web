@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, Tag, Package, ShoppingCart,
@@ -10,8 +12,8 @@ import {
 } from "lucide-react";
 
 // Importamos los logos subiendo un nivel desde 'components' hacia 'assets'
-import logoBlanco from '../assets/logo blanco.jpg';
-import logoNegro from '../assets/logo negro.jpg';
+import logo_blanco from '../assets/logo_blanco.jpg';
+import logo_negro from '../assets/logo_negro.jpg';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -211,7 +213,7 @@ export default function MainLayout({
           {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
 
-        {/* LOGO SECTION - Altura ampliada para hacer el logo más grande */}
+        {/* LOGO SECTION */}
         <div style={{ padding: '16px 8px', borderBottom: `1px solid ${GOLD}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 85 }}>
           {collapsed ? (
             <div style={{
@@ -223,19 +225,9 @@ export default function MainLayout({
           ) : (
             <div style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               {dark ? (
-                // Logo para Modo Dark (más grande)
-                <img 
-                  src={logoNegro} 
-                  alt="Stitcher Taller CDS" 
-                  style={{ width: '100%', maxHeight: 65, objectFit: 'contain' }} 
-                />
+                <img src={logo_negro} alt="Stitcher Taller CDS" style={{ width: '100%', maxHeight: 65, objectFit: 'contain' }} />
               ) : (
-                // Logo para Modo Light (más grande)
-                <img 
-                  src={logoBlanco} 
-                  alt="Stitcher Taller CDS" 
-                  style={{ width: '100%', maxHeight: 65, objectFit: 'contain' }} 
-                />
+                <img src={logo_blanco} alt="Stitcher Taller CDS" style={{ width: '100%', maxHeight: 65, objectFit: 'contain' }} />
               )}
             </div>
           )}
@@ -247,11 +239,12 @@ export default function MainLayout({
           {!collapsed && <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: `${GOLD}80`, paddingLeft: 12, marginTop: 4, marginBottom: 4 }}>Principal</div>}
           {renderNavBtn("dashboard", "Dashboard", LayoutDashboard)}
 
-          {/* Grupo INVENTARIO */}
+          {/* Grupo INVENTARIO (Incluyendo Insumos Enviados) */}
           {renderAccordionGroup("inventario", "Inventario", Package, [
             { id: "tipoInsumos", label: "Tipo de Insumo", icon: Tag },
             { id: "insumos", label: "Insumos", icon: Package },
             { id: "compras", label: "Compras", icon: ShoppingCart },
+            { id: "insumosEnviados", label: "Insumos Enviados", icon: Send },
           ])}
 
           {/* Grupo PRODUCCIÓN */}
@@ -265,7 +258,7 @@ export default function MainLayout({
             { id: "tiposMaquinaria", label: "Tipo de Máquina", icon: Wrench },
           ])}
 
-          {/* Grupo COMERCIAL */}
+          {/* Grupo COMERCIAL (Incluyendo Orden de Pedido) */}
           {renderAccordionGroup("comercial", "Comercial", TrendingUp, [
             { id: "clientes", label: "Clientes", icon: Users },
             { id: "remisiones", label: "Remisiones", icon: FileText },
@@ -274,7 +267,7 @@ export default function MainLayout({
             { id: "ventas", label: "Ventas", icon: BarChart2 },
           ])}
 
-          {/* Grupo CONFIGURACIÓN */}
+          {/* Grupo CONFIGURACIÓN (Incluyendo Proveedores) */}
           {renderAccordionGroup("configuracion", "Configuración", SlidersHorizontal, [
             { id: "permisos", label: "Permisos", icon: Shield },
             { id: "roles", label: "Roles", icon: Key },
