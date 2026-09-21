@@ -8,6 +8,9 @@ import TiposMaquinaria from './modules/parametros/TiposMaquinaria';
 import { TipoInsumoView } from './modules/inventario/Tipo_Insumo_view';
 import { InsumosView } from './modules/inventario/Insumo_view';
 import { ComprasView } from './modules/inventario/Compras_View';
+import InsumosEnviados from './modules/inventario/InsumosEnviados';
+import OrdenesPedido from './modules/comercial/OrdenesPedido';
+import Proveedores from './modules/configuracion/Proveedores';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -35,21 +38,22 @@ export default function App() {
     >
       <Toaster position="top-right" richColors />
       
-      {/* Módulo de Producción */}
       {currentView === 'produccion' && <ProduccionView dark={dark} />}
 
-      {/* Módulos de Inventario (Nuevos) */}
       {currentView === 'tipoInsumos' && <TipoInsumoView dark={dark} />}
       {currentView === 'insumos' && <InsumosView dark={dark} />}
       {currentView === 'compras' && <ComprasView dark={dark} />}
+      {currentView === 'insumosEnviados' && <InsumosEnviados dark={dark} />}
 
-      {/* Módulo: Administración de Parámetros */}
+      {currentView === 'ordenPedido' && <OrdenesPedido dark={dark} />}
+
+      {currentView === 'proveedores' && <Proveedores dark={dark} />}
+
       {currentView === 'catalogoPiezas' && <TiposPieza dark={dark} />}
       {currentView === 'tiposMaquinaria' && <TiposMaquinaria dark={dark} />}
       
-      {/* Dashboard por defecto */}
       {currentView === 'dashboard' && (
-        <div style={{ color: dark ? '#F8F9FA' : '#121212', fontSize: 24, fontWeight: 800 }}>
+        <div style={{ padding: 24, color: dark ? '#F8F9FA' : '#121212', fontSize: 24, fontWeight: 800 }}>
           Dashboard Principal de Eslabón
         </div>
       )}
