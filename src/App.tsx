@@ -12,9 +12,14 @@ import InsumosEnviados from './modules/inventario/InsumosEnviados';
 import OrdenesPedido from './modules/comercial/OrdenesPedido';
 import Proveedores from './modules/configuracion/Proveedores';
 
+// IMPORTACIÓN DE MÓDULOS DE COMERCIAL
+import { ClientesView } from './modules/comercial/clientes';
+import { RegistroDiarioView } from './modules/comercial/registro_diario';
+import { RemisionesView } from './modules/comercial/RemisionesView';
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentView, setCurrentView] = useState<string>('produccion');
+  const [currentView, setCurrentView] = useState<string>('remisiones'); // Se establece remisiones por defecto para pruebas
   const [dark, setDark] = useState<boolean>(false);
 
   if (!isAuthenticated) {
@@ -38,17 +43,23 @@ export default function App() {
     >
       <Toaster position="top-right" richColors />
       
+      {/* MÓDULO PRODUCCIÓN */}
       {currentView === 'produccion' && <ProduccionView dark={dark} />}
 
+      {/* MÓDULO INVENTARIO */}
       {currentView === 'tipoInsumos' && <TipoInsumoView dark={dark} />}
       {currentView === 'insumos' && <InsumosView dark={dark} />}
       {currentView === 'compras' && <ComprasView dark={dark} />}
       {currentView === 'insumosEnviados' && <InsumosEnviados dark={dark} />}
 
+      {/* MÓDULO COMERCIAL */}
       {currentView === 'ordenPedido' && <OrdenesPedido dark={dark} />}
+      {currentView === 'clientes' && <ClientesView dark={dark} />}
+      {currentView === 'registroDiario' && <RegistroDiarioView dark={dark} />}
+      {currentView === 'remisiones' && <RemisionesView dark={dark} />}
 
+      {/* MÓDULO CONFIGURACIÓN Y PARÁMETROS */}
       {currentView === 'proveedores' && <Proveedores dark={dark} />}
-
       {currentView === 'catalogoPiezas' && <TiposPieza dark={dark} />}
       {currentView === 'tiposMaquinaria' && <TiposMaquinaria dark={dark} />}
       
