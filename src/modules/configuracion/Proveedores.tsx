@@ -111,6 +111,13 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
     });
   };
 
+  const handleStateChangeInline = (id: string, nuevoEstado: EstadoProveedor) => {
+    setData(data.map(d => d.id === id ? { ...d, estado: nuevoEstado } : d));
+    toast.success(`Estado actualizado a "${nuevoEstado}"`, {
+      style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
+    });
+  };
+
   const getEstadoBadgeStyle = (estado: EstadoProveedor) => {
     switch (estado) {
       case "Activo":   return { bg: "#DCF7E6", color: "#28A745" };
@@ -193,10 +200,22 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
                     <td style={{ padding: '12px 16px', verticalAlign: 'middle', fontSize: 13, fontFamily: 'monospace', color: subtle }}>{row.nit}</td>
                     <td style={{ padding: '12px 16px', verticalAlign: 'middle', fontSize: 13, color: subtle }}>{row.telefono}</td>
                     <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
-                      <span style={{ background: badgeStyle.bg, color: badgeStyle.color, padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        {row.estado}
-                        <ChevronDown size={13} color={badgeStyle.color} />
-                      </span>
+                      <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+                        <select
+                          value={row.estado}
+                          onChange={(e) => handleStateChangeInline(row.id, e.target.value as EstadoProveedor)}
+                          style={{
+                            background: badgeStyle.bg, color: badgeStyle.color, border: 'none',
+                            borderRadius: 999, padding: '5px 24px 5px 12px', fontSize: 12,
+                            fontWeight: 700, cursor: 'pointer', outline: 'none',
+                            fontFamily: 'Montserrat, sans-serif', appearance: 'none'
+                          }}
+                        >
+                          <option value="Activo">Activo</option>
+                          <option value="Inactivo">Inactivo</option>
+                        </select>
+                        <ChevronDown size={13} color={badgeStyle.color} style={{ position: 'absolute', right: 8, pointerEvents: 'none' }} />
+                      </div>
                     </td>
                     <td style={{ padding: '12px 16px', verticalAlign: 'middle', textAlign: 'right' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
