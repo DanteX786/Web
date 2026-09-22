@@ -13,13 +13,13 @@ import OrdenesPedido from './modules/comercial/OrdenesPedido';
 import Proveedores from './modules/configuracion/Proveedores';
 
 // IMPORTACIÓN DE MÓDULOS DE COMERCIAL
-import { ClientesView } from './modules/comercial/clientes';
-import { RegistroDiarioView } from './modules/comercial/registro_diario';
+import { ClientesView } from './modules/comercial/ClientesView';
+import { RegistroDiarioView } from './modules/comercial/RegistroDiarioView';
 import { RemisionesView } from './modules/comercial/RemisionesView';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentView, setCurrentView] = useState<string>('remisiones'); // Se establece remisiones por defecto para pruebas
+  const [currentView, setCurrentView] = useState<string>('remisiones');
   const [dark, setDark] = useState<boolean>(false);
 
   if (!isAuthenticated) {
