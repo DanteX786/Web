@@ -17,6 +17,15 @@ import { ClientesView } from './modules/comercial/ClientesView';
 import { RegistroDiarioView } from './modules/comercial/RegistroDiarioView';
 import { RemisionesView } from './modules/comercial/RemisionesView';
 
+//empleados
+import EmpleadosView from './modules/configuracion/Empleados';
+
+//ROles
+import Roles from './modules/configuracion/Roles';
+
+//Ventas
+import Ventas from './modules/comercial/Ventas';
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentView, setCurrentView] = useState<string>('remisiones');
@@ -62,7 +71,9 @@ export default function App() {
       {currentView === 'proveedores' && <Proveedores dark={dark} />}
       {currentView === 'catalogoPiezas' && <TiposPieza dark={dark} />}
       {currentView === 'tiposMaquinaria' && <TiposMaquinaria dark={dark} />}
-      
+      {currentView === 'empleados' && <EmpleadosView dark={dark} />}
+      {currentView === 'roles' && <Roles dark={dark} />}
+      {currentView === 'ventas' && <Ventas dark={dark} />}
       {currentView === 'dashboard' && (
         <div style={{ padding: 24, color: dark ? '#F8F9FA' : '#121212', fontSize: 24, fontWeight: 800 }}>
           Dashboard Principal de Eslabón
