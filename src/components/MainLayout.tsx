@@ -330,7 +330,7 @@ export default function MainLayout({
           
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: fg, textTransform: 'capitalize' }}>
-              {currentView.replace(/([A-Z])/g, ' $1')}
+              {currentView === 'miPerfil' ? 'Mi Perfil' : currentView.replace(/([A-Z])/g, ' $1')}
             </div>
           </div>
 
@@ -448,14 +448,38 @@ export default function MainLayout({
                     </div>
                   </div>
 
+                  {/* NUEVO BOTÓN: MI PERFIL */}
+                  <div style={{ padding: 8 }}>
+                    <button
+                      onClick={() => {
+                        setCurrentView('miPerfil');
+                        setProfileOpen(false);
+                      }}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '8px 12px', background: 'transparent', border: 'none', borderRadius: 8,
+                        color: fg, fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = `${GOLD}15`}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <User size={15} color={GOLD} /> Mi Perfil
+                    </button>
+                  </div>
+
+                  {/* BOTÓN: CERRAR SESIÓN */}
                   <div style={{ borderTop: `1px solid ${borderCol}`, padding: 8 }}>
                     <button
                       onClick={onLogout}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 10,
                         padding: '8px 12px', background: 'transparent', border: 'none', borderRadius: 8,
-                        color: DANGER, fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left'
+                        color: DANGER, fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                        transition: 'background 0.2s'
                       }}
+                      onMouseEnter={(e) => e.currentTarget.style.background = `${DANGER}15`}
+                      onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                     >
                       <LogOut size={15} color={DANGER} /> Cerrar Sesión
                     </button>
