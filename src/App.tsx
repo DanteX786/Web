@@ -17,14 +17,18 @@ import { ClientesView } from './modules/comercial/ClientesView';
 import { RegistroDiarioView } from './modules/comercial/RegistroDiarioView';
 import { RemisionesView } from './modules/comercial/RemisionesView';
 
-//empleados
+// Empleados
 import EmpleadosView from './modules/configuracion/Empleados';
 
-//ROles
+// Roles
 import Roles from './modules/configuracion/Roles';
 
-//Ventas
+// Ventas
 import Ventas from './modules/comercial/Ventas';
+
+// IMPORTACIÓN DE MI PERFIL
+// Ajusta la ruta dependiendo de dónde guardaste exactamente el archivo MiPerfil.tsx
+import MiPerfil from './modules/auth/components/MiPerfil';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -47,7 +51,7 @@ export default function App() {
       dark={dark}
       setDark={setDark}
       onLogout={() => setIsAuthenticated(false)}
-      userName="Juan Valle"
+      userName="Juan Camilo"
       userRole="Administrador"
     >
       <Toaster position="top-right" richColors />
@@ -66,6 +70,7 @@ export default function App() {
       {currentView === 'clientes' && <ClientesView dark={dark} />}
       {currentView === 'registroDiario' && <RegistroDiarioView dark={dark} />}
       {currentView === 'remisiones' && <RemisionesView dark={dark} />}
+      {currentView === 'ventas' && <Ventas dark={dark} />}
 
       {/* MÓDULO CONFIGURACIÓN Y PARÁMETROS */}
       {currentView === 'proveedores' && <Proveedores dark={dark} />}
@@ -73,7 +78,15 @@ export default function App() {
       {currentView === 'tiposMaquinaria' && <TiposMaquinaria dark={dark} />}
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
       {currentView === 'roles' && <Roles dark={dark} />}
-      {currentView === 'ventas' && <Ventas dark={dark} />}
+      
+      {/* MI PERFIL */}
+      {currentView === 'miPerfil' && (
+        <MiPerfil 
+          dark={dark} 
+          currentUser={{ nombre: "Juan Camilo", rol: "Administrador" }} 
+        />
+      )}
+
       {currentView === 'dashboard' && (
         <div style={{ padding: 24, color: dark ? '#F8F9FA' : '#121212', fontSize: 24, fontWeight: 800 }}>
           Dashboard Principal de Eslabón
