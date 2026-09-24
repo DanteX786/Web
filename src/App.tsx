@@ -26,6 +26,8 @@ import Roles from './modules/configuracion/Roles';
 //Ventas
 import Ventas from './modules/comercial/Ventas';
 
+import { DashboardPage } from './modules/principal/Dashboard';
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentView, setCurrentView] = useState<string>('remisiones');
@@ -74,11 +76,7 @@ export default function App() {
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
       {currentView === 'roles' && <Roles dark={dark} />}
       {currentView === 'ventas' && <Ventas dark={dark} />}
-      {currentView === 'dashboard' && (
-        <div style={{ padding: 24, color: dark ? '#F8F9FA' : '#121212', fontSize: 24, fontWeight: 800 }}>
-          Dashboard Principal de Eslabón
-        </div>
-      )}
+      {currentView === 'dashboard' && <DashboardPage dark={dark} />}
     </MainLayout>
   );
 }
