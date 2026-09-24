@@ -26,9 +26,12 @@ import Roles from './modules/configuracion/Roles';
 // Ventas
 import Ventas from './modules/comercial/Ventas';
 
+
+import { DashboardPage } from './modules/principal/Dashboard'
 // IMPORTACIÓN DE MI PERFIL
 // Ajusta la ruta dependiendo de dónde guardaste exactamente el archivo MiPerfil.tsx
 import MiPerfil from './modules/auth/components/MiPerfil';
+
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -78,6 +81,9 @@ export default function App() {
       {currentView === 'tiposMaquinaria' && <TiposMaquinaria dark={dark} />}
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
       {currentView === 'roles' && <Roles dark={dark} />}
+
+      {currentView === 'ventas' && <Ventas dark={dark} />}
+      {currentView === 'dashboard' && <DashboardPage dark={dark} />}
       
       {/* MI PERFIL */}
       {currentView === 'miPerfil' && (
@@ -92,6 +98,7 @@ export default function App() {
           Dashboard Principal de Eslabón
         </div>
       )}
+
     </MainLayout>
   );
 }
