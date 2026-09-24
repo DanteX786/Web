@@ -17,6 +17,7 @@ import { ClientesView } from './modules/comercial/ClientesView';
 import { RegistroDiarioView } from './modules/comercial/RegistroDiarioView';
 import { RemisionesView } from './modules/comercial/RemisionesView';
 
+<<<<<<< Updated upstream
 // Empleados
 import EmpleadosView from './modules/configuracion/Empleados';
 
@@ -32,10 +33,19 @@ import { DashboardPage } from './modules/principal/Dashboard'
 // Ajusta la ruta dependiendo de dónde guardaste exactamente el archivo MiPerfil.tsx
 import MiPerfil from './modules/auth/components/MiPerfil';
 
+=======
+// Empleados y Roles
+import EmpleadosView from './modules/configuracion/Empleados';
+import Roles from './modules/configuracion/Roles';
+import Ventas from './modules/comercial/Ventas';
+
+// IMPORTACIÓN CORRECTA CON LLAVES {}
+import { DashboardView } from './modules/principal/Dashboard';
+>>>>>>> Stashed changes
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentView, setCurrentView] = useState<string>('remisiones');
+  const [currentView, setCurrentView] = useState<string>('dashboard');
   const [dark, setDark] = useState<boolean>(false);
 
   if (!isAuthenticated) {
@@ -83,6 +93,7 @@ export default function App() {
       {currentView === 'roles' && <Roles dark={dark} />}
 
       {currentView === 'ventas' && <Ventas dark={dark} />}
+<<<<<<< Updated upstream
       {currentView === 'dashboard' && <DashboardPage dark={dark} />}
       
       {/* MI PERFIL */}
@@ -99,6 +110,11 @@ export default function App() {
         </div>
       )}
 
+=======
+      
+      {/* RENDERIZADO DEL DASHBOARD */}
+      {currentView === 'dashboard' && <DashboardView dark={dark} />}
+>>>>>>> Stashed changes
     </MainLayout>
   );
 }
