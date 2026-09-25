@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Plus, Trash2, Pencil, X, Search, AlertTriangle 
 } from 'lucide-react';
@@ -102,56 +102,6 @@ export const Field: React.FC<{ label: string; dark?: boolean; children: React.Re
   </div>
 );
 
-export const ModuleHeader: React.FC<{
-  title: string;
-  subtitle: string;
-  onAdd: () => void;
-  addLabel: string;
-  search: string;
-  onSearch: (val: string) => void;
-  dark?: boolean;
-}> = ({ title, subtitle, onAdd, addLabel, search, onSearch, dark }) => {
-  const fg = dark ? '#F8F9FA' : '#121212';
-  const subtle = dark ? '#9A9A9A' : '#6B6B6B';
-  const surfaceBg = dark ? '#252525' : '#F8F8F8';
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-      <div>
-        <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: fg, fontFamily: 'Montserrat, sans-serif' }}>{title}</h2>
-        <p style={{ fontSize: 13, color: subtle, margin: 0, fontFamily: 'Montserrat, sans-serif' }}>{subtitle}</p>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
-          <input
-            type="text"
-            placeholder="Buscar..."
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            style={{
-              padding: '8px 12px 8px 36px', borderRadius: 8,
-              border: `1px solid ${dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
-              background: surfaceBg, color: fg, fontSize: 13, outline: 'none',
-              fontFamily: 'Montserrat, sans-serif'
-            }}
-          />
-        </div>
-        <button
-          onClick={onAdd}
-          style={{
-            background: `linear-gradient(135deg, #C9A227, ${GOLD}, ${GOLD_LIGHT})`,
-            color: '#121212', fontWeight: 700, fontSize: 14, borderRadius: 10,
-            padding: '8px 16px', border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Montserrat, sans-serif'
-          }}
-        >
-          <Plus size={16} /> {addLabel}
-        </button>
-      </div>
-    </div>
-  );
-};
-
 export const ConfirmDelete: React.FC<{
   onCancel: () => void;
   onConfirm: () => void;
@@ -225,6 +175,9 @@ interface RegistroDiarioViewProps {
 
 export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = false }) => {
   const [busqueda, setBusqueda] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
   const [registros, setRegistros] = useState<RegistroDiario[]>([
     { id: 'REG-001', idEmpleado: 'EMP-001', idPieza: 'TIP-001', idProduccion: 'PRD-001', cantidadRealizada: 20, fecha: '2026-06-26' },
     { id: 'REG-002', idEmpleado: 'EMP-002', idPieza: 'TIP-002', idProduccion: 'PRD-001', cantidadRealizada: 30, fecha: '2026-06-26' },
@@ -247,6 +200,17 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
   const [formProduccion, setFormProduccion] = useState('PRD-001 — ORD-001');
   const [formCantidad, setFormCantidad] = useState(0);
   const [formFecha, setFormFecha] = useState('2026-09-22');
+
+  // Cerrar el desplegable si se hace clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const abrirFormulario = (reg?: RegistroDiario) => {
     if (reg) {
@@ -272,7 +236,6 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
       toast.error('La cantidad realizada no puede ser negativa');
       return;
     }
-
     if (registroEditar) {
       setRegistros(registros.map(r => r.id === registroEditar.id ? {
         ...r,
@@ -300,13 +263,21 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
     setModalForm(false);
   };
 
-  const registrosFiltrados = registros.filter(r =>
-    r.id.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.idEmpleado.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.idPieza.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.idProduccion.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.fecha.includes(busqueda)
-  );
+  // Filtrado optimizado por ID de registro (similar al filtro por ID de clientes)
+  const registrosFiltrados = registros.filter(r => {
+    const query = busqueda.toLowerCase().trim();
+    if (!query) return true;
+    const idLimpio = r.id.toLowerCase();
+    const numeroBusqueda = query.replace(/^reg-?0*/i, '');
+    return (
+      idLimpio.includes(query) ||
+      (numeroBusqueda !== '' && idLimpio.includes(numeroBusqueda)) ||
+      r.idEmpleado.toLowerCase().includes(query) ||
+      r.idPieza.toLowerCase().includes(query) ||
+      r.idProduccion.toLowerCase().includes(query) ||
+      r.fecha.includes(query)
+    );
+  });
 
   const bg = dark ? "#121212" : "#F8F9FA";
   const fg = dark ? "#F8F9FA" : "#121212";
@@ -318,15 +289,81 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
   return (
     <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif' }}>
       
-      <ModuleHeader
-        title="Registro Diario"
-        subtitle="Control diario de producción por empleado y pieza"
-        onAdd={() => abrirFormulario()}
-        addLabel="Nuevo registro"
-        search={busqueda}
-        onSearch={setBusqueda}
-        dark={dark}
-      />
+      {/* HEADER CON BUSCADOR DESPLEGABLE */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: fg, fontFamily: 'Montserrat, sans-serif' }}>Registro Diario</h2>
+          <p style={{ fontSize: 13, color: subtle, margin: 0, fontFamily: 'Montserrat, sans-serif' }}>Control diario de producción por empleado y pieza</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          
+          {/* CONTENEDOR BUSCADOR CON SUGERENCIAS FLOTANTES */}
+          <div ref={searchRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Search size={14} color={subtle} style={{ position: 'absolute', left: 12, zIndex: 2 }} />
+            <input
+              type="text"
+              placeholder="Buscar por ID (ej. 1, REG-001)..."
+              value={busqueda}
+              onChange={(e) => {
+                setBusqueda(e.target.value);
+                setShowDropdown(true);
+              }}
+              onFocus={() => setShowDropdown(true)}
+              style={{
+                padding: '8px 12px 8px 36px', borderRadius: 8,
+                border: `1px solid ${dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
+                background: inputBg, color: fg, fontSize: 13, outline: 'none',
+                fontFamily: 'Montserrat, sans-serif', width: 240
+              }}
+            />
+            {/* MENÚ DESPLEGABLE HACIA ABAJO CON OPCIONES */}
+            {showDropdown && registrosFiltrados.length > 0 && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
+                background: cardBg, border: `1px solid ${GOLD}40`, borderRadius: 10,
+                boxShadow: '0 10px 25px rgba(0,0,0,0.2)', zIndex: 100, maxHeight: 200, overflowY: 'auto'
+              }}>
+                {registrosFiltrados.map((reg) => (
+                  <div
+                    key={reg.id}
+                    onClick={() => {
+                      setBusqueda(reg.id);
+                      setShowDropdown(false);
+                    }}
+                    style={{
+                      padding: '10px 12px', fontSize: 12, cursor: 'pointer',
+                      borderBottom: `1px solid ${borderNormal}`, display: 'flex',
+                      alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = `${GOLD}15`; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+                  >
+                    <span style={{ background: GOLD + "1F", color: GOLD, fontFamily: "monospace", fontWeight: 700, padding: "2px 6px", borderRadius: 4 }}>
+                      {reg.id}
+                    </span>
+                    <span style={{ fontWeight: 600, color: subtle, fontSize: 11 }}>
+                      {reg.fecha} — {reg.cantidadRealizada} und.
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => abrirFormulario()}
+            style={{
+              background: `linear-gradient(135deg, #C9A227, ${GOLD}, ${GOLD_LIGHT})`,
+              color: '#121212', fontWeight: 700, fontSize: 14, borderRadius: 10,
+              padding: '8px 16px', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Montserrat, sans-serif'
+            }}
+          >
+            <Plus size={16} /> Nuevo registro
+          </button>
+        </div>
+      </div>
 
       <TableShell headers={['ID REGISTRO', 'ID EMPLEADO', 'ID PIEZA', 'ID PRODUCCIÓN', 'CANTIDAD REALIZADA', 'FECHA', 'ACCIONES']} dark={dark}>
         {registrosFiltrados.length === 0 ? (
@@ -392,7 +429,6 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
                 <X size={18} />
               </button>
             </div>
-
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <Field label="ID Registro" dark={dark}>
@@ -412,7 +448,6 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
                   />
                 </Field>
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <Field label="ID Empleado" dark={dark}>
                   <select
@@ -437,7 +472,6 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
                   </select>
                 </Field>
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
                 <Field label="ID Producción" dark={dark}>
                   <select
@@ -461,7 +495,6 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
                 </Field>
               </div>
             </div>
-
             <div style={{ padding: '16px 24px', borderTop: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'flex-end', gap: 12, backgroundColor: dark ? '#252525' : '#FAFAFA' }}>
               <button
                 onClick={() => setModalForm(false)}
@@ -483,7 +516,6 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
                 Guardar
               </button>
             </div>
-
           </div>
         </div>
       )}
@@ -500,7 +532,6 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
           }}
         />
       )}
-
     </div>
   );
 };
