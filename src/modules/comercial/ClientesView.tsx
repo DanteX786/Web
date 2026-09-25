@@ -181,13 +181,11 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   const [busqueda, setBusqueda] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
-
   const [clientes, setClientes] = useState<Cliente[]>([
     { id: '00-1', nombre: 'QueNOTA', identificacion: '10458231', direccion: 'Cra 45 #20-432', correo: 'guenota@gmail.com', telefono: '3049820982', estado: 'ACTIVO' },
     { id: '00-2', nombre: 'Offcors', identificacion: '9032145', direccion: 'Cra 43 #43s', correo: 'offcors@gmail.com', telefono: '3092903093', estado: 'ACTIVO' },
     { id: '00-3', nombre: 'Nike', identificacion: '8801234', direccion: 'Cra 48 #99', correo: 'nike@gmail.com', telefono: '90980981', estado: 'ACTIVO' }
   ]);
-
   const [modalForm, setModalForm] = useState(false);
   const [clienteEditar, setClienteEditar] = useState<Cliente | null>(null);
   const [modalDelete, setModalDelete] = useState<Cliente | null>(null);
@@ -237,7 +235,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       toast.error('Todos los campos son obligatorios para guardar el cliente.');
       return;
     }
-
     if (clienteEditar) {
       setClientes(clientes.map(c => c.id === clienteEditar.id ? {
         ...c,
@@ -278,7 +275,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
     if (!query) return true;
     const idLimpio = c.id.toLowerCase();
     const numeroBusqueda = query.replace(/^0+/, '');
-
     return (
       idLimpio.includes(query) ||
       (numeroBusqueda !== '' && idLimpio.endsWith(`-${numeroBusqueda}`)) ||
@@ -325,7 +321,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                 fontFamily: 'Montserrat, sans-serif', width: 220
               }}
             />
-
             {/* MENÚ DESPLEGABLE HACIA ABAJO CON OPCIONES */}
             {showDropdown && clientesFiltrados.length > 0 && (
               <div style={{
@@ -360,7 +355,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
               </div>
             )}
           </div>
-
           <button
             onClick={() => abrirFormulario()}
             style={{
@@ -374,7 +368,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
           </button>
         </div>
       </div>
-
       <TableShell headers={['ID CLIENTE', 'NOMBRE', 'IDENTIFICACIÓN', 'DIRECCIÓN', 'CORREO', 'TELÉFONO', 'ESTADO', 'ACCIONES']} dark={dark}>
         {clientesFiltrados.length === 0 ? (
           <tr>
@@ -460,7 +453,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                 <X size={18} />
               </button>
             </div>
-
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <Field label="ID (Auto)" dark={dark}>
@@ -484,7 +476,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                   />
                 </Field>
               </div>
-
               <Field label="Identificación" dark={dark}>
                 <input
                   type="text"
@@ -494,7 +485,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
                 />
               </Field>
-
               <Field label="Dirección" dark={dark}>
                 <input
                   type="text"
@@ -504,7 +494,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
                 />
               </Field>
-
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <Field label="Correo" dark={dark}>
                   <input
@@ -529,6 +518,18 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                 </Field>
               </div>
 
+              {/* CAMPO DE CONTRASEÑA EN MODO EDICIÓN (SÓLO LECTURA Y ENMASCARADO) */}
+              {clienteEditar && (
+                <Field label="Contraseña" dark={dark}>
+                  <input
+                    type="text"
+                    disabled
+                    value="********"
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: subtle, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box', cursor: 'not-allowed' }}
+                  />
+                </Field>
+              )}
+
               <Field label="Estado" dark={dark}>
                 <select
                   value={formEstado}
@@ -540,7 +541,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                 </select>
               </Field>
             </div>
-
             <div style={{ padding: '16px 24px', borderTop: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'flex-end', gap: 12, backgroundColor: dark ? '#252525' : '#FAFAFA' }}>
               <button
                 onClick={() => setModalForm(false)}
