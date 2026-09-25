@@ -26,13 +26,12 @@ import Roles from './modules/configuracion/Roles';
 // Ventas
 import Ventas from './modules/comercial/Ventas';
 
-<<<<<<<<< Temporary merge branch 1
+
 // IMPORTACIÓN DE MI PERFIL
 // Ajusta la ruta dependiendo de dónde guardaste exactamente el archivo MiPerfil.tsx
 import MiPerfil from './modules/auth/components/MiPerfil';
-=========
+
 import { DashboardPage } from './modules/principal/Dashboard';
->>>>>>>>> Temporary merge branch 2
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -82,7 +81,6 @@ export default function App() {
       {currentView === 'tiposMaquinaria' && <TiposMaquinaria dark={dark} />}
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
       {currentView === 'roles' && <Roles dark={dark} />}
-<<<<<<<<< Temporary merge branch 1
       
       {/* MI PERFIL */}
       {currentView === 'miPerfil' && (
@@ -100,7 +98,6 @@ export default function App() {
 =========
       {currentView === 'ventas' && <Ventas dark={dark} />}
       {currentView === 'dashboard' && <DashboardPage dark={dark} />}
->>>>>>>>> Temporary merge branch 2
     </MainLayout>
   );
 }
