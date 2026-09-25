@@ -17,16 +17,14 @@ import { ClientesView } from './modules/comercial/ClientesView';
 import { RegistroDiarioView } from './modules/comercial/RegistroDiarioView';
 import { RemisionesView } from './modules/comercial/RemisionesView';
 
-//empleados
+// Empleados
 import EmpleadosView from './modules/configuracion/Empleados';
 
-//ROles
+// Roles
 import Roles from './modules/configuracion/Roles';
 
-//Ventas
+// Ventas
 import Ventas from './modules/comercial/Ventas';
-
-import { DashboardPage } from './modules/principal/Dashboard';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -49,7 +47,7 @@ export default function App() {
       dark={dark}
       setDark={setDark}
       onLogout={() => setIsAuthenticated(false)}
-      userName="Juan Valle"
+      userName="Juan Camilo"
       userRole="Administrador"
     >
       <Toaster position="top-right" richColors />
@@ -68,6 +66,7 @@ export default function App() {
       {currentView === 'clientes' && <ClientesView dark={dark} />}
       {currentView === 'registroDiario' && <RegistroDiarioView dark={dark} />}
       {currentView === 'remisiones' && <RemisionesView dark={dark} />}
+      {currentView === 'ventas' && <Ventas dark={dark} />}
 
       {/* MÓDULO CONFIGURACIÓN Y PARÁMETROS */}
       {currentView === 'proveedores' && <Proveedores dark={dark} />}
@@ -76,7 +75,11 @@ export default function App() {
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
       {currentView === 'roles' && <Roles dark={dark} />}
       {currentView === 'ventas' && <Ventas dark={dark} />}
-      {currentView === 'dashboard' && <DashboardPage dark={dark} />}
+      {currentView === 'dashboard' && (
+        <div style={{ padding: 24, color: dark ? '#F8F9FA' : '#121212', fontSize: 24, fontWeight: 800 }}>
+          Dashboard Principal de Eslabón
+        </div>
+      )}
     </MainLayout>
   );
 }
