@@ -21,6 +21,7 @@ import {
   Checkbox,
   FormControlLabel,
   Collapse,
+  Switch,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
@@ -39,6 +40,7 @@ interface RoleData {
   description: string;
   permissionsCount: string;
   permissionsList: string[];
+  isActive: boolean;
 }
 
 const ALL_PERMISSIONS = [
@@ -53,19 +55,22 @@ const initialRows: RoleData[] = [
     id: 'ROL-01', 
     description: 'Admin', 
     permissionsCount: '17 módulos',
-    permissionsList: ALL_PERMISSIONS 
+    permissionsList: ALL_PERMISSIONS,
+    isActive: true 
   },
   { 
     id: 'ROL-02', 
     description: 'Empleado', 
     permissionsCount: '5 módulos',
-    permissionsList: ['Dashboard', 'Ventas', 'Clientes', 'Órdenes de Pedido', 'Envíos']
+    permissionsList: ['Dashboard', 'Ventas', 'Clientes', 'Órdenes de Pedido', 'Envíos'],
+    isActive: true 
   },
   { 
     id: 'ROL-03', 
     description: 'Cliente', 
     permissionsCount: '0 módulos',
-    permissionsList: [] 
+    permissionsList: [],
+    isActive: false 
   },
 ];
 
@@ -74,10 +79,11 @@ interface RoleRowProps {
   isDarkMode: boolean;
   onEdit: (role: RoleData) => void;
   onDelete: (role: RoleData) => void;
+  onToggleStatus: (id: string) => void; // <-- Nueva función para cambiar estado directo
 }
 
 // Componente para cada fila
-function RoleRow({ row, isDarkMode, onEdit, onDelete }: RoleRowProps) {
+function RoleRow({ row, isDarkMode, onEdit, onDelete, onToggleStatus }: RoleRowProps) {
   const [openView, setOpenView] = useState(false);
 
   const goldColor = '#D6A848';
@@ -107,6 +113,39 @@ function RoleRow({ row, isDarkMode, onEdit, onDelete }: RoleRowProps) {
             {row.description}
           </Typography>
         </TableCell>
+        
+        {/* Columna de Estado interactiva con Switch y Chip */}
+        <TableCell>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Switch 
+              size="small"
+              checked={row.isActive}
+              onChange={() => onToggleStatus(row.id)}
+              sx={{
+                '& .MuiSwitch-switchBase.Mui-checked': {
+                  color: '#137333',
+                  '&:hover': { backgroundColor: 'rgba(19, 115, 51, 0.08)' },
+                },
+                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                  backgroundColor: '#137333',
+                },
+              }}
+            />
+            <Chip 
+              label={row.isActive ? 'Activo' : 'Inactivo'} 
+              size="small"
+              sx={{ 
+                backgroundColor: row.isActive ? (isDarkMode ? '#0A2E1A' : '#E6F4EA') : (isDarkMode ? '#3C1414' : '#FCE8E6'), 
+                color: row.isActive ? '#137333' : '#C5221F', 
+                fontWeight: 'bold',
+                borderRadius: 4,
+                px: 1,
+                minWidth: '70px'
+              }} 
+            />
+          </Box>
+        </TableCell>
+
         <TableCell>
           <Chip 
             label={`${row.permissionsList.length} módulos`} 
@@ -122,7 +161,6 @@ function RoleRow({ row, isDarkMode, onEdit, onDelete }: RoleRowProps) {
         </TableCell>
         <TableCell>
           <Box sx={{ display: 'flex', flexDirection: 'row', gap: 1 }}>
-            {/* Botón Ver Detalles (Solo lectura) */}
             <IconButton 
               size="small" 
               onClick={() => setOpenView(!openView)}
@@ -135,7 +173,6 @@ function RoleRow({ row, isDarkMode, onEdit, onDelete }: RoleRowProps) {
               <VisibilityOutlinedIcon sx={{ fontSize: '1.2rem', color: openView ? goldColor : '#4A90E2' }} />
             </IconButton>
 
-            {/* Botón Editar */}
             <IconButton 
               size="small" 
               onClick={() => onEdit(row)}
@@ -144,7 +181,6 @@ function RoleRow({ row, isDarkMode, onEdit, onDelete }: RoleRowProps) {
               <EditOutlinedIcon sx={{ fontSize: '1.2rem', color: isDarkMode ? '#CCC' : '#555' }} />
             </IconButton>
 
-            {/* Botón Eliminar */}
             <IconButton 
               size="small" 
               onClick={() => onDelete(row)}
@@ -156,9 +192,8 @@ function RoleRow({ row, isDarkMode, onEdit, onDelete }: RoleRowProps) {
         </TableCell>
       </TableRow>
 
-      {/* Sección colapsable exclusiva para Ver Detalles */}
       <TableRow>
-        <TableCell style={{ paddingBottom: 0, paddingTop: 0, border: 0 }} colSpan={4}>
+        <TableCell style={{ paddingBottom: 0, paddingTop: 0, border: 0 }} colSpan={5}>
           <Collapse in={openView} timeout="auto" unmountOnExit>
             <Box 
               sx={{ 
@@ -173,7 +208,6 @@ function RoleRow({ row, isDarkMode, onEdit, onDelete }: RoleRowProps) {
                 Detalles del Rol
               </Typography>
 
-              {/* Información general del rol (ID y Descripción) */}
               <Box sx={{ display: 'flex', gap: 3, mb: 3 }}>
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="caption" sx={{ fontWeight: 'bold', color: textSec, mb: 1, display: 'block' }}>
@@ -197,6 +231,18 @@ function RoleRow({ row, isDarkMode, onEdit, onDelete }: RoleRowProps) {
                     value={row.description} 
                     disabled 
                     sx={{ backgroundColor: isDarkMode ? '#2A2A2A' : '#EAEAEA', input: { color: textCol, fontWeight: 'bold' } }}
+                  />
+                </Box>
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 'bold', color: textSec, mb: 1, display: 'block' }}>
+                    ESTADO
+                  </Typography>
+                  <TextField 
+                    fullWidth 
+                    size="small" 
+                    value={row.isActive ? 'Activo' : 'Inactivo'} 
+                    disabled 
+                    sx={{ backgroundColor: isDarkMode ? '#2A2A2A' : '#EAEAEA', input: { color: row.isActive ? '#137333' : '#C5221F', fontWeight: 'bold' } }}
                   />
                 </Box>
               </Box>
@@ -266,8 +312,8 @@ export default function RolesView({ dark = false }: RolesViewProps) {
   const [editingRole, setEditingRole] = useState<RoleData | null>(null);
   const [formDesc, setFormDesc] = useState('');
   const [formPerms, setFormPerms] = useState<string[]>([]);
+  const [formIsActive, setFormIsActive] = useState(true);
 
-  // Estado para el modal de advertencia de Admin
   const [adminAlertOpen, setAdminAlertOpen] = useState(false);
 
   const goldColor = '#D6A848';
@@ -278,19 +324,19 @@ export default function RolesView({ dark = false }: RolesViewProps) {
   const textCol = isDarkMode ? '#FFFFFF' : '#111111';
   const textSec = isDarkMode ? '#AAAAAA' : '#828282';
 
-  // Abrir modal para crear
   const handleOpenAdd = () => {
     setEditingRole(null);
     setFormDesc('');
     setFormPerms([]);
+    setFormIsActive(true);
     setIsModalOpen(true);
   };
 
-  // Abrir modal para editar
   const handleOpenEdit = (role: RoleData) => {
     setEditingRole(role);
     setFormDesc(role.description);
     setFormPerms([...role.permissionsList]);
+    setFormIsActive(role.isActive);
     setIsModalOpen(true);
   };
 
@@ -299,6 +345,7 @@ export default function RolesView({ dark = false }: RolesViewProps) {
     setEditingRole(null);
     setFormDesc('');
     setFormPerms([]);
+    setFormIsActive(true);
   };
 
   const handleTogglePermission = (perm: string) => {
@@ -315,27 +362,38 @@ export default function RolesView({ dark = false }: RolesViewProps) {
     }
   };
 
-  // Guardar rol (Crear o Editar con validaciones)
+  // Función para cambiar el estado directamente desde la tabla (Switch)
+  const handleToggleStatus = (id: string) => {
+    setRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, isActive: !r.isActive } : r))
+    );
+  };
+
   const handleSaveRole = () => {
     if (!formDesc.trim() || formPerms.length === 0) return;
 
     if (editingRole) {
-      // Editar existente
       setRows((prev) =>
         prev.map((r) =>
           r.id === editingRole.id
-            ? { ...r, description: formDesc, permissionsList: formPerms, permissionsCount: `${formPerms.length} módulos` }
+            ? { 
+                ...r, 
+                description: formDesc, 
+                permissionsList: formPerms, 
+                permissionsCount: `${formPerms.length} módulos`,
+                isActive: formIsActive 
+              }
             : r
         )
       );
     } else {
-      // Crear nuevo
       const newId = `ROL-0${rows.length + 1}`;
       const newRole: RoleData = {
         id: newId,
         description: formDesc,
         permissionsCount: `${formPerms.length} módulos`,
         permissionsList: formPerms,
+        isActive: formIsActive,
       };
       setRows((prev) => [...prev, newRole]);
     }
@@ -343,7 +401,6 @@ export default function RolesView({ dark = false }: RolesViewProps) {
     handleCloseModal();
   };
 
-  // Lógica para eliminar con restricción de Admin
   const handleDeleteRoleAttempt = (role: RoleData) => {
     if (role.id === 'ROL-01' || role.description.toLowerCase() === 'admin') {
       setAdminAlertOpen(true);
@@ -352,7 +409,6 @@ export default function RolesView({ dark = false }: RolesViewProps) {
     setRows((prev) => prev.filter((r) => r.id !== role.id));
   };
 
-  // Filtrar filas por búsqueda
   const filteredRows = rows.filter((r) => 
     r.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.id.toLowerCase().includes(searchTerm.toLowerCase())
@@ -434,7 +490,7 @@ export default function RolesView({ dark = false }: RolesViewProps) {
           <Table>
             <TableHead>
               <TableRow>
-                {['ID ROL', 'DESCRIPCIÓN', 'PERMISOS', 'ACCIONES'].map((headCell) => (
+                {['ID ROL', 'DESCRIPCIÓN', 'ESTADO', 'PERMISOS', 'ACCIONES'].map((headCell) => (
                   <TableCell
                     key={headCell}
                     sx={{
@@ -457,7 +513,8 @@ export default function RolesView({ dark = false }: RolesViewProps) {
                   row={row} 
                   isDarkMode={isDarkMode} 
                   onEdit={handleOpenEdit} 
-                  onDelete={handleDeleteRoleAttempt} 
+                  onDelete={handleDeleteRoleAttempt}
+                  onToggleStatus={handleToggleStatus} 
                 />
               ))}
             </TableBody>
@@ -525,6 +582,33 @@ export default function RolesView({ dark = false }: RolesViewProps) {
                 error={!formDesc.trim()}
                 helperText={!formDesc.trim() ? 'La descripción es obligatoria' : ''}
                 sx={{ backgroundColor: isDarkMode ? '#2A2A2A' : '#F9FAFB', input: { color: textCol } }} 
+              />
+            </Box>
+            <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <Typography variant="caption" sx={{ fontWeight: 'bold', color: textSec, mb: 1, display: 'block' }}>
+                ESTADO
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch 
+                    checked={formIsActive}
+                    onChange={(e) => setFormIsActive(e.target.checked)}
+                    sx={{
+                      '& .MuiSwitch-switchBase.Mui-checked': {
+                        color: '#137333',
+                        '&:hover': { backgroundColor: 'rgba(19, 115, 51, 0.08)' },
+                      },
+                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                        backgroundColor: '#137333',
+                      },
+                    }}
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: formIsActive ? '#137333' : '#C5221F' }}>
+                    {formIsActive ? 'Activo' : 'Inactivo'}
+                  </Typography>
+                }
               />
             </Box>
           </Box>
