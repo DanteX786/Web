@@ -49,7 +49,6 @@ export interface DetalleProduccion {
 
 export interface Produccion {
   id: string;
-  ordenPedido: string;
   remision: string;
   fechaInicio: string;
   fechaEntrega: string;
@@ -347,7 +346,6 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
   const [producciones, setProducciones] = useState<Produccion[]>([
     {
       id: 'PRD-001',
-      ordenPedido: 'ORD-001',
       remision: 'REM-101',
       fechaInicio: '2026-09-01',
       fechaEntrega: '2026-09-15',
@@ -358,7 +356,6 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
     },
     {
       id: 'PRD-002',
-      ordenPedido: 'ORD-002',
       remision: 'REM-102',
       fechaInicio: '2026-09-05',
       fechaEntrega: '2026-09-20',
@@ -367,7 +364,6 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
     },
     {
       id: 'PRD-003',
-      ordenPedido: 'ORD-003',
       remision: 'REM-103',
       fechaInicio: '2026-09-10',
       fechaEntrega: '2026-09-25',
@@ -376,23 +372,41 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
     },
     {
       id: 'PRD-004',
-      ordenPedido: 'ORD-004',
       remision: 'REM-104',
       fechaInicio: '2026-09-12',
       fechaEntrega: '2026-09-28',
       estado: 'Cancelado',
       detalles: []
+    },
+    {
+      id: 'PRD-005',
+      remision: 'REM-105',
+      fechaInicio: '2026-09-14',
+      fechaEntrega: '2026-09-30',
+      estado: 'En proceso',
+      detalles: []
     }
   ]);
 
-  const ordenesDisponibles = ['ORD-001', 'ORD-002', 'ORD-003', 'ORD-004', 'ORD-005'];
+  const remisionesDisponibles = ['REM-101', 'REM-102', 'REM-103', 'REM-104', 'REM-105'];
   const operariosLista = ['Juan Pérez', 'María Rodríguez', 'Carlos López', 'Ana Gómez'];
   const piezasLista = ['Manga Larga', 'Cuello Polo', 'Frente Camisa', 'Bolsillo'];
   const maquinasLista = ['Plana Industrial', 'Fileteadora', 'Colcollarin', 'Ojaladora'];
-  const insumosStock = [
-    { id: 'INS-001', nombre: 'Hilo Blanco 40/2', stock: 120 },
-    { id: 'INS-002', nombre: 'Botón 14mm', stock: 500 },
-    { id: 'INS-003', nombre: 'Cierre 20cm Negro', stock: 85 }
+  
+  // Insumos en stock general (siempre disponibles)
+  const insumosStockGlobal = [
+    { id: 'INS-001', nombre: 'Hilo Blanco 40/2 (Stock General)' },
+    { id: 'INS-002', nombre: 'Botón 14mm (Stock General)' },
+    { id: 'INS-003', nombre: 'Cierre 20cm Negro (Stock General)' }
+  ];
+
+  // Insumos enviados por el cliente asociados a cada remisión (INSENV)
+  const insumosEnviadosGlobal = [
+    { id: 'INS-ENV-001', id_remision: 'REM-101', nombre: 'Botones Dorados Metálicos (INSENV)' },
+    { id: 'INS-ENV-002', id_remision: 'REM-101', nombre: 'Hilo Poliéster Negro (INSENV)' },
+    { id: 'INS-ENV-003', id_remision: 'REM-101', nombre: 'Cierres de Cremallera 20cm (INSENV)' },
+    { id: 'INS-ENV-004', id_remision: 'REM-102', nombre: 'Tela Lino Estampada (INSENV)' }
+    // REM-103, REM-104, REM-105 no tienen insumos enviados de prueba para verificar el estado "No enviado"
   ];
 
   const [modalVer, setModalVer] = useState<Produccion | null>(null);
@@ -400,7 +414,7 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
   const [itemEditar, setItemEditar] = useState<Produccion | null>(null);
   const [modalDelete, setModalDelete] = useState<Produccion | null>(null);
 
-  const [formOrden, setFormOrden] = useState('ORD-001');
+  const [formRemision, setFormRemision] = useState('REM-101');
   const [formEstado, setFormEstado] = useState<'En proceso' | 'Finalizado' | 'Pausado' | 'Cancelado'>('En proceso');
   const [formFechaInicio, setFormFechaInicio] = useState('');
   const [formFechaEntrega, setFormFechaEntrega] = useState('');
@@ -410,14 +424,14 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
   const handleOpenForm = (prod?: Produccion) => {
     if (prod) {
       setItemEditar(prod);
-      setFormOrden(prod.ordenPedido);
+      setFormRemision(prod.remision);
       setFormEstado(prod.estado);
       setFormFechaInicio(prod.fechaInicio);
       setFormFechaEntrega(prod.fechaEntrega);
       setFormDetalles(prod.detalles.map(({ id, ...rest }) => rest));
     } else {
       setItemEditar(null);
-      setFormOrden('ORD-001');
+      setFormRemision('REM-101');
       setFormEstado('En proceso');
       setFormFechaInicio(new Date().toISOString().split('T')[0]);
       setFormFechaEntrega('');
@@ -426,7 +440,7 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
           empleado: operariosLista[0], 
           pieza: piezasLista[0], 
           maquina: maquinasLista[0], 
-          insumo: `${insumosStock[0].id} — ${insumosStock[0].nombre}`, 
+          insumo: `${insumosStockGlobal[0].id} — ${insumosStockGlobal[0].nombre}`, 
           cantidad: 10, 
           fechaAsignada: new Date().toISOString().split('T')[0] 
         }
@@ -450,7 +464,7 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
     if (itemEditar) {
       setProducciones(producciones.map(p => p.id === itemEditar.id ? {
         ...p,
-        ordenPedido: formOrden,
+        remision: formRemision,
         estado: formEstado,
         fechaInicio: formFechaInicio,
         fechaEntrega: formFechaEntrega,
@@ -459,11 +473,9 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
       toast.success('Producción actualizada');
     } else {
       const newId = nextId('PRD', producciones.map(p => p.id));
-      const remId = `REM-${100 + producciones.length + 1}`;
       const nueva: Produccion = {
         id: newId,
-        ordenPedido: formOrden,
-        remision: remId,
+        remision: formRemision,
         fechaInicio: formFechaInicio,
         fechaEntrega: formFechaEntrega,
         estado: formEstado,
@@ -480,11 +492,15 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
     toast.success(`Estado actualizado a "${nuevoEstado}"`);
   };
 
+  // Filtrado de insumos enviados específicos para la remisión seleccionada en el formulario
+  const insumosEnviadosActuales = insumosEnviadosGlobal.filter(i => i.id_remision === formRemision);
+
+  // Filtrado y ordenamiento numérico ascendente por ID (PRD-001, PRD-002...)
   const produccionesFiltradas = producciones.filter(p =>
     p.id.toLowerCase().includes(busqueda.toLowerCase()) ||
-    p.ordenPedido.toLowerCase().includes(busqueda.toLowerCase()) ||
+    p.remision.toLowerCase().includes(busqueda.toLowerCase()) ||
     p.estado.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  ).sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 
   const fg = dark ? "#F8F9FA" : "#121212";
   const subtle = dark ? "#9A9A9A" : "#6B6B6B";
@@ -533,7 +549,7 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
       </div>
 
       {/* TABLA PRINCIPAL */}
-      <TableShell headers={['ID PRODUCCIÓN', 'ORDEN DE PEDIDO', 'FECHA INICIO', 'FECHA ENTREGA', 'ESTADO', 'ACCIONES']} dark={dark}>
+      <TableShell headers={['ID PRODUCCIÓN', 'REMISIÓN', 'FECHA INICIO', 'FECHA ENTREGA', 'ESTADO', 'ACCIONES']} dark={dark}>
         {produccionesFiltradas.length === 0 ? (
           <tr>
             <td colSpan={6} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
@@ -550,7 +566,7 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
                 </td>
 
                 <td style={{ padding: '12px 14px' }}>
-                  <IdBadge id={prod.ordenPedido} />
+                  <IdBadge id={prod.remision} />
                 </td>
 
                 <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 12, color: subtle }}>
@@ -626,17 +642,16 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
             </div>
 
             <div style={{ gridColumn: 'span 2', background: dark ? '#252525' : '#F8F8F8', borderRadius: 8, padding: '10px 14px' }}>
-              <div style={{ fontSize: 10, letterSpacing: '0.05em', color: subtle, marginBottom: 4 }}>ORDEN DE PEDIDO</div>
+              <div style={{ fontSize: 10, letterSpacing: '0.05em', color: subtle, marginBottom: 4 }}>REMISIÓN ASOCIADA</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <IdBadge id={modalVer.ordenPedido} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: GOLD }}>↳ Remisión incluida: {modalVer.remision}</span>
+                <IdBadge id={modalVer.remision} />
               </div>
             </div>
           </div>
 
           <div style={{ marginTop: 8 }}>
             <h4 style={{ fontSize: 13, fontWeight: 700, margin: '0 0 10px', color: fg }}>Detalle de Asignaciones</h4>
-            <TableShell headers={['ID', 'EMPLEADO', 'PIEZA', 'MÁQUINA', 'INSUMO', 'CANT.', 'FECHA']} dark={dark}>
+            <TableShell headers={['ID', 'EMPLEADO', 'PIEZA', 'MÁQUINA', 'INSUMO / INSENV', 'CANT.', 'FECHA']} dark={dark}>
               {modalVer.detalles.length === 0 ? (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: 20, color: subtle, fontSize: 12 }}>Sin asignaciones.</td>
@@ -670,13 +685,13 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
           maxWidth="900px"
         >
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 16, rowGap: 16, width: '100%', boxSizing: 'border-box' }}>
-            <Field label="Orden de Pedido" dark={dark}>
+            <Field label="Remisión" dark={dark}>
               <select
-                value={formOrden}
-                onChange={(e) => setFormOrden(e.target.value)}
+                value={formRemision}
+                onChange={(e) => setFormRemision(e.target.value)}
                 style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
               >
-                {ordenesDisponibles.map(o => <option key={o} value={o}>{o}</option>)}
+                {remisionesDisponibles.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </Field>
 
@@ -720,13 +735,17 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
               <button
                 type="button"
                 onClick={() => {
+                  const defaultInsumo = insumosEnviadosActuales.length > 0 
+                    ? `${insumosEnviadosActuales[0].id} — ${insumosEnviadosActuales[0].nombre}`
+                    : `${insumosStockGlobal[0].id} — ${insumosStockGlobal[0].nombre}`;
+
                   setFormDetalles([
                     ...formDetalles,
                     {
                       empleado: operariosLista[0],
                       pieza: piezasLista[0],
                       maquina: maquinasLista[0],
-                      insumo: `${insumosStock[0].id} — ${insumosStock[0].nombre}`,
+                      insumo: defaultInsumo,
                       cantidad: 10,
                       fechaAsignada: new Date().toISOString().split('T')[0]
                     }
@@ -823,11 +842,11 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
                       </div>
                     </div>
 
-                    {/* SEGUNDA FILA: INSUMO Y CANTIDAD */}
+                    {/* SEGUNDA FILA: INSUMO FILTRADO POR REMISIÓN / STOCK Y CANTIDAD */}
                     <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8 }}>
                       <div>
                         <label style={{ fontSize: 10, fontWeight: 700, color: subtle, textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
-                          Insumo Asignado
+                          Insumo (Enviado para {formRemision} o Stock)
                         </label>
                         <select
                           value={det.insumo}
@@ -838,11 +857,25 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
                           }}
                           style={{ width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 12, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none' }}
                         >
-                          {insumosStock.map(ins => (
-                            <option key={ins.id} value={`${ins.id} — ${ins.nombre}`}>
-                              {ins.id} — {ins.nombre} (Stock: {ins.stock})
-                            </option>
-                          ))}
+                          <optgroup label={`Insumos Enviados (${formRemision})`}>
+                            {insumosEnviadosActuales.length > 0 ? (
+                              insumosEnviadosActuales.map(ins => (
+                                <option key={ins.id} value={`${ins.id} — ${ins.nombre}`}>
+                                  {ins.id} — {ins.nombre}
+                                </option>
+                              ))
+                            ) : (
+                              <option disabled value="">⚠️ No hay insumos enviados para esta remisión</option>
+                            )}
+                          </optgroup>
+                          
+                          <optgroup label="Insumos Generales de Stock">
+                            {insumosStockGlobal.map(stk => (
+                              <option key={stk.id} value={`${stk.id} — ${stk.nombre}`}>
+                                {stk.id} — {stk.nombre}
+                              </option>
+                            ))}
+                          </optgroup>
                         </select>
                       </div>
 
@@ -903,33 +936,3 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
     </div>
   );
 };
-
-
-{/* Sección de Insumos / Materia Prima */}
-<div className="mb-4">
-    <div className="flex justify-between items-center mb-2">
-        <label className="font-semibold text-gray-700">Insumos Utilizados</label>
-        <button type="button" className="text-sm text-amber-600 hover:underline">
-            + Agregar Insumo
-        </button>
-    </div>
-    
-    {/* Cabeceras de los campos */}
-    <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 mb-1 px-1">
-        <div className="col-span-6">Insumo</div>
-        <div className="col-span-4">Cantidad</div>
-        <div className="col-span-2">Acción</div>
-    </div>
-
-    {/* Fila dinámica de insumos */}
-    <div className="flex items-center gap-2 mb-2">
-        <select className="flex-1 border rounded p-2 text-sm">
-            <option>Seleccionar insumo...</option>
-            {/* Opciones de insumos desde la BD */}
-        </select>
-        <input type="number" placeholder="Cant." className="w-24 border rounded p-2 text-sm" />
-        <button type="button" className="text-red-500 hover:text-red-700 p-2">
-            🗑️
-        </button>
-    </div>
-</div>

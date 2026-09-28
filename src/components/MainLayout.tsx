@@ -11,7 +11,6 @@ import {
   User, Sliders
 } from "lucide-react";
 
-// Importamos los logos subiendo un nivel desde 'components' hacia 'assets'
 import logo_blanco from '../assets/logo_blanco.jpg';
 import logo_negro from '../assets/logo_negro.jpg';
 
@@ -40,7 +39,6 @@ export default function MainLayout({
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   
-  // Grupos colapsables del sidebar
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     inventario: true,
     produccion: false,
@@ -185,7 +183,6 @@ export default function MainLayout({
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: dark ? '#121212' : '#F8F9FA', fontFamily: 'Montserrat, sans-serif', overflowX: 'hidden' }}>
       
-      {/* 1. SIDEBAR */}
       <aside style={{
         width: collapsed ? 72 : 256,
         background: sidebarBg,
@@ -212,8 +209,7 @@ export default function MainLayout({
         >
           {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
-
-        {/* LOGO SECTION */}
+        
         <div style={{ padding: '16px 8px', borderBottom: `1px solid ${GOLD}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 85 }}>
           {collapsed ? (
             <div style={{
@@ -235,11 +231,9 @@ export default function MainLayout({
 
         <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
           
-          {/* Grupo PRINCIPAL */}
           {!collapsed && <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: `${GOLD}80`, paddingLeft: 12, marginTop: 4, marginBottom: 4 }}>Principal</div>}
           {renderNavBtn("dashboard", "Dashboard", LayoutDashboard)}
 
-          {/* Grupo INVENTARIO (Incluyendo Insumos Enviados) */}
           {renderAccordionGroup("inventario", "Inventario", Package, [
             { id: "tipoInsumos", label: "Tipo de Insumo", icon: Tag },
             { id: "insumos", label: "Insumos", icon: Package },
@@ -247,27 +241,23 @@ export default function MainLayout({
             { id: "insumosEnviados", label: "Insumos Enviados", icon: Send },
           ])}
 
-          {/* Grupo PRODUCCIÓN */}
           {renderAccordionGroup("produccion", "Producción", Factory, [
             { id: "produccion", label: "Gestión Producción", icon: Factory },
+            { id: "registroDiarioEmpleado", label: "Registro Empleado", icon: ClipboardList },
           ])}
 
-          {/* Grupo ADM. DE PARÁMETROS */}
           {renderAccordionGroup("parametros", "Adm. de Parámetros", Sliders, [
             { id: "catalogoPiezas", label: "Tipo de Pieza", icon: Scissors },
             { id: "tiposMaquinaria", label: "Tipo de Máquina", icon: Wrench },
           ])}
 
-          {/* Grupo COMERCIAL (Incluyendo Orden de Pedido) */}
           {renderAccordionGroup("comercial", "Comercial", TrendingUp, [
             { id: "clientes", label: "Clientes", icon: Users },
             { id: "remisiones", label: "Remisiones", icon: FileText },
             { id: "registroDiario", label: "Registro Diario", icon: ClipboardList },
-            { id: "ordenPedido", label: "Orden de Pedido", icon: ShoppingBag },
-            { id: "ventas", label: "Ventas", icon: BarChart2 },
+            { id: "remisionEntrega", label: "Venta", icon: BarChart2 },
           ])}
 
-          {/* Grupo CONFIGURACIÓN (Incluyendo Proveedores) */}
           {renderAccordionGroup("configuracion", "Configuración", SlidersHorizontal, [
             { id: "permisos", label: "Permisos", icon: Shield },
             { id: "roles", label: "Roles", icon: Key },
@@ -276,12 +266,11 @@ export default function MainLayout({
             { id: "envios", label: "Envíos", icon: Send },
           ])}
 
-          <div style={{ borderTop: `1px solid ${GOLD}30`, marginTop: 8, paddingTop: 8 }}>
-            {renderNavBtn("documentacion", "Documentación", FileText)}
+          <div style={{ borderTop: `4px solid ${GOLD}90`, marginTop: 8, paddingTop: 8 }}>
+          
           </div>
         </div>
 
-        {/* Perfil inferior */}
         <div 
           onClick={() => setProfileOpen(!profileOpen)}
           style={{
@@ -311,7 +300,6 @@ export default function MainLayout({
 
       </aside>
 
-      {/* 2. CONTENEDOR DERECHO */}
       <div style={{
         flex: 1,
         marginLeft: collapsed ? 72 : 256,
@@ -448,7 +436,6 @@ export default function MainLayout({
                     </div>
                   </div>
 
-                  {/* NUEVO BOTÓN: MI PERFIL */}
                   <div style={{ padding: 8 }}>
                     <button
                       onClick={() => {
@@ -468,7 +455,6 @@ export default function MainLayout({
                     </button>
                   </div>
 
-                  {/* BOTÓN: CERRAR SESIÓN */}
                   <div style={{ borderTop: `1px solid ${borderCol}`, padding: 8 }}>
                     <button
                       onClick={onLogout}

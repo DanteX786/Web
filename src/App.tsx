@@ -3,12 +3,13 @@ import { Toaster } from 'sonner';
 import MainLayout from './components/MainLayout';
 import { AuthView } from './modules/auth/components/AuthView';
 import { ProduccionView } from './modules/produccion/ProduccionView';
+import { RegistroDiarioEmpleadoView } from './modules/comercial/RegistroDiarioEmpleadoView';
 import TiposPieza from './modules/parametros/TiposPieza';
 import TiposMaquinaria from './modules/parametros/TiposMaquinaria';
 import { TipoInsumoView } from './modules/inventario/Tipo_Insumo_view';
 import { InsumosView } from './modules/inventario/Insumo_view';
 import { ComprasView } from './modules/inventario/Compras_View';
-import InsumosEnviados from './modules/inventario/InsumosEnviados';
+import { InsumosEnviadosView } from './modules/inventario/InsumosEnviadosView';
 import OrdenesPedido from './modules/comercial/OrdenesPedido';
 import Proveedores from './modules/configuracion/Proveedores';
 
@@ -16,6 +17,7 @@ import Proveedores from './modules/configuracion/Proveedores';
 import { ClientesView } from './modules/comercial/ClientesView';
 import { RegistroDiarioView } from './modules/comercial/RegistroDiarioView';
 import { RemisionesView } from './modules/comercial/RemisionesView';
+import { RemisionEntregaView } from './modules/comercial/RemisionEntregaView';
 
 // Empleados
 import EmpleadosView from './modules/configuracion/Empleados';
@@ -23,15 +25,8 @@ import EmpleadosView from './modules/configuracion/Empleados';
 // Roles
 import Roles from './modules/configuracion/Roles';
 
-// Ventas
-import Ventas from './modules/comercial/Ventas';
-
-
-import { DashboardPage } from './modules/principal/Dashboard'
-// IMPORTACIÓN DE MI PERFIL
-// Ajusta la ruta dependiendo de dónde guardaste exactamente el archivo MiPerfil.tsx
+import { DashboardPage } from './modules/principal/Dashboard';
 import MiPerfil from './modules/auth/components/MiPerfil';
-
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -61,19 +56,20 @@ export default function App() {
       
       {/* MÓDULO PRODUCCIÓN */}
       {currentView === 'produccion' && <ProduccionView dark={dark} />}
+      {currentView === 'registroDiarioEmpleado' && <RegistroDiarioEmpleadoView dark={dark} />}
 
       {/* MÓDULO INVENTARIO */}
       {currentView === 'tipoInsumos' && <TipoInsumoView dark={dark} />}
       {currentView === 'insumos' && <InsumosView dark={dark} />}
       {currentView === 'compras' && <ComprasView dark={dark} />}
-      {currentView === 'insumosEnviados' && <InsumosEnviados dark={dark} />}
+      {currentView === 'insumosEnviados' && <InsumosEnviadosView dark={dark} />}
 
       {/* MÓDULO COMERCIAL */}
       {currentView === 'ordenPedido' && <OrdenesPedido dark={dark} />}
       {currentView === 'clientes' && <ClientesView dark={dark} />}
       {currentView === 'registroDiario' && <RegistroDiarioView dark={dark} />}
       {currentView === 'remisiones' && <RemisionesView dark={dark} />}
-      {currentView === 'ventas' && <Ventas dark={dark} />}
+      {currentView === 'remisionEntrega' && <RemisionEntregaView dark={dark} />}
 
       {/* MÓDULO CONFIGURACIÓN Y PARÁMETROS */}
       {currentView === 'proveedores' && <Proveedores dark={dark} />}
@@ -82,7 +78,6 @@ export default function App() {
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
       {currentView === 'roles' && <Roles dark={dark} />}
 
-      {currentView === 'ventas' && <Ventas dark={dark} />}
       {currentView === 'dashboard' && <DashboardPage dark={dark} />}
       
       {/* MI PERFIL */}
@@ -91,12 +86,6 @@ export default function App() {
           dark={dark} 
           currentUser={{ nombre: "Juan Camilo", rol: "Administrador" }} 
         />
-      )}
-
-      {currentView === 'dashboard' && (
-        <div style={{ padding: 24, color: dark ? '#F8F9FA' : '#121212', fontSize: 24, fontWeight: 800 }}>
-          Dashboard Principal de Eslabón
-        </div>
       )}
 
     </MainLayout>
