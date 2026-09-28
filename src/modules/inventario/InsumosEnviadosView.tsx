@@ -1,23 +1,22 @@
 import React, { useState } from 'react';
 import { 
-  ClipboardList, Pencil, Trash2, X, 
+  Package, Pencil, Trash2, X, 
   Search, AlertTriangle 
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+// PALETA DE DISEÑO ESLABÓN
 const GOLD       = "#C9A227";
 const GOLD_LIGHT = "#E6B84A";
 const DANGER     = "#DC3545";
 const DANGER_BG  = "#FDECEA";
 const DANGER_TXT = "#721c24";
 
-export interface RegistroDiarioAdmin {
-  Id_registro_diario: string;
-  empleado: string;
-  pieza: string;
-  maquina: string;
+export interface InsumoEnviado {
+  Id_insumo_enviado: string;
+  id_remision: string;
+  Nombre: string;
   Cantidad: number;
-  Fecha: string;
 }
 
 export const IdBadge: React.FC<{ id: string }> = ({ id }) => (
@@ -90,7 +89,7 @@ export const Modal: React.FC<{
   dark?: boolean;
   maxWidth?: string;
   children: React.ReactNode;
-}> = ({ title, icon, onClose, onSave, dark, maxWidth = "500px", children }) => {
+}> = ({ title, icon, onClose, onSave, dark, maxWidth = "650px", children }) => {
   const cardBg = dark ? '#1E1E1E' : '#FFFFFF';
   const fg = dark ? '#F8F9FA' : '#121212';
   return (
@@ -129,7 +128,7 @@ export const Modal: React.FC<{
               Cancelar
             </button>
             <button onClick={onSave} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: `linear-gradient(135deg, #C9A227, #E6B84A)`, color: '#121212', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-              Guardar Cambios
+              Guardar
             </button>
           </div>
         )}
@@ -147,70 +146,76 @@ export const Field: React.FC<{ label: string; dark?: boolean; children: React.Re
   </div>
 );
 
-interface RegistroDiarioViewProps {
+interface InsumosEnviadosViewProps {
   dark?: boolean;
 }
 
-export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = false }) => {
+export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark = false }) => {
   const [busqueda, setBusqueda] = useState('');
   
-  const [registros, setRegistros] = useState<RegistroDiarioAdmin[]>([
-    { Id_registro_diario: 'REG-001', empleado: 'Juan Pérez', pieza: 'Manga Larga', maquina: 'Plana Industrial', Cantidad: 45, Fecha: '2026-09-26' },
-    { Id_registro_diario: 'REG-002', empleado: 'María Rodríguez', pieza: 'Cuello Polo', maquina: 'Fileteadora', Cantidad: 60, Fecha: '2026-09-27' }
+  // Varios insumos enviados asociados a una misma remisión (REM-101) y otras remisiones
+  const [insumos, setInsumos] = useState<InsumoEnviado[]>([
+    { Id_insumo_enviado: 'INS-ENV-001', id_remision: 'REM-101', Nombre: 'Botones Dorados Metálicos', Cantidad: 150 },
+    { Id_insumo_enviado: 'INS-ENV-002', id_remision: 'REM-101', Nombre: 'Hilo Poliéster Negro 40/2', Cantidad: 12 },
+    { Id_insumo_enviado: 'INS-ENV-003', id_remision: 'REM-101', Nombre: 'Cierres de Cremallera 20cm', Cantidad: 45 },
+    { Id_insumo_enviado: 'INS-ENV-004', id_remision: 'REM-101', Nombre: 'Elástico Reforzado de 2cm', Cantidad: 200 },
+    { Id_insumo_enviado: 'INS-ENV-005', id_remision: 'REM-101', Nombre: 'Sesgo Negro de Algodón', Cantidad: 90 },
+    { Id_insumo_enviado: 'INS-ENV-006', id_remision: 'REM-101', Nombre: 'Etiquetas de Talla S/M/L', Cantidad: 300 },
+    { Id_insumo_enviado: 'INS-ENV-007', id_remision: 'REM-102', Nombre: 'Tela Lino Estampada', Cantidad: 50 }
   ]);
 
-  const [modalEdit, setModalEdit] = useState<RegistroDiarioAdmin | null>(null);
-  const [modalDelete, setModalDelete] = useState<RegistroDiarioAdmin | null>(null);
+  const [modalEdit, setModalEdit] = useState<InsumoEnviado | null>(null);
+  const [modalDelete, setModalDelete] = useState<InsumoEnviado | null>(null);
 
-  // Estados del formulario de edición
+  const [formNombre, setFormNombre] = useState('');
   const [formCantidad, setFormCantidad] = useState<number | ''>('');
-  const [formFecha, setFormFecha] = useState('');
 
-  const handleOpenEdit = (item: RegistroDiarioAdmin) => {
+  const handleOpenEdit = (item: InsumoEnviado) => {
     setModalEdit(item);
+    setFormNombre(item.Nombre);
     setFormCantidad(item.Cantidad);
-    setFormFecha(item.Fecha);
   };
 
   const handleSaveEdit = () => {
-    if (formCantidad === '' || Number(formCantidad) <= 0) {
-      toast.error('Ingresa una cantidad válida mayor a 0');
+    if (!formNombre.trim() || formCantidad === '' || Number(formCantidad) <= 0) {
+      toast.error('Por favor completa todos los campos correctamente');
       return;
     }
 
     if (modalEdit) {
-      setRegistros(registros.map(r => r.Id_registro_diario === modalEdit.Id_registro_diario ? {
-        ...r,
-        Cantidad: Number(formCantidad),
-        Fecha: formFecha
-      } : r));
-      toast.success('Registro diario actualizado correctamente');
+      setInsumos(insumos.map(i => i.Id_insumo_enviado === modalEdit.Id_insumo_enviado ? {
+        ...i,
+        Nombre: formNombre,
+        Cantidad: Number(formCantidad)
+      } : i));
+      toast.success('Insumo enviado actualizado');
       setModalEdit(null);
     }
   };
 
-  const registrosFiltrados = registros.filter(r =>
-    r.Id_registro_diario.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.empleado.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.pieza.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.Fecha.includes(busqueda)
+  const insumosFiltrados = insumos.filter(i =>
+    i.Nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+    i.id_remision.toLowerCase().includes(busqueda.toLowerCase()) ||
+    i.Id_insumo_enviado.toLowerCase().includes(busqueda.toLowerCase())
   );
 
   const fg = dark ? "#F8F9FA" : "#121212";
   const subtle = dark ? "#9A9A9A" : "#6B6B6B";
   const cardBg = dark ? "#1E1E1E" : "#FFFFFF";
+  const bg = dark ? "#121212" : "#F8F9FA";
   const inputBg = dark ? "#2A2A2A" : "#F3F3F5";
   const borderNormal = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
 
   return (
-    <div style={{ backgroundColor: dark ? "#121212" : "#F8F9FA", color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif' }}>
+    <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif' }}>
+      {/* HEADER */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
           <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: GOLD, fontFamily: 'Montserrat, sans-serif' }}>
-            Registro Diario de Producción — Administrador
+            Insumos Enviados por Cliente
           </h2>
           <p style={{ fontSize: 13, color: subtle, margin: 0, fontFamily: 'Montserrat, sans-serif' }}>
-            Control global, búsqueda, edición y auditoría de los registros de producción
+            Gestión y control de múltiples materias primas enviadas bajo una misma remisión
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -218,7 +223,7 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
             <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
             <input
               type="text"
-              placeholder="Buscar por empleado, pieza o fecha..."
+              placeholder="Buscar insumo o remisión..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               style={{
@@ -231,22 +236,21 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
         </div>
       </div>
 
-      <TableShell headers={['ID REGISTRO', 'EMPLEADO', 'PIEZA', 'MÁQUINA', 'CANTIDAD', 'FECHA', 'ACCIONES']} dark={dark}>
-        {registrosFiltrados.length === 0 ? (
+      {/* TABLA */}
+      <TableShell headers={['ID INSUMO', 'ID REMISIÓN', 'NOMBRE DEL INSUMO', 'CANTIDAD', 'ACCIONES']} dark={dark}>
+        {insumosFiltrados.length === 0 ? (
           <tr>
-            <td colSpan={7} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
-              0 resultados encontrados.
+            <td colSpan={5} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
+              No se encontraron insumos enviados registrados.
             </td>
           </tr>
         ) : (
-          registrosFiltrados.map((item) => (
-            <tr key={item.Id_registro_diario} style={{ borderBottom: `1px solid ${borderNormal}` }}>
-              <td style={{ padding: '12px 14px' }}><IdBadge id={item.Id_registro_diario} /></td>
-              <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: fg }}>{item.empleado}</td>
-              <td style={{ padding: '12px 14px', fontSize: 13, color: fg }}>{item.pieza}</td>
-              <td style={{ padding: '12px 14px', fontSize: 12, color: subtle }}>{item.maquina}</td>
+          insumosFiltrados.map((item) => (
+            <tr key={item.Id_insumo_enviado} style={{ borderBottom: `1px solid ${borderNormal}` }}>
+              <td style={{ padding: '12px 14px' }}><IdBadge id={item.Id_insumo_enviado} /></td>
+              <td style={{ padding: '12px 14px' }}><IdBadge id={item.id_remision} /></td>
+              <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: fg }}>{item.Nombre}</td>
               <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{item.Cantidad}</td>
-              <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 12, color: subtle }}>{item.Fecha}</td>
               <td style={{ padding: '12px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <ActionCircleBtn variant="gold" onClick={() => handleOpenEdit(item)} title="Editar">
@@ -265,34 +269,34 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
       {/* MODAL EDITAR */}
       {modalEdit && (
         <Modal
-          title="Editar Registro Diario"
-          icon={<ClipboardList size={16} color={GOLD} />}
+          title="Editar Insumo Enviado"
+          icon={<Package size={16} color={GOLD} />}
           onClose={() => setModalEdit(null)}
           onSave={handleSaveEdit}
           dark={dark}
-          maxWidth="450px"
+          maxWidth="500px"
         >
-          <Field label="Empleado / Tarea" dark={dark}>
+          <Field label="ID Remisión (Asociada)" dark={dark}>
             <input
               type="text"
               disabled
-              value={`${modalEdit.empleado} - ${modalEdit.pieza}`}
+              value={modalEdit.id_remision}
               style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: dark ? '#333' : '#EAEAEA', color: subtle, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box', cursor: 'not-allowed' }}
             />
           </Field>
-          <Field label="Cantidad Producida" dark={dark}>
+          <Field label="Nombre del Insumo" dark={dark}>
+            <input
+              type="text"
+              value={formNombre}
+              onChange={(e) => setFormNombre(e.target.value)}
+              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
+            />
+          </Field>
+          <Field label="Cantidad" dark={dark}>
             <input
               type="number"
               value={formCantidad}
               onChange={(e) => setFormCantidad(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
-            />
-          </Field>
-          <Field label="Fecha" dark={dark}>
-            <input
-              type="date"
-              value={formFecha}
-              onChange={(e) => setFormFecha(e.target.value)}
               style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
             />
           </Field>
@@ -308,16 +312,16 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
               <div style={{ width: 64, height: 64, borderRadius: '50%', background: DANGER_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                 <AlertTriangle size={28} color={DANGER} />
               </div>
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: fg, margin: '0 0 12px' }}>¿Eliminar registro diario?</h3>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: fg, margin: '0 0 12px' }}>¿Eliminar insumo?</h3>
               <div style={{ background: DANGER_BG, border: `1px solid ${DANGER}4D`, borderRadius: 10, padding: '10px 14px', fontSize: 12, color: DANGER_TXT, fontWeight: 600, marginBottom: 20 }}>
-                Esta acción retirará el registro de producción de la base de datos de forma irreversible.
+                Esta acción eliminará el registro del insumo enviado permanentemente.
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <button onClick={() => setModalDelete(null)} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', background: dark ? '#2A2A2A' : '#EAEAEA', color: fg, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
                 <button onClick={() => {
-                  setRegistros(registros.filter(r => r.Id_registro_diario !== modalDelete.Id_registro_diario));
+                  setInsumos(insumos.filter(i => i.Id_insumo_enviado !== modalDelete.Id_insumo_enviado));
                   setModalDelete(null);
-                  toast.success('Registro diario eliminado correctamente');
+                  toast.success('Insumo eliminado correctamente');
                 }} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: DANGER, color: '#FFFFFF', fontWeight: 700, cursor: 'pointer' }}>Sí, eliminar</button>
               </div>
             </div>
