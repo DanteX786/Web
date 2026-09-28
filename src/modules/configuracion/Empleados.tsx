@@ -19,14 +19,17 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  Link
+  Link,
+  Switch,
+  FormControlLabel,
+  Chip
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import AddIcon from '@mui/icons-material/Add';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
+import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 interface Employee {
   id: string;
@@ -37,7 +40,7 @@ interface Employee {
   codRol: string;
   rol: string;
   identificacion: string;
-  estado: string;
+  estado: string; // 'ACTIVO' o 'INACTIVO'
   password?: string; 
 }
 
@@ -56,17 +59,6 @@ const styles = {
   badgeGold: { backgroundColor: '#fcf8eb', color: '#d6a848', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold', fontSize: '0.8rem', display: 'inline-block' },
   btnGold: { backgroundColor: '#dfb754', color: '#000', textTransform: 'none', fontWeight: 'bold', '&:hover': { backgroundColor: '#cda542' } },
   tableHeader: { borderBottom: '2px solid #dfb754' },
-  
-  getStatusStyle: (status: string) => ({
-    backgroundColor: status === 'ACTIVO' ? '#e6f4ea' : '#fce8e8',
-    color: status === 'ACTIVO' ? '#1e8e3e' : '#d93025',
-    fontWeight: 'bold',
-    fontSize: '0.8rem',
-    borderRadius: '20px',
-    padding: '0',
-    display: 'flex',
-    alignItems: 'center'
-  }),
 
   modalInput: {
     backgroundColor: '#f4f5f7',
@@ -91,11 +83,15 @@ const styles = {
 export default function EmpleadosModulo({ dark }: EmpleadosModuloProps) {
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [showPassword, setShowPassword] = useState<{ [key: string]: boolean }>({});
   
   const [openModal, setOpenModal] = useState<boolean>(false);
   const [modalMode, setModalMode] = useState<'ADD' | 'EDIT'>('ADD');
-  const [formData, setFormData] = useState<Partial<Employee>>({});
+  const [formData, setFormData] = useState<Partial<Employee> & { confirmPassword?: string }>({});
+  const [errorMessage, setErrorMessage] = useState<string>('');
+
+  // Estados para el modal de confirmación de eliminación
+  const [openDeleteModal, setOpenDeleteModal] = useState<boolean>(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
 
   const filteredEmployees = employees.filter(emp => 
     emp.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -103,29 +99,67 @@ export default function EmpleadosModulo({ dark }: EmpleadosModuloProps) {
     emp.correo.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleStatusChange = (id: string, newStatus: string) => {
-    setEmployees(employees.map(emp => emp.id === id ? { ...emp, estado: newStatus } : emp));
+  // Cambio directo de estado desde la tabla con el Switch
+  const handleToggleStatus = (id: string) => {
+    setEmployees(employees.map(emp => {
+      if (emp.id === id) {
+        const nextStatus = emp.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
+        return { ...emp, estado: nextStatus };
+      }
+      return emp;
+    }));
+  };
+
+  const handleOpenDeleteDialog = (employee: Employee) => {
+    setEmployeeToDelete(employee);
+    setOpenDeleteModal(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (employeeToDelete) {
+      setEmployees(employees.filter(emp => emp.id !== employeeToDelete.id));
+      setOpenDeleteModal(false);
+      setEmployeeToDelete(null);
+    }
   };
 
   const handleOpenModal = (mode: 'ADD' | 'EDIT', employee: Employee | null = null) => {
     setModalMode(mode);
-    setFormData(employee || { id: '', nombre: '', telefono: '', direccion: '', correo: '', codRol: 'ROL-02', rol: 'Empleado', identificacion: '', estado: 'ACTIVO', password: '' });
+    setErrorMessage('');
+    setFormData(employee ? { ...employee, confirmPassword: employee.password || '' } : { id: '', nombre: '', telefono: '', direccion: '', correo: '', codRol: 'ROL-02', rol: 'Empleado', identificacion: '', estado: 'ACTIVO', password: '', confirmPassword: '' });
     setOpenModal(true);
   };
 
   const handleSave = () => {
+    const { nombre, telefono, direccion, correo, identificacion, password, confirmPassword } = formData;
+    
+    if (!nombre || !telefono || !direccion || !correo || !identificacion) {
+      setErrorMessage('Por favor, completa todos los campos obligatorios.');
+      return;
+    }
+
+    if (modalMode === 'ADD' && (!password || !confirmPassword)) {
+      setErrorMessage('Por favor, ingresa y confirma la contraseña.');
+      return;
+    }
+
+    if (password && password !== confirmPassword) {
+      setErrorMessage('Las contraseñas no coinciden.');
+      return;
+    }
+
+    setErrorMessage('');
+
     if (modalMode === 'ADD') {
       const newId = `EMP-00${employees.length + 1}`;
-      const newEmployee = { ...formData, id: newId } as Employee;
+      const { confirmPassword, ...employeeData } = formData;
+      const newEmployee = { ...employeeData, id: newId } as Employee;
       setEmployees([...employees, newEmployee]);
     } else {
-      setEmployees(employees.map(emp => emp.id === formData.id ? (formData as Employee) : emp));
+      const { confirmPassword, ...employeeData } = formData;
+      setEmployees(employees.map(emp => emp.id === formData.id ? (employeeData as Employee) : emp));
     }
     setOpenModal(false);
-  };
-
-  const togglePasswordVisibility = (id: string) => {
-    setShowPassword(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   const autoId = `EMP-00${employees.length + 1}`;
@@ -184,59 +218,77 @@ export default function EmpleadosModulo({ dark }: EmpleadosModuloProps) {
               <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>ROL</TableCell>
               <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>IDENTIFICACIÓN</TableCell>
               <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>ESTADO</TableCell>
-              <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>CONTRASEÑA</TableCell>
               <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }} align="center">ACCIONES</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredEmployees.map((row) => (
-              <TableRow key={row.id} sx={{ '&:last-child td, &:last-child th': { border: 0 }, backgroundColor: dark ? '#1e1e1e' : '#fafafa' }}>
-                <TableCell><Box sx={styles.badgeGold}>{row.id}</Box></TableCell>
-                <TableCell sx={{ fontWeight: 'bold', color: dark ? '#ddd' : 'inherit' }}>{row.nombre}</TableCell>
-                <TableCell sx={{ color: '#666' }}>{row.telefono}</TableCell>
-                <TableCell sx={{ color: '#666' }}>{row.direccion}</TableCell>
-                <TableCell>
-                  <Link href={`mailto:${row.correo}`} sx={{ color: '#4da6ff', textDecoration: 'none' }}>
-                    {row.correo}
-                  </Link>
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={styles.badgeGold}>{row.codRol}</Box>
-                    <Typography variant="body2" sx={{ color: '#666' }}>{row.rol}</Typography>
-                  </Box>
-                </TableCell>
-                <TableCell sx={{ fontWeight: '500', color: dark ? '#ddd' : 'inherit' }}>{row.identificacion}</TableCell>
-                <TableCell>
-                  <Select
-                    value={row.estado}
-                    onChange={(e) => handleStatusChange(row.id, e.target.value as string)}
-                    size="small"
-                    disableUnderline
-                    variant="standard"
-                    sx={{ ...styles.getStatusStyle(row.estado), pl: 1.5, pr: 0.5, '& .MuiSelect-select': { paddingRight: '24px !important' }, '&::before, &::after': { display: 'none' } }}
-                  >
-                    <MenuItem value="ACTIVO">ACTIVO</MenuItem>
-                    <MenuItem value="INACTIVO">INACTIVO</MenuItem>
-                  </Select>
-                </TableCell>
-                <TableCell>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography sx={{ letterSpacing: '2px', mt: 1, color: dark ? '#ddd' : 'inherit' }}>
-                      {showPassword[row.id] ? (row.password || 'password123') : '••••••••'}
-                    </Typography>
-                    <IconButton size="small" onClick={() => togglePasswordVisibility(row.id)}>
-                      {showPassword[row.id] ? <VisibilityIcon fontSize="small" sx={{ color: '#bbb' }}/> : <VisibilityOffIcon fontSize="small" sx={{ color: '#bbb' }}/>}
-                    </IconButton>
-                  </Box>
-                </TableCell>
-                <TableCell align="center">
-                  <IconButton onClick={() => handleOpenModal('EDIT', row)} size="small" sx={{ color: '#dfb754' }}>
-                    <EditIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
+            {filteredEmployees.map((row) => {
+              const isActive = row.estado === 'ACTIVO';
+              return (
+                <TableRow key={row.id} sx={{ '&:last-child td, &:last-child th': { border: 0 }, backgroundColor: dark ? '#1e1e1e' : '#fafafa' }}>
+                  <TableCell><Box sx={styles.badgeGold}>{row.id}</Box></TableCell>
+                  <TableCell sx={{ fontWeight: 'bold', color: dark ? '#ddd' : 'inherit' }}>{row.nombre}</TableCell>
+                  <TableCell sx={{ color: '#666' }}>{row.telefono}</TableCell>
+                  <TableCell sx={{ color: '#666' }}>{row.direccion}</TableCell>
+                  <TableCell>
+                    <Link href={`mailto:${row.correo}`} sx={{ color: '#4da6ff', textDecoration: 'none' }}>
+                      {row.correo}
+                    </Link>
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={styles.badgeGold}>{row.codRol}</Box>
+                      <Typography variant="body2" sx={{ color: '#666' }}>{row.rol}</Typography>
+                    </Box>
+                  </TableCell>
+                  <TableCell sx={{ fontWeight: '500', color: dark ? '#ddd' : 'inherit' }}>{row.identificacion}</TableCell>
+                  
+                  {/* Columna de Estado interactiva con Switch y Chip */}
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                      <Switch 
+                        size="small"
+                        checked={isActive}
+                        onChange={() => handleToggleStatus(row.id)}
+                        sx={{
+                          '& .MuiSwitch-switchBase.Mui-checked': {
+                            color: '#137333',
+                            '&:hover': { backgroundColor: 'rgba(19, 115, 51, 0.08)' },
+                          },
+                          '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                            backgroundColor: '#137333',
+                          },
+                        }}
+                      />
+                      <Chip 
+                        label={row.estado} 
+                        size="small"
+                        sx={{ 
+                          backgroundColor: isActive ? (dark ? '#0A2E1A' : '#E6F4EA') : (dark ? '#3C1414' : '#FCE8E6'), 
+                          color: isActive ? '#137333' : '#C5221F', 
+                          fontWeight: 'bold',
+                          borderRadius: '20px',
+                          fontSize: '0.75rem',
+                          height: '24px',
+                          px: 0.5
+                        }} 
+                      />
+                    </Box>
+                  </TableCell>
+
+                  <TableCell align="center">
+                    <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1 }}>
+                      <IconButton onClick={() => handleOpenModal('EDIT', row)} size="small" sx={{ color: '#dfb754' }}>
+                        <EditIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton onClick={() => handleOpenDeleteDialog(row)} size="small" sx={{ color: '#d93025' }}>
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
         <Box sx={{ p: 2, backgroundColor: dark ? '#121212' : '#fcfcfc', borderTop: '1px solid #eee' }}>
@@ -244,7 +296,7 @@ export default function EmpleadosModulo({ dark }: EmpleadosModuloProps) {
         </Box>
       </TableContainer>
 
-      {/* Modal Rediseñado sin Componente Grid y actualizando slotProps para el paper */}
+      {/* Modal de Crear / Editar Empleado */}
       <Dialog 
         open={openModal} 
         onClose={() => setOpenModal(false)} 
@@ -267,6 +319,23 @@ export default function EmpleadosModulo({ dark }: EmpleadosModuloProps) {
         </DialogTitle>
 
         <DialogContent dividers sx={{ borderBottom: 'none', px: 4, py: 3 }}>
+          {errorMessage && (
+            <Box 
+              sx={{ 
+                backgroundColor: '#fde8e8', 
+                color: '#c5221f', 
+                p: '10px 14px', 
+                borderRadius: '8px', 
+                mb: 2.5, 
+                fontWeight: '500', 
+                fontSize: '0.85rem',
+                border: '1px solid #fad2d1'
+              }}
+            >
+              {errorMessage}
+            </Box>
+          )}
+
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2.5 }}>
             <Box>
               <Typography sx={styles.modalLabel}>ID (AUTO)</Typography>
@@ -312,22 +381,41 @@ export default function EmpleadosModulo({ dark }: EmpleadosModuloProps) {
                 <MenuItem value="Empleado">ROL-02 — Empleado</MenuItem>
               </Select>
             </Box>
-            <Box>
+            
+            {/* Campo Estado con Switch en el modal */}
+            <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <Typography sx={styles.modalLabel}>ESTADO</Typography>
-              <Select 
-                value={formData.estado || 'ACTIVO'} 
-                onChange={(e) => setFormData({...formData, estado: e.target.value})} 
-                fullWidth 
-                sx={styles.modalInput}
-              >
-                <MenuItem value="ACTIVO">Activo</MenuItem>
-                <MenuItem value="INACTIVO">Inactivo</MenuItem>
-              </Select>
+              <FormControlLabel
+                control={
+                  <Switch 
+                    checked={formData.estado === 'ACTIVO'}
+                    onChange={(e) => setFormData({ ...formData, estado: e.target.checked ? 'ACTIVO' : 'INACTIVO' })}
+                    sx={{
+                      '& .MuiSwitch-switchBase.Mui-checked': {
+                        color: '#137333',
+                        '&:hover': { backgroundColor: 'rgba(19, 115, 51, 0.08)' },
+                      },
+                      '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                        backgroundColor: '#137333',
+                      },
+                    }}
+                  />
+                }
+                label={
+                  <Typography variant="body2" sx={{ fontWeight: 'bold', color: formData.estado === 'ACTIVO' ? '#137333' : '#C5221F' }}>
+                    {formData.estado === 'ACTIVO' ? 'ACTIVO' : 'INACTIVO'}
+                  </Typography>
+                }
+              />
             </Box>
 
-            <Box sx={{ gridColumn: '1 / -1' }}>
+            <Box>
               <Typography sx={styles.modalLabel}>CONTRASEÑA</Typography>
               <TextField fullWidth type="password" placeholder="........" value={formData.password || ''} onChange={(e) => setFormData({...formData, password: e.target.value})} sx={styles.modalInput} />
+            </Box>
+            <Box>
+              <Typography sx={styles.modalLabel}>CONFIRMAR CONTRASEÑA</Typography>
+              <TextField fullWidth type="password" placeholder="........" value={formData.confirmPassword || ''} onChange={(e) => setFormData({...formData, confirmPassword: e.target.value})} sx={styles.modalInput} />
             </Box>
           </Box>
         </DialogContent>
@@ -345,6 +433,83 @@ export default function EmpleadosModulo({ dark }: EmpleadosModuloProps) {
             sx={{ ...styles.btnGold, px: 4 }}
           >
             Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de Confirmación de Eliminación */}
+      <Dialog
+        open={openDeleteModal}
+        onClose={() => setOpenDeleteModal(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '16px',
+              p: 1,
+              textAlign: 'center',
+              borderTop: '4px solid #d93025'
+            }
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 1, pt: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
+            <Box 
+              sx={{ 
+                backgroundColor: '#fce8e8', 
+                color: '#d93025', 
+                borderRadius: '50%', 
+                p: 1.5, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }}
+            >
+              <WarningAmberIcon sx={{ fontSize: '32px' }} />
+            </Box>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1a1a1a' }}>
+              ¿Seguro deseas eliminar este empleado?
+            </Typography>
+          </Box>
+        </DialogTitle>
+
+        <DialogContent sx={{ pb: 2 }}>
+          <Typography variant="body2" sx={{ color: '#666' }}>
+            Esta acción eliminará a <strong>{employeeToDelete?.nombre}</strong> ({employeeToDelete?.id}) permanentemente del sistema.
+          </Typography>
+        </DialogContent>
+
+        <DialogActions sx={{ justifyContent: 'center', pb: 3, gap: 1.5 }}>
+          <Button
+            onClick={() => setOpenDeleteModal(false)}
+            sx={{ 
+              backgroundColor: '#e2e8f0', 
+              color: '#1a1a1a', 
+              fontWeight: 'bold', 
+              textTransform: 'none', 
+              px: 3, 
+              borderRadius: '8px',
+              '&:hover': { backgroundColor: '#cbd5e1' } 
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleConfirmDelete}
+            variant="contained"
+            sx={{ 
+              backgroundColor: '#d93025', 
+              color: '#fff', 
+              fontWeight: 'bold', 
+              textTransform: 'none', 
+              px: 3, 
+              borderRadius: '8px',
+              '&:hover': { backgroundColor: '#b31412' } 
+            }}
+          >
+            Sí, eliminar
           </Button>
         </DialogActions>
       </Dialog>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Plus, Trash2, Pencil, X, Search, AlertTriangle, CheckCircle 
 } from 'lucide-react';
@@ -106,56 +106,6 @@ export const Field: React.FC<{ label: string; dark?: boolean; children: React.Re
   </div>
 );
 
-export const ModuleHeader: React.FC<{
-  title: string;
-  subtitle: string;
-  onAdd: () => void;
-  addLabel: string;
-  search: string;
-  onSearch: (val: string) => void;
-  dark?: boolean;
-}> = ({ title, subtitle, onAdd, addLabel, search, onSearch, dark }) => {
-  const fg = dark ? '#F8F9FA' : '#121212';
-  const subtle = dark ? '#9A9A9A' : '#6B6B6B';
-  const surfaceBg = dark ? '#252525' : '#F8F8F8';
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-      <div>
-        <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: fg, fontFamily: 'Montserrat, sans-serif' }}>{title}</h2>
-        <p style={{ fontSize: 13, color: subtle, margin: 0, fontFamily: 'Montserrat, sans-serif' }}>{subtitle}</p>
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-          <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
-          <input
-            type="text"
-            placeholder="Buscar..."
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            style={{
-              padding: '8px 12px 8px 36px', borderRadius: 8,
-              border: `1px solid ${dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
-              background: surfaceBg, color: fg, fontSize: 13, outline: 'none',
-              fontFamily: 'Montserrat, sans-serif'
-            }}
-          />
-        </div>
-        <button
-          onClick={onAdd}
-          style={{
-            background: `linear-gradient(135deg, #C9A227, ${GOLD}, ${GOLD_LIGHT})`,
-            color: '#121212', fontWeight: 700, fontSize: 14, borderRadius: 10,
-            padding: '8px 16px', border: 'none', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Montserrat, sans-serif'
-          }}
-        >
-          <Plus size={16} /> {addLabel}
-        </button>
-      </div>
-    </div>
-  );
-};
-
 export const ConfirmDelete: React.FC<{
   onCancel: () => void;
   onConfirm: () => void;
@@ -229,6 +179,9 @@ interface ClientesViewProps {
 
 export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   const [busqueda, setBusqueda] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
   const [clientes, setClientes] = useState<Cliente[]>([
     { id: '00-1', nombre: 'QueNOTA', identificacion: '10458231', direccion: 'Cra 45 #20-432', correo: 'guenota@gmail.com', telefono: '3049820982', estado: 'ACTIVO' },
     { id: '00-2', nombre: 'Offcors', identificacion: '9032145', direccion: 'Cra 43 #43s', correo: 'offcors@gmail.com', telefono: '3092903093', estado: 'ACTIVO' },
@@ -246,6 +199,17 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   const [formCorreo, setFormCorreo] = useState('');
   const [formTelefono, setFormTelefono] = useState('');
   const [formEstado, setFormEstado] = useState<'ACTIVO' | 'INACTIVO'>('ACTIVO');
+
+  // Cerrar el desplegable si se hace clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const abrirFormulario = (cli?: Cliente) => {
     if (cli) {
@@ -269,8 +233,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   };
 
   const handleGuardarCliente = () => {
-    if (!formNombre.trim() || !formIdentificacion.trim()) {
-      toast.error('Completa los campos obligatorios (Nombre e Identificación)');
+    if (!formNombre.trim() || !formIdentificacion.trim() || !formDireccion.trim() || !formCorreo.trim() || !formTelefono.trim()) {
+      toast.error('Todos los campos son obligatorios para guardar el cliente.');
       return;
     }
 
@@ -308,12 +272,21 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
     toast.success(`Estado actualizado a ${nuevoEstado}`);
   };
 
-  const clientesFiltrados = clientes.filter(c =>
-    c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.identificacion.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.id.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.correo.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  // Filtrado optimizado para la tabla y las sugerencias desplegables
+  const clientesFiltrados = clientes.filter(c => {
+    const query = busqueda.toLowerCase().trim();
+    if (!query) return true;
+    const idLimpio = c.id.toLowerCase();
+    const numeroBusqueda = query.replace(/^0+/, '');
+
+    return (
+      idLimpio.includes(query) ||
+      (numeroBusqueda !== '' && idLimpio.endsWith(`-${numeroBusqueda}`)) ||
+      c.nombre.toLowerCase().includes(query) ||
+      c.identificacion.toLowerCase().includes(query) ||
+      c.correo.toLowerCase().includes(query)
+    );
+  });
 
   const bg = dark ? "#121212" : "#F8F9FA";
   const fg = dark ? "#F8F9FA" : "#121212";
@@ -325,15 +298,82 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   return (
     <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif' }}>
       
-      <ModuleHeader
-        title="Clientes"
-        subtitle="Registro de clientes del taller"
-        onAdd={() => abrirFormulario()}
-        addLabel="Nuevo cliente"
-        search={busqueda}
-        onSearch={setBusqueda}
-        dark={dark}
-      />
+      {/* HEADER CON BUSCADOR DESPLEGABLE */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: fg, fontFamily: 'Montserrat, sans-serif' }}>Clientes</h2>
+          <p style={{ fontSize: 13, color: subtle, margin: 0, fontFamily: 'Montserrat, sans-serif' }}>Registro de clientes del taller</p>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          
+          {/* CONTENEDOR BUSCADOR CON SUGERENCIAS FLOTANTES */}
+          <div ref={searchRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Search size={14} color={subtle} style={{ position: 'absolute', left: 12, zIndex: 2 }} />
+            <input
+              type="text"
+              placeholder="Buscar por ID (ej. 1, 00-1)..."
+              value={busqueda}
+              onChange={(e) => {
+                setBusqueda(e.target.value);
+                setShowDropdown(true);
+              }}
+              onFocus={() => setShowDropdown(true)}
+              style={{
+                padding: '8px 12px 8px 36px', borderRadius: 8,
+                border: `1px solid ${dark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
+                background: inputBg, color: fg, fontSize: 13, outline: 'none',
+                fontFamily: 'Montserrat, sans-serif', width: 220
+              }}
+            />
+
+            {/* MENÚ DESPLEGABLE HACIA ABAJO CON OPCIONES */}
+            {showDropdown && clientesFiltrados.length > 0 && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
+                background: cardBg, border: `1px solid ${GOLD}40`, borderRadius: 10,
+                boxShadow: '0 10px 25px rgba(0,0,0,0.2)', zIndex: 100, maxHeight: 200, overflowY: 'auto'
+              }}>
+                {clientesFiltrados.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => {
+                      setBusqueda(c.id);
+                      setShowDropdown(false);
+                    }}
+                    style={{
+                      padding: '10px 12px', fontSize: 12, cursor: 'pointer',
+                      borderBottom: `1px solid ${borderNormal}`, display: 'flex',
+                      alignItems: 'center', justifyContent: 'between', gap: 8,
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = `${GOLD}15`; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
+                  >
+                    <span style={{ background: GOLD + "1F", color: GOLD, fontFamily: "monospace", fontWeight: 700, padding: "2px 6px", borderRadius: 4 }}>
+                      {c.id}
+                    </span>
+                    <span style={{ fontWeight: 600, color: fg, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {c.nombre}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={() => abrirFormulario()}
+            style={{
+              background: `linear-gradient(135deg, #C9A227, ${GOLD}, ${GOLD_LIGHT})`,
+              color: '#121212', fontWeight: 700, fontSize: 14, borderRadius: 10,
+              padding: '8px 16px', border: 'none', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Montserrat, sans-serif'
+            }}
+          >
+            <Plus size={16} /> Nuevo cliente
+          </button>
+        </div>
+      </div>
 
       <TableShell headers={['ID CLIENTE', 'NOMBRE', 'IDENTIFICACIÓN', 'DIRECCIÓN', 'CORREO', 'TELÉFONO', 'ESTADO', 'ACCIONES']} dark={dark}>
         {clientesFiltrados.length === 0 ? (
@@ -431,12 +471,15 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: subtle, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
                   />
                 </Field>
-                <Field label="Nombre" dark={dark}>
+                <Field label="Nombre (Solo Letras)" dark={dark}>
                   <input
                     type="text"
                     placeholder="Nombre del cliente"
                     value={formNombre}
-                    onChange={(e) => setFormNombre(e.target.value)}
+                    onChange={(e) => {
+                      const valorLimpio = e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '');
+                      setFormNombre(valorLimpio);
+                    }}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
                   />
                 </Field>
@@ -472,12 +515,15 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
                   />
                 </Field>
-                <Field label="Teléfono" dark={dark}>
+                <Field label="Teléfono (Solo Números)" dark={dark}>
                   <input
                     type="text"
-                    placeholder="300 000 0000"
+                    placeholder="3000000000"
                     value={formTelefono}
-                    onChange={(e) => setFormTelefono(e.target.value)}
+                    onChange={(e) => {
+                      const valorLimpio = e.target.value.replace(/\D/g, '');
+                      setFormTelefono(valorLimpio);
+                    }}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
                   />
                 </Field>
@@ -516,7 +562,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                 Guardar
               </button>
             </div>
-
           </div>
         </div>
       )}
@@ -533,7 +578,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
           }}
         />
       )}
-
     </div>
   );
 };
