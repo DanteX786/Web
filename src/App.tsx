@@ -25,22 +25,19 @@ import EmpleadosView from './modules/configuracion/Empleados';
 // Roles
 import Roles from './modules/configuracion/Roles';
 
-<<<<<<< HEAD
+
 import { DashboardPage } from './modules/principal/Dashboard';
 import MiPerfil from './modules/auth/components/MiPerfil';
 
-=======
+
 // Ventas
-import Ventas from './modules/comercial/Ventas';
 
 
 // IMPORTACIÓN DE MI PERFIL
 // Ajusta la ruta dependiendo de dónde guardaste exactamente el archivo MiPerfil.tsx
-import MiPerfil from './modules/auth/components/MiPerfil';
 
-import { DashboardPage } from './modules/principal/Dashboard';
 
->>>>>>> 6eb5cea8a7223af3f3cca2b6d806f4feba6ce1f2
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentView, setCurrentView] = useState<string>('remisiones');
@@ -90,11 +87,10 @@ export default function App() {
       {currentView === 'tiposMaquinaria' && <TiposMaquinaria dark={dark} />}
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
       {currentView === 'roles' && <Roles dark={dark} />}
-<<<<<<< HEAD
+
 
       {currentView === 'dashboard' && <DashboardPage dark={dark} />}
-=======
->>>>>>> 6eb5cea8a7223af3f3cca2b6d806f4feba6ce1f2
+
       
       {/* MI PERFIL */}
       {currentView === 'miPerfil' && (
@@ -104,17 +100,15 @@ export default function App() {
         />
       )}
 
-<<<<<<< HEAD
-=======
+
       {currentView === 'dashboard' && (
         <div style={{ padding: 24, color: dark ? '#F8F9FA' : '#121212', fontSize: 24, fontWeight: 800 }}>
           Dashboard Principal de Eslabón
         </div>
       )}
-=========
-      {currentView === 'ventas' && <Ventas dark={dark} />}
+
       {currentView === 'dashboard' && <DashboardPage dark={dark} />}
->>>>>>> 6eb5cea8a7223af3f3cca2b6d806f4feba6ce1f2
+
     </MainLayout>
   );
 }

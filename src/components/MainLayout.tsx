@@ -259,11 +259,9 @@ export default function MainLayout({
           ])}
 
           {renderAccordionGroup("configuracion", "Configuración", SlidersHorizontal, [
-            { id: "permisos", label: "Permisos", icon: Shield },
             { id: "roles", label: "Roles", icon: Key },
             { id: "empleados", label: "Empleados", icon: Users },
             { id: "proveedores", label: "Proveedores", icon: Truck },
-            { id: "envios", label: "Envíos", icon: Send },
           ])}
 
           <div style={{ borderTop: `4px solid ${GOLD}90`, marginTop: 8, paddingTop: 8 }}>
