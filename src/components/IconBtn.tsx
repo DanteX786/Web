@@ -1,22 +1,33 @@
 import React from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { LucideIcon } from 'lucide-react';
 
 const DANGER = "#DC3545";
 
 interface IconBtnProps {
+  icon?: LucideIcon;
   variant?: 'edit' | 'danger';
+  danger?: boolean;
+  dark?: boolean;
   onClick?: () => void;
 }
 
-export const IconBtn: React.FC<IconBtnProps> = ({ variant = 'edit', onClick }) => {
-  const isDanger = variant === 'danger';
+export const IconBtn: React.FC<IconBtnProps> = ({ 
+  icon: Icon, 
+  variant, 
+  danger, 
+  dark, 
+  onClick 
+}) => {
+  const isDanger = variant === 'danger' || danger;
 
   return (
     <button
       onClick={onClick}
       style={{
-        background: isDanger ? `${DANGER}1A` : 'rgba(0,0,0,0.06)',
-        border: 'none',
+        background: isDanger 
+          ? `${DANGER}1A` 
+          : dark ? '#2A2A2A' : 'rgba(0,0,0,0.06)',
+        border: dark ? '1px solid rgba(255,255,255,0.1)' : 'none',
         borderRadius: 8,
         padding: 6,
         cursor: 'pointer',
@@ -28,11 +39,9 @@ export const IconBtn: React.FC<IconBtnProps> = ({ variant = 'edit', onClick }) =
       onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.7')}
       onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
     >
-      {isDanger ? (
-        <Trash2 size={14} color={DANGER} />
-      ) : (
-        <Pencil size={14} color="#6B6B6B" />
-      )}
+      {Icon ? (
+        <Icon size={14} color={isDanger ? DANGER : (dark ? '#D1D5DB' : '#6B6B6B')} />
+      ) : null}
     </button>
   );
 };
