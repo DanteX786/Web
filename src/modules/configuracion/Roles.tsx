@@ -409,12 +409,24 @@ export default function RolesView({ dark = false }: RolesViewProps) {
     setRows((prev) => prev.filter((r) => r.id !== role.id));
   };
 
+ // Estados para controlar la paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
   const filteredRows = rows.filter((r) => 
     r.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     r.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Lógica para seccionar los datos por página
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentRows = filteredRows.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredRows.length / itemsPerPage);
+
+
   const isFormValid = formDesc.trim().length > 0 && formPerms.length > 0;
+
 
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: bgMain, color: textCol, transition: 'background-color 0.3s ease' }}>
@@ -507,7 +519,7 @@ export default function RolesView({ dark = false }: RolesViewProps) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredRows.map((row) => (
+              {currentRows.map((row) => (
                 <RoleRow 
                   key={row.id} 
                   row={row} 
@@ -521,10 +533,38 @@ export default function RolesView({ dark = false }: RolesViewProps) {
           </Table>
         </TableContainer>
 
-        <Typography variant="body2" sx={{ color: textSec, mt: 2, ml: 1 }}>
-          {rows.length} roles • {rows.reduce((acc, r) => acc + r.permissionsList.length, 0)} asignaciones
-        </Typography>
+        {/* CONTROLES DE PAGINACIÓN */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2, px: 1 }}>
+          <Typography variant="body2" sx={{ color: textSec }}>
+            Mostrando de {filteredRows.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, filteredRows.length)} de {filteredRows.length} roles
+          </Typography>
+          
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              variant="outlined"
+              size="small"
+              sx={{ textTransform: 'none', color: textCol, borderColor: borderCol }}
+            >
+              Anterior
+            </Button>
+            
+            <Typography variant="body2" sx={{ fontWeight: 'bold', px: 1, color: textCol }}>
+              Página {currentPage} de {totalPages || 1}
+            </Typography>
 
+            <Button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              variant="outlined"
+              size="small"
+              sx={{ textTransform: 'none', color: textCol, borderColor: borderCol }}
+            >
+              Siguiente
+            </Button>
+          </Box>
+        </Box>
       </Box>
 
       {/* ================= MODAL CREAR / EDITAR ROL ================= */}
@@ -763,3 +803,4 @@ export default function RolesView({ dark = false }: RolesViewProps) {
     </Box>
   );
 }
+

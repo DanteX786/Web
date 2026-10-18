@@ -93,11 +93,22 @@ export default function EmpleadosModulo({ dark }: EmpleadosModuloProps) {
   const [openDeleteModal, setOpenDeleteModal] = useState<boolean>(false);
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null);
 
+// Estados para controlar la paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
   const filteredEmployees = employees.filter(emp => 
     emp.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
     emp.identificacion.includes(searchQuery) ||
     emp.correo.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Lógica para seccionar los datos por página
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentEmployees = filteredEmployees.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
+
 
   // Cambio directo de estado desde la tabla con el Switch
   const handleToggleStatus = (id: string) => {
@@ -222,7 +233,7 @@ export default function EmpleadosModulo({ dark }: EmpleadosModuloProps) {
             </TableRow>
           </TableHead>
           <TableBody>
-            {filteredEmployees.map((row) => {
+            {currentEmployees.map((row) => {
               const isActive = row.estado === 'ACTIVO';
               return (
                 <TableRow key={row.id} sx={{ '&:last-child td, &:last-child th': { border: 0 }, backgroundColor: dark ? '#1e1e1e' : '#fafafa' }}>
@@ -291,8 +302,37 @@ export default function EmpleadosModulo({ dark }: EmpleadosModuloProps) {
             })}
           </TableBody>
         </Table>
-        <Box sx={{ p: 2, backgroundColor: dark ? '#121212' : '#fcfcfc', borderTop: '1px solid #eee' }}>
-          <Typography variant="body2" sx={{ color: '#888' }}>{filteredEmployees.length} registros</Typography>
+        {/* CONTROLES DE PAGINACIÓN */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2, backgroundColor: dark ? '#1e1e1e' : '#fcfcfc', borderTop: '1px solid #eee' }}>
+          <Typography variant="body2" sx={{ color: '#888' }}>
+            Mostrando de {filteredEmployees.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, filteredEmployees.length)} de {filteredEmployees.length} registros
+          </Typography>
+          
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              variant="outlined"
+              size="small"
+              sx={{ textTransform: 'none', color: dark ? '#ddd' : '#333', borderColor: '#ccc' }}
+            >
+              Anterior
+            </Button>
+            
+            <Typography variant="body2" sx={{ fontWeight: 'bold', px: 1, color: dark ? '#ddd' : '#333' }}>
+              Página {currentPage} de {totalPages || 1}
+            </Typography>
+
+            <Button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              variant="outlined"
+              size="small"
+              sx={{ textTransform: 'none', color: dark ? '#ddd' : '#333', borderColor: '#ccc' }}
+            >
+              Siguiente
+            </Button>
+          </Box>
         </Box>
       </TableContainer>
 

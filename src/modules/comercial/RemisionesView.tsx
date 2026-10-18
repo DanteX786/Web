@@ -268,6 +268,14 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
   const datosMostrar = rolActivo === 'CLIENTE' ? remisiones.filter(r => r.nit === '900123456') : remisiones;
   const remisionesFiltradas = datosMostrar.filter(r => r.id.toLowerCase().includes(busqueda.toLowerCase()) || r.nit.includes(busqueda));
 
+  // Lógica para seccionar los datos por página
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = remisionesFiltradas.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(remisionesFiltradas.length / itemsPerPage);
+
   // ==========================================
   // RENDER DE VISTA 1: LISTADO
   // ==========================================
@@ -317,7 +325,7 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
               {remisionesFiltradas.length === 0 ? (
                 <tr><td colSpan={8} style={{ textAlign: 'center', padding: 32, color: subtle }}>No hay remisiones registradas.</td></tr>
               ) : (
-                remisionesFiltradas.map(rem => {
+                currentItems.map(rem => {
                   const st = ESTADOS_STYLES[rem.estado];
                   return (
                   <tr key={rem.id} style={{ borderBottom: `1px solid ${borderNormal}` }}>
@@ -350,6 +358,47 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
               )}
             </tbody>
           </table>
+        </div>
+        
+        {/* CONTROLES DE PAGINACIÓN */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, padding: '0 8px' }}>
+          <span style={{ fontSize: 12, color: subtle, fontFamily: 'Montserrat, sans-serif' }}>
+            Mostrando de {remisionesFiltradas.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, remisionesFiltradas.length)} de {remisionesFiltradas.length} registros
+          </span>
+          
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              style={{
+                padding: '6px 12px', borderRadius: 6, border: `1px solid ${borderNormal}`,
+                background: currentPage === 1 ? (dark ? '#1a1a1a' : '#f5f5f5') : 'transparent',
+                color: currentPage === 1 ? subtle : fg,
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600
+              }}
+            >
+              Anterior
+            </button>
+            
+            <span style={{ fontSize: 13, fontWeight: 700, color: fg, fontFamily: 'Montserrat, sans-serif', padding: '0 8px' }}>
+              Página {currentPage} de {totalPages || 1}
+            </span>
+
+            <button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              style={{
+                padding: '6px 12px', borderRadius: 6, border: `1px solid ${borderNormal}`,
+                background: (currentPage === totalPages || totalPages === 0) ? (dark ? '#1a1a1a' : '#f5f5f5') : 'transparent',
+                color: (currentPage === totalPages || totalPages === 0) ? subtle : fg,
+                cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600
+              }}
+            >
+              Siguiente
+            </button>
+          </div>
         </div>
 
         {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}

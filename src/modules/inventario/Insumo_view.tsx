@@ -149,6 +149,14 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
     i.id.toLowerCase().includes(busqueda.toLowerCase()) ||
     i.tipoNombre.toLowerCase().includes(busqueda.toLowerCase())
   );
+     
+     // Lógica para seccionar los datos por página
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = insumosFiltrados.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(insumosFiltrados.length / itemsPerPage);
 
   return (
     <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif', boxSizing: 'border-box' }}>
@@ -229,7 +237,7 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
                 </td>
               </tr>
             ) : (
-              insumosFiltrados.map((insumo) => {
+              currentItems.map((insumo) => {
                 const stockBajo = insumo.stock <= 10;
                 return (
                   <tr key={insumo.id} style={{ borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'}` }}>
@@ -320,9 +328,47 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
         </table>
       </div>
 
-      <div style={{ fontSize: 12, color: subtle, marginTop: 12 }}>
-        {insumosFiltrados.length} registros encontrados
+     {/* CONTROLES DE PAGINACIÓN */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, padding: '0 8px' }}>
+        <span style={{ fontSize: 12, color: subtle, fontFamily: 'Montserrat, sans-serif' }}>
+          Mostrando de {insumosFiltrados.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, insumosFiltrados.length)} de {insumosFiltrados.length} registros
+        </span>
+        
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button 
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            style={{
+              padding: '6px 12px', borderRadius: 6, border: `1px solid ${borderNormal}`,
+              background: currentPage === 1 ? (dark ? '#1a1a1a' : '#f5f5f5') : 'transparent',
+              color: currentPage === 1 ? subtle : fg,
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+              fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600
+            }}
+          >
+            Anterior
+          </button>
+          
+          <span style={{ fontSize: 13, fontWeight: 700, color: fg, fontFamily: 'Montserrat, sans-serif', padding: '0 8px' }}>
+            Página {currentPage} de {totalPages || 1}
+          </span>
+
+          <button 
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages || totalPages === 0}
+            style={{
+              padding: '6px 12px', borderRadius: 6, border: `1px solid ${borderNormal}`,
+              background: (currentPage === totalPages || totalPages === 0) ? (dark ? '#1a1a1a' : '#f5f5f5') : 'transparent',
+              color: (currentPage === totalPages || totalPages === 0) ? subtle : fg,
+              cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+              fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600
+            }}
+          >
+            Siguiente
+          </button>
+        </div>
       </div>
+
 
       {/* MODAL DE CREACIÓN / EDICIÓN */}
       {isModalOpen && (

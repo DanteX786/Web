@@ -107,6 +107,15 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
     [d.id, d.nombre, d.desc].join(" ").toLowerCase().includes(search.toLowerCase())
   );
 
+  // Lógica para seccionar los datos por página
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filtered.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+
+
   function openAdd() {
     const nextCode = nextId("PIE", data.map(d => d.id));
     setForm({ id: nextCode, nombre: "", desc: "" });
@@ -187,7 +196,7 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(item => (
+            {currentItems.map(item => (
               <tr key={item.id} style={{ borderBottom: `1px solid ${dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}` }}>
                 <td style={{ padding: "10px 12px" }}><IdBadge id={item.id} /></td>
                 <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 500, color: fg }}>{item.nombre}</td>
@@ -204,7 +213,46 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
         </table>
       </div>
 
-      <p style={{ fontSize: 12, color: subtle, marginTop: 8, fontFamily: "Montserrat, sans-serif" }}>{filtered.length} registro(s) encontrado(s)</p>
+      {/* CONTROLES DE PAGINACIÓN */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, padding: '0 8px' }}>
+        <span style={{ fontSize: 12, color: subtle, fontFamily: 'Montserrat, sans-serif' }}>
+          Mostrando de {filtered.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, filtered.length)} de {filtered.length} registros
+        </span>
+        
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button 
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            style={{
+              padding: '6px 12px', borderRadius: 6, border: `1px solid ${borderNormal}`,
+              background: currentPage === 1 ? (dark ? '#1a1a1a' : '#f5f5f5') : 'transparent',
+              color: currentPage === 1 ? subtle : fg,
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+              fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600
+            }}
+          >
+            Anterior
+          </button>
+          
+          <span style={{ fontSize: 13, fontWeight: 700, color: fg, fontFamily: 'Montserrat, sans-serif', padding: '0 8px' }}>
+            Página {currentPage} de {totalPages || 1}
+          </span>
+
+          <button 
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages || totalPages === 0}
+            style={{
+              padding: '6px 12px', borderRadius: 6, border: `1px solid ${borderNormal}`,
+              background: (currentPage === totalPages || totalPages === 0) ? (dark ? '#1a1a1a' : '#f5f5f5') : 'transparent',
+              color: (currentPage === totalPages || totalPages === 0) ? subtle : fg,
+              cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+              fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600
+            }}
+          >
+            Siguiente
+          </button>
+        </div>
+      </div>
 
       {/* Modal */}
       {modal && (
