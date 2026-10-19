@@ -199,6 +199,14 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
     i.Id_insumo_enviado.toLowerCase().includes(busqueda.toLowerCase())
   );
 
+  // Lógica para seccionar los datos por página
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = insumosFiltrados.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(insumosFiltrados.length / itemsPerPage);
+
   const fg = dark ? "#F8F9FA" : "#121212";
   const subtle = dark ? "#9A9A9A" : "#6B6B6B";
   const cardBg = dark ? "#1E1E1E" : "#FFFFFF";
@@ -245,7 +253,7 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
             </td>
           </tr>
         ) : (
-          insumosFiltrados.map((item) => (
+          currentItems.map((item) => (
             <tr key={item.Id_insumo_enviado} style={{ borderBottom: `1px solid ${borderNormal}` }}>
               <td style={{ padding: '12px 14px' }}><IdBadge id={item.Id_insumo_enviado} /></td>
               <td style={{ padding: '12px 14px' }}><IdBadge id={item.id_remision} /></td>
@@ -265,6 +273,47 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
           ))
         )}
       </TableShell>
+
+      {/* CONTROLES DE PAGINACIÓN */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, padding: '0 8px' }}>
+        <span style={{ fontSize: 12, color: subtle, fontFamily: 'Montserrat, sans-serif' }}>
+          Mostrando de {insumosFiltrados.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, insumosFiltrados.length)} de {insumosFiltrados.length} registros
+        </span>
+        
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button 
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            style={{
+              padding: '6px 12px', borderRadius: 6, border: `1px solid ${borderNormal}`,
+              background: currentPage === 1 ? (dark ? '#1a1a1a' : '#f5f5f5') : 'transparent',
+              color: currentPage === 1 ? subtle : fg,
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+              fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600
+            }}
+          >
+            Anterior
+          </button>
+          
+          <span style={{ fontSize: 13, fontWeight: 700, color: fg, fontFamily: 'Montserrat, sans-serif', padding: '0 8px' }}>
+            Página {currentPage} de {totalPages || 1}
+          </span>
+
+          <button 
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages || totalPages === 0}
+            style={{
+              padding: '6px 12px', borderRadius: 6, border: `1px solid ${borderNormal}`,
+              background: (currentPage === totalPages || totalPages === 0) ? (dark ? '#1a1a1a' : '#f5f5f5') : 'transparent',
+              color: (currentPage === totalPages || totalPages === 0) ? subtle : fg,
+              cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+              fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600
+            }}
+          >
+            Siguiente
+          </button>
+        </div>
+      </div>
 
       {/* MODAL EDITAR */}
       {modalEdit && (
