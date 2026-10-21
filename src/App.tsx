@@ -2,68 +2,85 @@ import React, { useState } from 'react';
 import { Toaster } from 'sonner';
 import MainLayout from './components/MainLayout';
 import { AuthView } from './modules/auth/components/AuthView';
+import LandingPage from './components/LandingPage';
+
+// MÓDULO PRODUCCIÓN
 import { ProduccionView } from './modules/produccion/ProduccionView';
 import { RegistroDiarioEmpleadoView } from './modules/comercial/RegistroDiarioEmpleadoView';
-import TiposPieza from './modules/parametros/TiposPieza';
-import TiposMaquinaria from './modules/parametros/TiposMaquinaria';
+
+// MÓDULO INVENTARIO
 import { TipoInsumoView } from './modules/inventario/Tipo_Insumo_view';
 import { InsumosView } from './modules/inventario/Insumo_view';
 import { ComprasView } from './modules/inventario/Compras_View';
 import { InsumosEnviadosView } from './modules/inventario/InsumosEnviadosView';
-import OrdenesPedido from './modules/comercial/OrdenesPedido';
-import Proveedores from './modules/configuracion/Proveedores';
 
-// IMPORTACIÓN DE MÓDULOS DE COMERCIAL
+// MÓDULO COMERCIAL
+import OrdenesPedido from './modules/comercial/OrdenesPedido';
 import { ClientesView } from './modules/comercial/ClientesView';
 import { RegistroDiarioView } from './modules/comercial/RegistroDiarioView';
 import { RemisionesView } from './modules/comercial/RemisionesView';
 import { RemisionEntregaView } from './modules/comercial/RemisionEntregaView';
 
-// Empleados
+// MÓDULO CONFIGURACIÓN Y PARÁMETROS
+import Proveedores from './modules/configuracion/Proveedores';
+import TiposPieza from './modules/parametros/TiposPieza';
+import TiposMaquinaria from './modules/parametros/TiposMaquinaria';
 import EmpleadosView from './modules/configuracion/Empleados';
-
-// Roles
 import Roles from './modules/configuracion/Roles';
 
-
+// MÓDULO PRINCIPAL Y AUTH
 import { DashboardPage } from './modules/principal/Dashboard';
 import MiPerfil from './modules/auth/components/MiPerfil';
 
-
-// Ventas
-
-
-// IMPORTACIÓN DE MI PERFIL
-// Ajusta la ruta dependiendo de dónde guardaste exactamente el archivo MiPerfil.tsx
-
-
-
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentView, setCurrentView] = useState<string>('remisiones');
+  const [currentView, setCurrentView] = useState<string>('landing');
   const [dark, setDark] = useState<boolean>(false);
 
-  if (!isAuthenticated) {
+  // 1. SI LA VISTA ES 'landing', MUESTRA LA LANDING PAGE
+  if (currentView === 'landing') {
     return (
       <>
         <Toaster position="top-right" richColors />
-        <AuthView onLoginSuccess={() => setIsAuthenticated(true)} />
+        <LandingPage onNavigateToLogin={() => setCurrentView('login')} />
       </>
     );
   }
 
+  // 2. SI NO ESTÁ AUTENTICADO, MUESTRA LA VISTA DE INICIO DE SESIÓN
+  if (!isAuthenticated) {
+    return (
+      <>
+        <Toaster position="top-right" richColors />
+        <AuthView 
+          onLoginSuccess={() => {
+            setIsAuthenticated(true);
+            setCurrentView('dashboard'); // Redirige al Dashboard tras iniciar sesión
+          }} 
+        />
+      </>
+    );
+  }
+
+  // 3. VISTAS DEL SISTEMA DENTRO DEL MAINLAYOUT AL INICIAR SESIÓN
   return (
     <MainLayout
       currentView={currentView}
       setCurrentView={setCurrentView}
       dark={dark}
       setDark={setDark}
-      onLogout={() => setIsAuthenticated(false)}
+      onLogout={() => {
+        setIsAuthenticated(false);
+        setCurrentView('landing');
+      }}
       userName="Juan Camilo"
       userRole="Administrador"
     >
       <Toaster position="top-right" richColors />
-      
+
+      {/* MÓDULO PRINCIPAL */}
+      {currentView === 'dashboard' && <DashboardPage dark={dark} />}
+
       {/* MÓDULO PRODUCCIÓN */}
       {currentView === 'produccion' && <ProduccionView dark={dark} />}
       {currentView === 'registroDiarioEmpleado' && <RegistroDiarioEmpleadoView dark={dark} />}
@@ -88,10 +105,6 @@ export default function App() {
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
       {currentView === 'roles' && <Roles dark={dark} />}
 
-
-      {currentView === 'dashboard' && <DashboardPage dark={dark} />}
-
-      
       {/* MI PERFIL */}
       {currentView === 'miPerfil' && (
         <MiPerfil 
@@ -99,16 +112,6 @@ export default function App() {
           currentUser={{ nombre: "Juan Camilo", rol: "Administrador" }} 
         />
       )}
-
-
-      {currentView === 'dashboard' && (
-        <div style={{ padding: 24, color: dark ? '#F8F9FA' : '#121212', fontSize: 24, fontWeight: 800 }}>
-          Dashboard Principal de Eslabón
-        </div>
-      )}
-
-      {currentView === 'dashboard' && <DashboardPage dark={dark} />}
-
     </MainLayout>
   );
 }
