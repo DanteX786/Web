@@ -110,7 +110,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
         {/* LOGO SUPERIOR DINÁMICO (USA LA CARPETA PUBLIC) */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <img 
-            src={isDark ? "/logo negro.jpg" : "/logo blanco.jpg"} 
+            src={isDark ? "/logo negro.png" : "/logo blanco.png"} 
             alt="Logo Stitcher" 
             style={{ height: 100, width: 'auto', display: 'inline-block', objectFit: 'contain' }} 
           />
