@@ -99,6 +99,9 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
   const [editCompra, setEditCompra] = useState<Compra | null>(null);
   const [deleteItem, setDeleteItem] = useState<Compra | null>(null);
 
+  // Estado para el modal de eliminar ítem del detalle
+  const [deleteDetalleItemState, setDeleteDetalleItemState] = useState<{ compraId: string; detalle: DetalleItem } | null>(null);
+
   // Formulario temporal maestro
   const [formFecha, setFormFecha] = useState('');
   const [formProveedor, setFormProveedor] = useState('');
@@ -273,12 +276,17 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
     toast.success('Detalle actualizado');
   };
 
-  const handleDeleteDetalleItem = (compraId: string, idDetalle: string) => {
+  const handleConfirmDeleteDetalle = () => {
+    if (!deleteDetalleItemState) return;
+    const { compraId, detalle } = deleteDetalleItemState;
+
     setCompras(compras.map(c => {
       if (c.id !== compraId) return c;
-      return { ...c, detalles: c.detalles.filter(d => d.idDetalle !== idDetalle) };
+      return { ...c, detalles: c.detalles.filter(d => d.idDetalle !== detalle.idDetalle) };
     }));
-    toast.success('Ítem eliminado del detalle');
+
+    setDeleteDetalleItemState(null);
+    toast.success('Ítem eliminado del detalle correctamente');
   };
 
   const comprasFiltradas = compras.filter(c =>
@@ -458,7 +466,6 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
                                 DETALLE_COMPRA — {compra.id} ({compra.nombreProveedor})
                               </span>
                             </div>
-                            {/* El botón de agregar ítem aquí fue eliminado */}
                           </div>
 
                           <div style={{ background: cardBg, borderRadius: 10, overflow: 'hidden', border: `1px solid ${borderNormal}` }}>
@@ -582,7 +589,7 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
                                             )}
 
                                             <button
-                                              onClick={() => handleDeleteDetalleItem(compra.id, det.idDetalle)}
+                                              onClick={() => setDeleteDetalleItemState({ compraId: compra.id, detalle: det })}
                                               title="Eliminar ítem"
                                               style={{
                                                 width: 28, height: 28, borderRadius: '50%', background: 'transparent',
@@ -701,12 +708,11 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
                 <input type="text" placeholder="Descripción general de la compra" value={formDescripcion} onChange={(e) => setFormDescripcion(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 14, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }} />
               </div>
 
-              {/* === SECCIÓN DINÁMICA DE INSUMOS DENTRO DEL MODAL === */}
+              {/* === SECCIÓN DINÁMICA DE INSÚMOS DENTRO DEL MODAL === */}
               <div style={{ marginTop: 4, borderTop: `1px solid ${GOLD}40`, paddingTop: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle }}>Insumos de la compra</label>
                   
-                  {/* Botones de acción para insumos */}
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button 
                       type="button" 
@@ -725,7 +731,6 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
                   </div>
                 </div>
 
-                {/* Contenedor con Scroll para las filas */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}>
                   {formDetalles.map((detalle, index) => (
                     <div key={index} style={{ display: 'flex', gap: 8, alignItems: 'center', background: dark ? '#252525' : '#F9F9F9', padding: 8, borderRadius: 8, border: `1px solid ${borderNormal}` }}>
@@ -864,7 +869,7 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
         </div>
       )}
 
-      {/* MODAL ELIMINAR */}
+      {/* MODAL ELIMINAR COMPRA MAESTRA */}
       {deleteItem && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 16 }}>
           <div style={{ width: '100%', maxWidth: 400, borderRadius: 16, backgroundColor: cardBg, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden', textAlign: 'center', paddingBottom: 24 }}>
@@ -884,6 +889,32 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
               <div style={{ display: 'flex', gap: 12 }}>
                 <button onClick={() => setDeleteItem(null)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: dark ? '#2A2A2A' : '#E8E8E8', color: fg, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
                 <button onClick={handleConfirmDelete} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: DANGER, color: '#FFFFFF', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Sí, eliminar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ELIMINAR ÍTEM DEL DETALLE DE COMPRA */}
+      {deleteDetalleItemState && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 16 }}>
+          <div style={{ width: '100%', maxWidth: 400, borderRadius: 16, backgroundColor: cardBg, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden', textAlign: 'center', paddingBottom: 24 }}>
+            <div style={{ height: 4, background: `linear-gradient(135deg, ${DANGER}, #f56565)` }} />
+            <div style={{ padding: '24px 24px 0' }}>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: DANGER_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                <AlertTriangle size={28} color={DANGER} />
+              </div>
+              <h3 style={{ fontSize: 18, fontWeight: 800, color: fg, margin: '0 0 8px' }}>¿Eliminar ítem del detalle?</h3>
+              <p style={{ fontSize: 13, color: subtle, margin: '0 0 16px' }}>Esta acción quitará este insumo de la compra actual.</p>
+
+              <div style={{ background: DANGER_BG, border: `1px solid ${DANGER}4D`, borderRadius: 10, padding: '10px 14px', fontSize: 12, color: DANGER_TXT, fontWeight: 600, marginBottom: 20, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <AlertTriangle size={14} color={DANGER} style={{ flexShrink: 0 }} />
+                <span>Se eliminará el insumo <strong>{deleteDetalleItemState.detalle.nombreInsumo}</strong> ({deleteDetalleItemState.detalle.idDetalle}).</span>
+              </div>
+
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button onClick={() => setDeleteDetalleItemState(null)} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: dark ? '#2A2A2A' : '#E8E8E8', color: fg, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                <button onClick={handleConfirmDeleteDetalle} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: DANGER, color: '#FFFFFF', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Sí, eliminar</button>
               </div>
             </div>
           </div>
