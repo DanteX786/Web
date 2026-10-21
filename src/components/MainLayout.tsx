@@ -11,8 +11,8 @@ import {
   User, Sliders
 } from "lucide-react";
 
-import logo_blanco from '../assets/logo_blanco.jpg';
-import logo_negro from '../assets/logo_negro.jpg';
+import logo_blanco from '../../public/logo blanco.png';
+import logo_negro from '../../public/logo negro.png';
 
 interface MainLayoutProps {
   children: React.ReactNode;
