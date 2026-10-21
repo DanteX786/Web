@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Search, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -57,6 +57,21 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
   const [stock, setStock] = useState<number | ''>('');
   const [tipoIdSeleccionado, setTipoIdSeleccionado] = useState('TIPI-001');
   const [deleteItem, setDeleteItem] = useState<Insumo | null>(null);
+
+  // EFECTO PARA LANZAR LA NOTIFICACIÓN AUTOMÁTICA DE STOCK BAJO AL CARGAR
+  useEffect(() => {
+    const insumosBajos = insumos.filter(i => i.stock <= 10);
+    if (insumosBajos.length > 0) {
+      toast.warning(`¡Atención! Hay ${insumosBajos.length} insumo(s) con stock bajo en el taller.`, {
+        style: { 
+          background: DANGER_BG, 
+          border: `1px solid ${DANGER}`, 
+          color: DANGER_TXT, 
+          fontFamily: 'Montserrat, sans-serif' 
+        }
+      });
+    }
+  }, []);
 
   const bg = dark ? "#121212" : "#F8F9FA";
   const cardBg = dark ? "#1E1E1E" : "#FFFFFF";
@@ -150,7 +165,7 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
     i.tipoNombre.toLowerCase().includes(busqueda.toLowerCase())
   );
      
-     // Lógica para seccionar los datos por página
+  // Lógica para seccionar los datos por página
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -285,7 +300,6 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
                     </td>
 
                     <td style={{ padding: '12px 16px', verticalAlign: 'middle', textAlign: 'right' }}>
-                      {/* BOTONES CIRCULARES ESTILO IMAGEN DE REFERENCIA */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
                         <button
                           onClick={() => handleOpenEdit(insumo)}
@@ -328,7 +342,7 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
         </table>
       </div>
 
-     {/* CONTROLES DE PAGINACIÓN */}
+      {/* CONTROLES DE PAGINACIÓN */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, padding: '0 8px' }}>
         <span style={{ fontSize: 12, color: subtle, fontFamily: 'Montserrat, sans-serif' }}>
           Mostrando de {insumosFiltrados.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, insumosFiltrados.length)} de {insumosFiltrados.length} registros
@@ -368,7 +382,6 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
           </button>
         </div>
       </div>
-
 
       {/* MODAL DE CREACIÓN / EDICIÓN */}
       {isModalOpen && (

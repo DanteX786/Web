@@ -4,10 +4,9 @@ import {
   Box,
   AlertTriangle,
   ShoppingCart,
-  DollarSign,
   ShoppingBag,
-  Users,
-  ChevronDown
+  Scissors,
+  TrendingUp
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -15,12 +14,14 @@ interface DashboardProps {
 }
 
 export const DashboardPage: React.FC<DashboardProps> = ({ dark = false }) => {
-  const [filtroVentas, setFiltroVentas] = useState('Diario');
-  const [filtroCompras, setFiltroCompras] = useState('Diario');
+  const [filtroInsumos, setFiltroInsumos] = useState('Mes');
+  const [filtroCompras, setFiltroCompras] = useState('Mes');
   const [filtroRegistros, setFiltroRegistros] = useState('Diario');
-  const [filtroInsumos, setFiltroInsumos] = useState('Diario');
-  const [filtroProveedores, setFiltroProveedores] = useState('Diario');
-  const [filtroClientes, setFiltroClientes] = useState('Diario');
+  const [filtroProduccion, setFiltroProduccion] = useState('Mes');
+  
+  const [filtroGraficaProd, setFiltroGraficaProd] = useState('Mes');
+  const [filtroGraficaCompras, setFiltroGraficaCompras] = useState('Mes');
+  const [filtroGraficaRegistros, setFiltroGraficaRegistros] = useState('Diario');
 
   const bgStyle = dark ? '#121212' : '#F8F9FA';
   const cardBg = dark ? '#1E1E1E' : '#FFFFFF';
@@ -30,11 +31,84 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false }) => {
   const GOLD = '#C9A227';
   const SUCCESS = '#28A745';
 
+  const periodosOpciones = [
+    { value: 'Diario', label: 'Día' },
+    { value: 'Semanal', label: 'Semana' },
+    { value: 'Mes', label: 'Mes' },
+    { value: 'Trimestre', label: 'Trimestre' },
+    { value: 'Semestre', label: 'Semestre' },
+    { value: 'Año', label: 'Año' }
+  ];
+
+  const datosInsumos: { [key: string]: { total: string; alerta: string } } = {
+    Diario: { total: '24 Tipos', alerta: '3 con Stock Bajo' },
+    Semanal: { total: '24 Tipos', alerta: '3 con Stock Bajo' },
+    Mes: { total: '24 Tipos', alerta: '3 con Stock Bajo' },
+    Trimestre: { total: '25 Tipos', alerta: '4 con Stock Bajo' },
+    Semestre: { total: '26 Tipos', alerta: '2 con Stock Bajo' },
+    Año: { total: '28 Tipos', alerta: '1 con Stock Bajo' }
+  };
+
+  const datosCompras: { [key: string]: { valor: string; subtitulo: string } } = {
+    Diario: { valor: '$65.000', subtitulo: 'Gastos de hoy' },
+    Semanal: { valor: '$320.000', subtitulo: 'Inversión semanal' },
+    Mes: { valor: '$1.450.000', subtitulo: 'Inversión este mes' },
+    Trimestre: { valor: '$4.300.000', subtitulo: 'Inversión trimestral' },
+    Semestre: { valor: '$8.900.000', subtitulo: 'Inversión semestral' },
+    Año: { valor: '$17.500.000', subtitulo: 'Inversión anual' }
+  };
+
+  const datosRegistros: { [key: string]: { valor: string; subtitulo: string } } = {
+    Diario: { valor: '105 unds', subtitulo: 'Piezas hechas hoy' },
+    Semanal: { valor: '520 unds', subtitulo: 'Piezas de la semana' },
+    Mes: { valor: '2.100 unds', subtitulo: 'Piezas este mes' },
+    Trimestre: { valor: '6.400 unds', subtitulo: 'Piezas trimestrales' },
+    Semestre: { valor: '12.800 unds', subtitulo: 'Piezas semestrales' },
+    Año: { valor: '25.500 unds', subtitulo: 'Piezas anuales' }
+  };
+
+  const datosProduccion: { [key: string]: { valor: string; subtitulo: string } } = {
+    Diario: { valor: '1 Lote', subtitulo: 'En proceso hoy' },
+    Semanal: { valor: '1 Lote', subtitulo: 'Completado esta semana' },
+    Mes: { valor: '4 Lotes', subtitulo: 'Máximo mensual' },
+    Trimestre: { valor: '12 Lotes', subtitulo: 'Producción trimestral' },
+    Semestre: { valor: '24 Lotes', subtitulo: 'Producción semestral' },
+    Año: { valor: '48 Lotes', subtitulo: 'Producción anual' }
+  };
+
+  // DATOS COHERENTES SEGÚN CADA FILTRO SELECCIONADO
+  const datasetsProduccion: { [key: string]: { valores: number[]; etiquetas: string[] } } = {
+    Diario: { valores: [1], etiquetas: ['Hoy'] },
+    Semanal: { valores: [1, 2, 1, 2, 1, 1, 1], etiquetas: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] },
+    Mes: { valores: [1, 1, 1, 1], etiquetas: ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'] },
+    Trimestre: { valores: [3, 4, 5], etiquetas: ['Mes 1', 'Mes 2', 'Mes 3'] },
+    Semestre: { valores: [4, 4, 3, 4, 5, 4], etiquetas: ['Mes 1', 'Mes 2', 'Mes 3', 'Mes 4', 'Mes 5', 'Mes 6'] },
+    Año: { valores: [3, 4, 4, 5, 4, 4, 5, 4, 4, 3, 4, 4], etiquetas: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'] }
+  };
+
+  const datasetsCompras: { [key: string]: { valores: number[]; etiquetas: string[] } } = {
+    Diario: { valores: [65000], etiquetas: ['Gastos del día'] },
+    Semanal: { valores: [50000, 80000, 45000, 60000, 85000], etiquetas: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'] },
+    Mes: { valores: [350000, 400000, 320000, 380000], etiquetas: ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'] },
+    Trimestre: { valores: [1200000, 1400000, 1700000], etiquetas: ['Mes 1', 'Mes 2', 'Mes 3'] },
+    Semestre: { valores: [1400000, 1500000, 1600000, 1400000, 1500000, 1500000], etiquetas: ['Mes 1', 'Mes 2', 'Mes 3', 'Mes 4', 'Mes 5', 'Mes 6'] },
+    Año: { valores: [1200000, 1300000, 1400000, 1500000, 1400000, 1300000, 1500000, 1400000, 1500000, 1400000, 1300000, 1500000], etiquetas: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'] }
+  };
+
+  const datasetsRegistros: { [key: string]: { valores: number[]; etiquetas: string[] } } = {
+    Diario: { valores: [105], etiquetas: ['Total hoy'] },
+    Semanal: { valores: [80, 110, 95, 130, 105], etiquetas: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie'] },
+    Mes: { valores: [450, 550, 520, 580], etiquetas: ['Sem 1', 'Sem 2', 'Sem 3', 'Sem 4'] },
+    Trimestre: { valores: [1800, 2100, 2500], etiquetas: ['Mes 1', 'Mes 2', 'Mes 3'] },
+    Semestre: { valores: [2100, 2200, 2150, 2200, 2150, 2100], etiquetas: ['Mes 1', 'Mes 2', 'Mes 3', 'Mes 4', 'Mes 5', 'Mes 6'] },
+    Año: { valores: [2000, 2100, 2200, 2150, 2200, 2100, 2150, 2200, 2100, 2150, 2200, 2100], etiquetas: ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'] }
+  };
+
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: bgStyle, color: textColor, padding: '24px', fontFamily: 'Montserrat, sans-serif' }}>
+    <div style={{ minHeight: '100vh', backgroundColor: bgStyle, color: textColor, padding: '24px', fontFamily: 'Montserrat, sans-serif', boxSizing: 'border-box' }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
         
-        {/* ENCABEZADO CORREGIDO */}
+        {/* ENCABEZADO */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${borderColor}`, paddingBottom: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: `${GOLD}20`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -42,7 +116,7 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false }) => {
             </div>
             <div>
               <h1 style={{ fontSize: '24px', fontWeight: 800, margin: 0, color: textColor, fontFamily: 'Montserrat, sans-serif' }}>Dashboard General</h1>
-              <p style={{ fontSize: '13px', color: textSecColor, margin: '4px 0 0 0', fontFamily: 'Montserrat, sans-serif' }}>Resumen analítico del sistema Eslabón.</p>
+              <p style={{ fontSize: '13px', color: textSecColor, margin: '4px 0 0 0', fontFamily: 'Montserrat, sans-serif' }}>Resumen analítico de producción e inventario en Eslabón[cite: 5].</p>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '20px', background: `${SUCCESS}15`, color: SUCCESS, fontSize: '12px', fontWeight: 700 }}>
@@ -51,236 +125,348 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false }) => {
           </div>
         </div>
 
-        {/* KPIS */}
+        {/* KPIS PRINCIPALES */}
         <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', color: textColor }}>Indicadores Clave</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-            <MiniStat titulo="Insumos Totales" valor="24" subtitulo="Registrados" icono={<Box style={{ width: '20px', height: '20px', color: GOLD }} />} colorFondo={`${GOLD}20`} cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} />
-            <MiniStat titulo="Stock Bajo" valor="3" subtitulo="Por revisar" icono={<AlertTriangle style={{ width: '20px', height: '20px', color: '#DC3545' }} />} colorFondo="#DC354520" cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} />
-            <MiniStat titulo="Ventas del Mes" valor="128" subtitulo="Completadas" icono={<ShoppingCart style={{ width: '20px', height: '20px', color: SUCCESS }} />} colorFondo={`${SUCCESS}20`} cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} />
-            <MiniStat titulo="Ingresos" valor="$18.4M" subtitulo="Este mes" icono={<DollarSign style={{ width: '20px', height: '20px', color: GOLD }} />} colorFondo={`${GOLD}20`} cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: 0, color: textColor }}>Indicadores Clave</h2>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
+            
+            <KpiCardWithFilter 
+              titulo="Inventario de Insumos" 
+              valor={datosInsumos[filtroInsumos].total} 
+              alertaTexto={datosInsumos[filtroInsumos].alerta}
+              icono={<Box style={{ width: '20px', height: '20px', color: GOLD }} />} 
+              colorFondo={`${GOLD}20`} 
+              cardBg={cardBg} 
+              textColor={textColor} 
+              textSecColor={textSecColor} 
+              borderColor={borderColor}
+              filtro={filtroInsumos}
+              setFiltro={setFiltroInsumos}
+              opciones={periodosOpciones}
+              dark={dark}
+              hasAlert={true}
+            />
+
+            <KpiCardWithFilter 
+              titulo="Compras de Insumos" 
+              valor={datosCompras[filtroCompras].valor} 
+              subtitulo={datosCompras[filtroCompras].subtitulo}
+              icono={<ShoppingCart style={{ width: '20px', height: '20px', color: '#4A90E2' }} />} 
+              colorFondo="#4A90E220" 
+              cardBg={cardBg} 
+              textColor={textColor} 
+              textSecColor={textSecColor} 
+              borderColor={borderColor}
+              filtro={filtroCompras}
+              setFiltro={setFiltroCompras}
+              opciones={periodosOpciones}
+              dark={dark}
+            />
+
+            <KpiCardWithFilter 
+              titulo="Producción Diaria" 
+              valor={datosRegistros[filtroRegistros].valor} 
+              subtitulo={datosRegistros[filtroRegistros].subtitulo}
+              icono={<Scissors style={{ width: '20px', height: '20px', color: '#9B6DFF' }} />} 
+              colorFondo="#9B6DFF20" 
+              cardBg={cardBg} 
+              textColor={textColor} 
+              textSecColor={textSecColor} 
+              borderColor={borderColor}
+              filtro={filtroRegistros}
+              setFiltro={setFiltroRegistros}
+              opciones={periodosOpciones}
+              dark={dark}
+            />
+
+            <KpiCardWithFilter 
+              titulo="Lotes Terminados" 
+              valor={datosProduccion[filtroProduccion].valor} 
+              subtitulo={datosProduccion[filtroProduccion].subtitulo}
+              icono={<ShoppingBag style={{ width: '20px', height: '20px', color: SUCCESS }} />} 
+              colorFondo={`${SUCCESS}20`} 
+              cardBg={cardBg} 
+              textColor={textColor} 
+              textSecColor={textSecColor} 
+              borderColor={borderColor}
+              filtro={filtroProduccion}
+              setFiltro={setFiltroProduccion}
+              opciones={periodosOpciones}
+              dark={dark}
+            />
+
           </div>
         </div>
 
-        {/* GRAFICAS GRID */}
+        {/* ANÁLISIS DE RENDIMIENTO (GRÁFICAS COHERENTES Y DINÁMICAS) */}
         <div>
           <h2 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', color: textColor }}>Análisis de Rendimiento</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
-            <GraficaCard titulo="Comportamiento de Ventas" valor="$18.450.000" porcentaje="+12.5%" colorBadge={GOLD} cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} filtro={filtroVentas} setFiltro={setFiltroVentas} dark={dark}><VentasChart dark={dark} /></GraficaCard>
-            <GraficaCard titulo="Flujo de Compras" valor="$8.750.000" porcentaje="+8.4%" colorBadge="#4A90E2" cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} filtro={filtroCompras} setFiltro={setFiltroCompras} dark={dark}><ComprasChart dark={dark} /></GraficaCard>
-            <GraficaCard titulo="Registros Diarios" valor="32" porcentaje="+6.2%" colorBadge="#9B6DFF" cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} filtro={filtroRegistros} setFiltro={setFiltroRegistros} dark={dark}><RegistrosChart dark={dark} /></GraficaCard>
-            <GraficaCard titulo="Distribución de Insumos" valor="24" porcentaje="Actualizado" colorBadge={GOLD} cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} filtro={filtroInsumos} setFiltro={setFiltroInsumos} dark={dark}><InsumosChart dark={dark} /></GraficaCard>
-            <GraficaCard titulo="Proveedores Activos" valor="15" porcentaje="+4.1%" colorBadge="#4A90E2" cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} filtro={filtroProveedores} setFiltro={setFiltroProveedores} dark={dark}><ProveedoresChart dark={dark} /></GraficaCard>
-            <GraficaCard titulo="Segmentación de Clientes" valor="340" porcentaje="+15.3%" colorBadge={SUCCESS} cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} filtro={filtroClientes} setFiltro={setFiltroClientes} dark={dark}><ClientesChart dark={dark} /></GraficaCard>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
+            
+            <GraficaCard 
+              titulo="Historial de Producción" 
+              valor={datosProduccion[filtroGraficaProd].valor} 
+              porcentaje="Óptimo" 
+              colorBadge={SUCCESS} 
+              cardBg={cardBg} 
+              textColor={textColor} 
+              textSecColor={textSecColor} 
+              borderColor={borderColor} 
+              filtro={filtroGraficaProd} 
+              setFiltro={setFiltroGraficaProd} 
+              opciones={periodosOpciones}
+              dark={dark}
+            >
+              <BarChartCoherent dataObj={datasetsProduccion[filtroGraficaProd]} color={SUCCESS} dark={dark} tipoUnidad="Lotes" />
+            </GraficaCard>
+
+            <GraficaCard 
+              titulo="Flujo de Inversión en Compras" 
+              valor={datosCompras[filtroGraficaCompras].valor} 
+              porcentaje="Controlado" 
+              colorBadge="#4A90E2" 
+              cardBg={cardBg} 
+              textColor={textColor} 
+              textSecColor={textSecColor} 
+              borderColor={borderColor} 
+              filtro={filtroGraficaCompras} 
+              setFiltro={setFiltroGraficaCompras} 
+              opciones={periodosOpciones}
+              dark={dark}
+            >
+              <BarChartCoherent dataObj={datasetsCompras[filtroGraficaCompras]} color="#4A90E2" dark={dark} tipoUnidad="$" />
+            </GraficaCard>
+
+            <GraficaCard 
+              titulo="Avance de Piezas por Operarios" 
+              valor={datosRegistros[filtroGraficaRegistros].valor} 
+              porcentaje="Activo" 
+              colorBadge="#9B6DFF" 
+              cardBg={cardBg} 
+              textColor={textColor} 
+              textSecColor={textSecColor} 
+              borderColor={borderColor} 
+              filtro={filtroGraficaRegistros} 
+              setFiltro={setFiltroGraficaRegistros} 
+              opciones={periodosOpciones}
+              dark={dark}
+            >
+              <BarChartCoherent dataObj={datasetsRegistros[filtroGraficaRegistros]} color="#9B6DFF" dark={dark} tipoUnidad="unds" />
+            </GraficaCard>
+
           </div>
         </div>
 
-        {/* ULTIMAS VENTAS */}
-        <UltimasVentas cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} />
+        {/* ÚLTIMAS TRANSACCIONES */}
+        <UltimasTransacciones cardBg={cardBg} textColor={textColor} textSecColor={textSecColor} borderColor={borderColor} />
 
       </div>
     </div>
   );
 };
 
-// COMPONENTES AUXILIARES CON ESTILOS EN LÍNEA
-const MiniStat: React.FC<any> = ({ titulo, valor, subtitulo, icono, colorFondo, cardBg, textColor, textSecColor, borderColor }) => (
-  <div style={{ background: cardBg, border: `1px solid ${borderColor}`, padding: '20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-    <div>
-      <span style={{ fontSize: '11px', fontWeight: 700, color: textSecColor, textTransform: 'uppercase' }}>{titulo}</span>
-      <h4 style={{ fontSize: '22px', fontWeight: 800, margin: '4px 0', color: textColor }}>{valor}</h4>
-      <span style={{ fontSize: '11px', color: textSecColor }}>{subtitulo}</span>
+// ==========================================
+// COMPONENTES AUXILIARES CON COHERENCIA TEMPORAL
+// ==========================================
+
+const KpiCardWithFilter: React.FC<{
+  titulo: string;
+  valor: string;
+  subtitulo?: string;
+  alertaTexto?: string;
+  icono: React.ReactNode;
+  colorFondo: string;
+  cardBg: string;
+  textColor: string;
+  textSecColor: string;
+  borderColor: string;
+  filtro: string;
+  setFiltro: (val: string) => void;
+  opciones: Array<{ value: string; label: string }>;
+  dark: boolean;
+  hasAlert?: boolean;
+}> = ({ 
+  titulo, valor, subtitulo, alertaTexto, icono, colorFondo, 
+  cardBg, textColor, textSecColor, borderColor, filtro, setFiltro, opciones, dark, hasAlert 
+}) => (
+  <div style={{ background: cardBg, border: `1px solid ${borderColor}`, padding: '20px', borderRadius: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px', boxSizing: 'border-box' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ fontSize: '11px', fontWeight: 700, color: textSecColor, textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>{titulo}</span>
+        <h4 style={{ fontSize: '20px', fontWeight: 800, margin: 0, color: textColor }}>{valor}</h4>
+      </div>
+      <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: colorFondo, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {icono}
+      </div>
     </div>
-    <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: colorFondo, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {icono}
+
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${borderColor}`, paddingTop: '10px', gap: '8px' }}>
+      {hasAlert ? (
+        <span style={{ fontSize: '11px', fontWeight: 700, color: '#DC3545', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <AlertTriangle size={12} style={{ flexShrink: 0 }} /> <span>{alertaTexto}</span>
+        </span>
+      ) : (
+        <span style={{ fontSize: '11px', color: textSecColor }}>{subtitulo}</span>
+      )}
+
+      <select 
+        value={filtro} 
+        onChange={(e) => setFiltro(e.target.value)} 
+        style={{ fontSize: '11px', padding: '3px 8px', borderRadius: '8px', border: `1px solid ${borderColor}`, background: dark ? '#2A2A2A' : '#F3F3F5', color: textColor, cursor: 'pointer', outline: 'none', fontFamily: 'Montserrat, sans-serif', flexShrink: 0 }}
+      >
+        {opciones.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
     </div>
   </div>
 );
 
-const GraficaCard: React.FC<any> = ({ titulo, valor, porcentaje, colorBadge, cardBg, textColor, textSecColor, borderColor, filtro, setFiltro, dark, children }) => (
-  <div style={{ background: cardBg, border: `1px solid ${borderColor}`, padding: '20px', borderRadius: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+const GraficaCard: React.FC<{
+  titulo: string;
+  valor: string;
+  porcentaje: string;
+  colorBadge: string;
+  cardBg: string;
+  textColor: string;
+  textSecColor: string;
+  borderColor: string;
+  filtro: string;
+  setFiltro: (val: string) => void;
+  opciones: Array<{ value: string; label: string }>;
+  dark: boolean;
+  children: React.ReactNode;
+}> = ({ titulo, valor, porcentaje, colorBadge, cardBg, textColor, textSecColor, borderColor, filtro, setFiltro, opciones, dark, children }) => (
+  <div style={{ background: cardBg, border: `1px solid ${borderColor}`, padding: '20px', borderRadius: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '8px' }}>
       <div>
-        <span style={{ fontSize: '12px', color: textSecColor, fontWeight: 700 }}>{titulo}</span>
-        <h3 style={{ fontSize: '20px', fontWeight: 800, margin: '4px 0 0 0', color: textColor }}>{valor}</h3>
+        <span style={{ fontSize: '12px', color: textSecColor, fontWeight: 700, display: 'block', marginBottom: '2px' }}>{titulo}</span>
+        <h3 style={{ fontSize: '18px', fontWeight: 800, margin: 0, color: textColor }}>{valor}</h3>
       </div>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-        <select value={filtro} onChange={(e) => setFiltro(e.target.value)} style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '8px', border: `1px solid ${borderColor}`, background: dark ? '#2A2A2A' : '#F3F3F5', color: textColor, cursor: 'pointer', outline: 'none', fontFamily: 'Montserrat, sans-serif' }}>
-          <option value="Diario">Diario</option>
-          <option value="Mensual">Mensual</option>
-          <option value="6 Meses">6 Meses</option>
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
+        <select 
+          value={filtro} 
+          onChange={(e) => setFiltro(e.target.value)} 
+          style={{ fontSize: '11px', padding: '4px 8px', borderRadius: '8px', border: `1px solid ${borderColor}`, background: dark ? '#2A2A2A' : '#F3F3F5', color: textColor, cursor: 'pointer', outline: 'none', fontFamily: 'Montserrat, sans-serif' }}
+        >
+          {opciones.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
         </select>
-        <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '8px', background: `${colorBadge}20`, color: colorBadge }}>{porcentaje}</span>
+        <span style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '8px', background: `${colorBadge}20`, color: colorBadge, whiteSpace: 'nowrap' }}>{porcentaje}</span>
       </div>
     </div>
-    <div style={{ width: '100%', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    
+    <div style={{ width: '100%', height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>
       {children}
     </div>
   </div>
 );
 
-const VentasChart = ({ dark }: { dark: boolean }) => {
-  const datos = [35, 52, 42, 72, 65, 88, 78];
-  return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', position: 'relative' }}>
-      <div style={{ width: '100%', height: '150px', position: 'relative' }}>
-        <svg style={{ width: '100%', height: '100%', overflow: 'visible' }} viewBox="0 0 100 100" preserveAspectRatio="none">
-          <path d={datos.reduce((acc, val, idx) => { const x = (idx / (datos.length - 1)) * 100; const y = 100 - (val / 100) * 100; return idx === 0 ? `M ${x} ${y}` : `${acc} L ${x} ${y}`; }, '')} fill="none" stroke="#C9A227" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          {datos.map((val, idx) => <circle key={idx} cx={(idx / (datos.length - 1)) * 100} cy={100 - (val / 100) * 100} r="3.5" fill="#C9A227" />)}
-        </svg>
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: dark ? '#9A9A9A' : '#6B6B6B' }}><span>Sem 1</span><span>Sem 2</span><span>Sem 3</span><span>Sem 4</span></div>
-    </div>
-  );
-};
+// Gráfica de barras coherente con etiquetas temporales dinámicas y tooltip limpio
+const BarChartCoherent = ({ dataObj, color, dark, tipoUnidad }: { dataObj: { valores: number[]; etiquetas: string[] }; color: string; dark: boolean; tipoUnidad: string }) => {
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const valores = dataObj.valores;
+  const etiquetas = dataObj.etiquetas;
+  const maxVal = Math.max(...valores, 5);
 
-const ComprasChart = ({ dark }: { dark: boolean }) => {
-  const datos = [25, 40, 34, 55, 48, 68, 60];
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', position: 'relative' }}>
-      <div style={{ width: '100%', height: '150px', position: 'relative' }}>
-        <svg style={{ width: '100%', height: '100%', overflow: 'visible' }} viewBox="0 0 100 100" preserveAspectRatio="none">
-          <path d={datos.reduce((acc, val, idx) => { const x = (idx / (datos.length - 1)) * 100; const y = 100 - (val / 100) * 100; return idx === 0 ? `M ${x} ${y}` : `${acc} L ${x} ${y}`; }, '')} fill="none" stroke="#4A90E2" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-          {datos.map((val, idx) => <circle key={idx} cx={(idx / (datos.length - 1)) * 100} cy={100 - (val / 100) * 100} r="3.5" fill="#4A90E2" />)}
-        </svg>
+    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', boxSizing: 'border-box', position: 'relative' }}>
+      
+      {/* Tooltip superior limpio */}
+      <div style={{ height: '22px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '4px' }}>
+        {hoverIndex !== null ? (
+          <span style={{ fontSize: '11px', fontWeight: 700, color: dark ? '#FFF' : '#333', background: dark ? '#333' : '#E9ECEF', padding: '2px 8px', borderRadius: '6px' }}>
+            {etiquetas[hoverIndex]}: {tipoUnidad === '$' ? `$${valores[hoverIndex].toLocaleString()}` : `${valores[hoverIndex]} ${tipoUnidad}`}
+          </span>
+        ) : (
+          <span style={{ fontSize: '10px', color: dark ? '#9A9A9A' : '#6B6B6B' }}>
+            Pasa el cursor sobre las barras
+          </span>
+        )}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: dark ? '#9A9A9A' : '#6B6B6B' }}><span>Sem 1</span><span>Sem 2</span><span>Sem 3</span><span>Sem 4</span></div>
-    </div>
-  );
-};
 
-const RegistrosChart = ({ dark }: { dark: boolean }) => {
-  const datos = [35, 55, 42, 70, 62, 82, 58];
-  const dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-  return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-      <div style={{ width: '100%', height: '150px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around' }}>
-        {datos.map((val, idx) => <div key={idx} style={{ flex: 1, display: 'flex', justifyContent: 'center', height: '100%', alignItems: 'flex-end' }}><div style={{ height: `${val}%`, width: '14px', background: '#9B6DFF', borderRadius: '4px 4px 0 0' }} /></div>)}
+      {/* Barras de datos */}
+      <div style={{ width: '100%', height: '90px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around', gap: '8px' }}>
+        {valores.map((val, idx) => {
+          const alturaPorq = Math.max((val / maxVal) * 100, 12);
+          const isHovered = hoverIndex === idx;
+          return (
+            <div 
+              key={idx} 
+              onMouseEnter={() => setHoverIndex(idx)}
+              onMouseLeave={() => setHoverIndex(null)}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end', cursor: 'pointer' }}
+            >
+              <div 
+                style={{ 
+                  height: `${alturaPorq}%`, 
+                  width: '100%', 
+                  maxWidth: '24px', 
+                  background: color, 
+                  opacity: isHovered ? 1 : 0.8,
+                  transform: isHovered ? 'scaleY(1.05)' : 'scaleY(1)',
+                  borderRadius: '4px 4px 0 0',
+                  transition: 'all 0.2s ease'
+                }} 
+              />
+            </div>
+          );
+        })}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '10px', color: dark ? '#9A9A9A' : '#6B6B6B' }}>{dias.map((d, i) => <span key={i}>{d}</span>)}</div>
-    </div>
-  );
-};
 
-const InsumosChart = ({ dark }: { dark: boolean }) => {
-  const items = [
-    { label: 'Hilos', color: '#C9A227', porcentaje: 35 },
-    { label: 'Botones', color: '#4A90E2', porcentaje: 25 },
-    { label: 'Cierres', color: '#28A745', porcentaje: 20 },
-    { label: 'Telas', color: '#FD7E14', porcentaje: 20 },
-  ];
-  return (
-    <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
-      <div style={{ position: 'relative', width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }} viewBox="0 0 36 36">
-          <circle cx="18" cy="18" r="15.9155" fill="none" stroke={dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'} strokeWidth="3.8" />
-          {(() => {
-            let acumulado = 0;
-            return items.map((item, idx) => {
-              const offset = acumulado;
-              acumulado += item.porcentaje;
-              return <circle key={idx} cx="18" cy="18" r="15.9155" fill="none" stroke={item.color} strokeWidth="3.8" strokeDasharray={`${item.porcentaje} ${100 - item.porcentaje}`} strokeDashoffset={-offset} />;
-            });
-          })()}
-        </svg>
-        <div style={{ position: 'absolute', fontWeight: 800, fontSize: '18px' }}>24</div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {items.map((item, idx) => (
-          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
-            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: item.color }} />
-            <span>{item.label}</span>
-          </div>
+      {/* Etiquetas del eje X acordes al tiempo */}
+      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center', borderTop: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`, paddingTop: '6px', marginTop: '4px' }}>
+        {etiquetas.map((etiq, idx) => (
+          <span key={idx} style={{ fontSize: '9px', fontWeight: hoverIndex === idx ? 700 : 400, color: hoverIndex === idx ? color : (dark ? '#9A9A9A' : '#6B6B6B'), textAlign: 'center', flex: 1 }}>
+            {etiq}
+          </span>
         ))}
       </div>
     </div>
   );
 };
 
-const ProveedoresChart = ({ dark }: { dark: boolean }) => {
-  const proveedores = [
-    { nombre: 'Textiles S.A.', entregas: 85, color: '#4A90E2' },
-    { nombre: 'Botones & Co.', entregas: 60, color: '#C9A227' },
-    { nombre: 'Hilos del Sur', entregas: 75, color: '#28A745' },
-    { nombre: 'Cierres Express', entregas: 45, color: '#9B6DFF' },
+const UltimasTransacciones: React.FC<{
+  cardBg: string;
+  textColor: string;
+  textSecColor: string;
+  borderColor: string;
+}> = ({ cardBg, textColor, textSecColor, borderColor }) => {
+  const transacciones = [
+    { referencia: 'REG-001', tipo: 'Producción', detalle: 'Juan Pérez - Manga Larga', valor: '45 unds', estado: 'Completado' },
+    { referencia: 'COM-012', tipo: 'Compra', detalle: 'Reabastecimiento de hilos', valor: '$120.000', estado: 'Recibido' },
+    { referencia: 'REG-002', tipo: 'Producción', detalle: 'María Rodríguez - Cuello Polo', valor: '60 unds', estado: 'Completado' },
+    { referencia: 'COM-013', tipo: 'Compra', detalle: 'Botones y marquillas', valor: '$85.000', estado: 'Pendiente' },
   ];
   return (
-    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-      <div style={{ width: '100%', height: '150px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-around' }}>
-        {proveedores.map((prov, idx) => <div key={idx} style={{ flex: 1, display: 'flex', justifyContent: 'center', height: '100%', alignItems: 'flex-end' }}><div style={{ height: `${prov.entregas}%`, width: '18px', background: prov.color, borderRadius: '4px 4px 0 0' }} /></div>)}
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '9px', color: dark ? '#9A9A9A' : '#6B6B6B' }}>{proveedores.map((prov, i) => <span key={i} style={{ textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70px' }}>{prov.nombre}</span>)}</div>
-    </div>
-  );
-};
-
-const ClientesChart = ({ dark }: { dark: boolean }) => {
-  const segmentos = [
-    { label: 'Frecuentes', color: '#28A745', porcentaje: 50 },
-    { label: 'Ocasionales', color: '#4A90E2', porcentaje: 30 },
-    { label: 'Nuevos', color: '#9B6DFF', porcentaje: 20 },
-  ];
-  return (
-    <div style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
-      <div style={{ position: 'relative', width: '120px', height: '120px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <svg style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }} viewBox="0 0 36 36">
-          <circle cx="18" cy="18" r="15.9155" fill="none" stroke={dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'} strokeWidth="3.8" />
-          {(() => {
-            let acumulado = 0;
-            return segmentos.map((item, idx) => {
-              const offset = acumulado;
-              acumulado += item.porcentaje;
-              return <circle key={idx} cx="18" cy="18" r="15.9155" fill="none" stroke={item.color} strokeWidth="3.8" strokeDasharray={`${item.porcentaje} ${100 - item.porcentaje}`} strokeDashoffset={-offset} />;
-            });
-          })()}
-        </svg>
-        <div style={{ position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <span style={{ fontWeight: 800, fontSize: '15px', lineHeight: 1 }}>340</span>
-          <span style={{ fontSize: '9px', color: dark ? '#9A9A9A' : '#6B6B6B' }}>Total</span>
-        </div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {segmentos.map((item, idx) => (
-          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px' }}>
-            <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: item.color }} />
-            <span>{item.label} ({item.porcentaje}%)</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const UltimasVentas = ({ cardBg, textColor, textSecColor, borderColor }: any) => {
-  const ventas = [
-    { cliente: 'Carlos Pérez', producto: 'Camisa clásica', precio: '$180.000', estado: 'Completada' },
-    { cliente: 'María Gómez', producto: 'Pantalón formal', precio: '$220.000', estado: 'Completada' },
-    { cliente: 'Juan Rodríguez', producto: 'Camisa Oxford', precio: '$195.000', estado: 'Pendiente' },
-    { cliente: 'Laura Martínez', producto: 'Pantalón ejecutivo', precio: '$250.000', estado: 'Completada' },
-  ];
-  return (
-    <div style={{ background: cardBg, border: `1px solid ${borderColor}`, padding: '24px', borderRadius: '16px' }}>
-      <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px', color: textColor }}>Últimas Transacciones de Venta</h3>
+    <div style={{ background: cardBg, border: `1px solid ${borderColor}`, padding: '24px', borderRadius: '16px', boxSizing: 'border-box' }}>
+      <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px', color: textColor }}>Últimos Movimientos del Taller</h3>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-        {ventas.map((v, idx) => (
-          <div key={idx} style={{ padding: '14px', borderRadius: '12px', border: `1px solid ${borderColor}`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#C9A22720', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ShoppingBag style={{ width: '18px', height: '18px', color: '#C9A227' }} />
+        {transacciones.map((t, idx) => {
+          const esCompletado = t.estado === 'Completado' || t.estado === 'Recibido';
+          return (
+            <div key={idx} style={{ padding: '14px', borderRadius: '12px', border: `1px solid ${borderColor}`, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '12px', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: '#C9A22720', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <ShoppingBag style={{ width: '18px', height: '18px', color: '#C9A227' }} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h4 style={{ fontSize: '12px', fontWeight: 700, margin: 0, color: textColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.referencia} - {t.tipo}</h4>
+                  <p style={{ fontSize: '11px', color: textSecColor, margin: '2px 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.detalle}</p>
+                </div>
               </div>
-              <div>
-                <h4 style={{ fontSize: '12px', fontWeight: 700, margin: 0, color: textColor }}>{v.cliente}</h4>
-                <p style={{ fontSize: '11px', color: textSecColor, margin: '2px 0 0 0' }}>{v.producto}</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${borderColor}`, paddingTop: '8px' }}>
+                <span style={{ fontSize: '12px', fontWeight: 800, color: textColor }}>{t.valor}</span>
+                <span style={{ fontSize: '10px', fontWeight: 700, padding: '3px 10px', borderRadius: '12px', background: esCompletado ? '#28A74520' : '#FFB30020', color: esCompletado ? '#28A745' : '#D9822B', display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                  {t.estado}
+                </span>
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${borderColor}`, paddingTop: '8px' }}>
-              <span style={{ fontSize: '12px', fontWeight: 800, color: textColor }}>{v.precio}</span>
-              <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: v.estado === 'Completada' ? '#28A74520' : '#FFB30020', color: v.estado === 'Completada' ? '#28A745' : '#FFB300' }}>
-                {v.estado}
-              </span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
