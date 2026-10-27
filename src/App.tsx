@@ -1,59 +1,40 @@
 import React, { useState } from 'react';
 import { Toaster } from 'sonner';
-import MainLayout from './components/MainLayout';
-import { AuthView } from './modules/auth/components/AuthView';
-import LandingPage from './components/LandingPage';
+import MainLayout from './shared/components/MainLayout';
+import { AuthView } from './features/auth/components/AuthView';
+import LandingPage from './shared/components/LandingPage';
 
 // MÓDULO PRODUCCIÓN
-import { ProduccionView } from './modules/produccion/ProduccionView';
-import { RegistroDiarioEmpleadoView } from './modules/comercial/RegistroDiarioEmpleadoView';
+import { ProduccionView } from './features/produccion/views/ProduccionView';
+import { RegistroDiarioEmpleadoView } from './features/produccion/views/RegistroDiarioEmpleadoView';
 
 // MÓDULO INVENTARIO
-import { TipoInsumoView } from './modules/inventario/Tipo_Insumo_view';
-import { InsumosView } from './modules/inventario/Insumo_view';
-import { ComprasView } from './modules/inventario/Compras_View';
-import { InsumosEnviadosView } from './modules/inventario/InsumosEnviadosView';
+import { TipoInsumoView } from './features/compras/views/Tipo_Insumo_view';
+import { InsumosView } from './features/compras/views/Insumo_view';
+import { ComprasView } from './features/compras/views/Compras_View';
+import { InsumosEnviadosView } from './features/compras/views/InsumosEnviadosView';
 
 // MÓDULO COMERCIAL
-import OrdenesPedido from './modules/comercial/OrdenesPedido';
-import { ClientesView } from './modules/comercial/ClientesView';
-import { RegistroDiarioView } from './modules/comercial/RegistroDiarioView';
-import { RemisionesView } from './modules/comercial/RemisionesView';
-import { RemisionEntregaView } from './modules/comercial/RemisionEntregaView';
-
-
-// Empleados
+import OrdenesPedido from './features/ventas/views/producciones';
+import { ClientesView } from './features/usuarios/views/ClientesView';
+import { RegistroDiarioView } from './features/produccion/views/RegistroDiarioView';
+import { RemisionesView } from './features/ventas/views/RemisionesView';
+import { RemisionEntregaView } from './features/ventas/views/RemisionEntregaView';
 
 // MÓDULO CONFIGURACIÓN Y PARÁMETROS
-import Proveedores from './modules/configuracion/Proveedores';
-import TiposPieza from './modules/parametros/TiposPieza';
-import TiposMaquinaria from './modules/parametros/TiposMaquinaria';
-
-import EmpleadosView from './modules/configuracion/Empleados';
-import Roles from './modules/configuracion/Roles';
+import Proveedores from './features/compras/views/Proveedores';
+import TiposPieza from './features/parametros/views/TiposPieza';
+import TiposMaquinaria from './features/parametros/views/TiposMaquinaria';
+import EmpleadosView from './features/usuarios/views/Empleados';
+import Roles from './features/configuracion/views/Roles';
 
 // MÓDULO PRINCIPAL Y AUTH
-import { DashboardPage } from './modules/principal/Dashboard';
-import MiPerfil from './modules/auth/components/MiPerfil';
-
-
-// Empleados y Roles
-import EmpleadosView from './modules/configuracion/Empleados';
-import Roles from './modules/configuracion/Roles';
-import Ventas from './modules/comercial/Ventas';
-
-// IMPORTACIÓN CORRECTA CON LLAVES {}
-import { DashboardView } from './modules/principal/Dashboard';
-
+import { DashboardPage } from './features/medicion/views/Dashboard';
+import MiPerfil from './features/usuarios/views/MiPerfil';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentView, setCurrentView] = useState<string>('dashboard');
-
-export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [currentView, setCurrentView] = useState<string>('landing');
-
   const [dark, setDark] = useState<boolean>(false);
 
   // 1. SI LA VISTA ES 'landing', MUESTRA LA LANDING PAGE
@@ -124,12 +105,6 @@ export default function App() {
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
       {currentView === 'roles' && <Roles dark={dark} />}
 
-
-      {currentView === 'ventas' && <Ventas dark={dark} />}
-
-      {currentView === 'dashboard' && <DashboardPage dark={dark} />}
-      
-
       {/* MI PERFIL */}
       {currentView === 'miPerfil' && (
         <MiPerfil 
@@ -137,18 +112,6 @@ export default function App() {
           currentUser={{ nombre: "Juan Camilo", rol: "Administrador" }} 
         />
       )}
-
-
-      {currentView === 'dashboard' && (
-        <div style={{ padding: 24, color: dark ? '#F8F9FA' : '#121212', fontSize: 24, fontWeight: 800 }}>
-          Dashboard Principal de Eslabón
-        </div>
-      )}
-
-      
-      {/* RENDERIZADO DEL DASHBOARD */}
-      {currentView === 'dashboard' && <DashboardView dark={dark} />}
-
     </MainLayout>
   );
 }
