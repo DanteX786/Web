@@ -3,16 +3,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, Tag, Package, ShoppingCart,
-  Factory, Scissors, Wrench, TrendingUp, Users,
-  FileText, ClipboardList, ShoppingBag, BarChart2,
-  SlidersHorizontal, Shield, Key, Truck, Send,
+  Factory, Scissors, Wrench, Users, FileText,
+  SlidersHorizontal, Key, Truck, ShoppingBag, ClipboardList,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  Sun, Moon, Bell, Search, Menu, LogOut,
-  User, Sliders
+  Sun, Moon, Bell, Search, LogOut, User, Send, UserCheck
 } from "lucide-react";
 
-import logo_blanco from '../../public/logo blanco.png';
-import logo_negro from '../../public/logo negro.png';
+import logo_blanco from '../../../public/images/logo blanco.png';
+import logo_negro from '../../../public/images/logo negro.png';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -39,12 +37,14 @@ export default function MainLayout({
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   
+  // Estado inicial de los menús (todos cerrados por defecto)
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    inventario: true,
-    produccion: false,
+    configuracion: false,
     parametros: false,
-    comercial: false,
-    configuracion: false
+    usuarios: false,
+    ventas: false,
+    compras: false,
+    produccion: false
   });
 
   const [notifOpen, setNotifOpen] = useState<boolean>(false);
@@ -83,8 +83,16 @@ export default function MainLayout({
   const inputBg = dark ? "#2A2A2A" : "#F3F3F5";
   const surfaceBg = dark ? "#252525" : "#F8F8F8";
 
+  // LÓGICA DE ACORDEÓN: Cierra todos los demás al abrir uno nuevo
   const toggleGroup = (groupKey: string) => {
-    setOpenGroups(prev => ({ ...prev, [groupKey]: !prev[groupKey] }));
+    setOpenGroups(prev => {
+      const newState: Record<string, boolean> = {};
+      Object.keys(prev).forEach(key => {
+        newState[key] = false;
+      });
+      newState[groupKey] = !prev[groupKey];
+      return newState;
+    });
   };
 
   const renderNavBtn = (id: string, label: string, Icon: any, isSub = false) => {
@@ -141,15 +149,6 @@ export default function MainLayout({
 
     return (
       <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {!collapsed && (
-          <div style={{
-            fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
-            color: `${GOLD}80`, paddingLeft: 12, marginTop: 8, marginBottom: 4
-          }}>
-            {groupKey === 'inventario' ? 'Inventario' : groupKey === 'produccion' ? 'Producción' : groupKey === 'parametros' ? 'Configuración' : groupKey === 'comercial' ? 'Comercial' : 'Sistema'}
-          </div>
-        )}
-        
         <button
           onClick={() => toggleGroup(groupKey)}
           style={{
@@ -172,7 +171,8 @@ export default function MainLayout({
           <div style={{
             display: 'flex', flexDirection: 'column', gap: 4,
             marginLeft: 18, paddingLeft: 12, borderLeft: `2px solid ${GOLD}30`
-          }}>
+          }}
+        >
             {items.map(sub => renderNavBtn(sub.id, sub.label, sub.icon, true))}
           </div>
         )}
@@ -183,7 +183,24 @@ export default function MainLayout({
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: dark ? '#121212' : '#F8F9FA', fontFamily: 'Montserrat, sans-serif', overflowX: 'hidden' }}>
       
-      <aside style={{
+      {/* ESTILOS DE BARRA DE NAVEGACIÓN PERSONALIZADA (Scrollbar) */}
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: ${GOLD}80;
+          border-radius: 10px;
+        }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+          background-color: ${GOLD};
+        }
+      `}</style>
+
+      <aside className="custom-scrollbar" style={{
         width: collapsed ? 72 : 256,
         background: sidebarBg,
         borderRight: `1px solid ${borderCol}`,
@@ -229,44 +246,54 @@ export default function MainLayout({
           )}
         </div>
 
-        <div style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
+        {/* CONTENEDOR DE MENÚS CON SCROLLBAR PERSONALIZADO */}
+        <div className="custom-scrollbar" style={{ padding: '8px', display: 'flex', flexDirection: 'column', gap: 4, flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
           
-          {!collapsed && <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: `${GOLD}80`, paddingLeft: 12, marginTop: 4, marginBottom: 4 }}>Principal</div>}
+        {!collapsed && <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: `${GOLD}80`, paddingLeft: 12, marginTop: 4, marginBottom: 4 }}>Principal</div>}
+          
+          {/* PROCESO DE MEDICIÓN Y DESEMPEÑO */}
           {renderNavBtn("dashboard", "Dashboard", LayoutDashboard)}
 
-          {renderAccordionGroup("inventario", "Inventario", Package, [
-            { id: "tipoInsumos", label: "Tipo de Insumo", icon: Tag },
-            { id: "insumos", label: "Insumos", icon: Package },
-            { id: "compras", label: "Compras", icon: ShoppingCart },
-            { id: "insumosEnviados", label: "Insumos Enviados", icon: Send },
-          ])}
-
-          {renderAccordionGroup("produccion", "Producción", Factory, [
-            { id: "produccion", label: "Gestión Producción", icon: Factory },
-            { id: "registroDiarioEmpleado", label: "Registro Empleado", icon: ClipboardList },
-          ])}
-
-          {renderAccordionGroup("parametros", "Adm. de Parámetros", Sliders, [
-            { id: "catalogoPiezas", label: "Tipo de Pieza", icon: Scissors },
-            { id: "tiposMaquinaria", label: "Tipo de Máquina", icon: Wrench },
-          ])}
-
-          {renderAccordionGroup("comercial", "Comercial", TrendingUp, [
-            { id: "clientes", label: "Clientes", icon: Users },
-            { id: "remisiones", label: "Remisiones", icon: FileText },
-            { id: "registroDiario", label: "Registro Diario", icon: ClipboardList },
-            { id: "remisionEntrega", label: "Venta", icon: BarChart2 },
-          ])}
-
+          {/* PROCESO DE CONFIGURACIÓN */}
           {renderAccordionGroup("configuracion", "Configuración", SlidersHorizontal, [
-            { id: "roles", label: "Roles", icon: Key },
-            { id: "empleados", label: "Empleados", icon: Users },
-            { id: "proveedores", label: "Proveedores", icon: Truck },
+            { id: "roles", label: "Roles y Permisos", icon: Key }
           ])}
 
-          <div style={{ borderTop: `4px solid ${GOLD}90`, marginTop: 8, paddingTop: 8 }}>
-          
-          </div>
+          {/* PARÁMETROS (Separado según Casos de Uso) */}
+          {renderAccordionGroup("parametros", "Parámetros", Wrench, [
+            { id: "tiposMaquinaria", label: "Tipos de Máquina", icon: Wrench },
+            { id: "catalogoPiezas", label: "Tipos de Pieza", icon: Scissors }
+          ])}
+
+          {/* PROCESO DE USUARIOS */}
+          {renderAccordionGroup("usuarios", "Usuarios", Users, [
+            { id: "empleados", label: "Empleados", icon: Users },
+            { id: "clientes", label: "Clientes", icon: User }
+          ])}
+
+          {/* PROCESO DE VENTAS */}
+          {renderAccordionGroup("ventas", "Ventas", ShoppingCart, [
+            { id: "remisiones", label: "Remisiones", icon: FileText },
+            { id: "remisionEntrega", label: "Remisiones de Entrega", icon: Truck }
+          ])}
+
+          {/* PROCESO DE COMPRAS */}
+          {renderAccordionGroup("compras", "Compras e Inventario", Package, [
+            { id: "compras", label: "Compras", icon: ShoppingBag },
+            { id: "proveedores", label: "Proveedores", icon: Truck },
+            { id: "insumos", label: "Insumos", icon: Package },
+            { id: "tipoInsumos", label: "Categorías de Insumos", icon: Tag },
+            { id: "insumosEnviados", label: "Insumos Enviados", icon: Send }
+          ])}
+
+          {/* PROCESO DE PRODUCCIÓN */}
+          {renderAccordionGroup("produccion", "Producción", Factory, [
+            { id: "produccion", label: "Producciones en curso", icon: Factory },
+            { id: "registroDiario", label: "Registro Diario", icon: ClipboardList },
+            { id: "registroDiarioEmpleado", label: "Registro Empleado", icon: UserCheck }
+          ])}
+
+          <div style={{ borderTop: `4px solid ${GOLD}90`, marginTop: 8, paddingTop: 8 }}></div>
         </div>
 
         <div 
@@ -475,7 +502,7 @@ export default function MainLayout({
           </div>
         </header>
 
-        <main style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
+        <main className="custom-scrollbar" style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
           {children}
         </main>
 

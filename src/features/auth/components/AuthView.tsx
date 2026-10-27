@@ -6,6 +6,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import logo_blanco from '../../../../public/images/logo blanco.png';
+import logo_negro from '../../../../public/images/logo negro.png';
+
 const GOLD = "#C9A227";
 const GOLD_LIGHT = "#E6B84A";
 const DANGER = "#DC3545";
@@ -110,7 +113,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess }) => {
         {/* LOGO SUPERIOR DINÁMICO (USA LA CARPETA PUBLIC) */}
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <img 
-            src={isDark ? "/logo negro.png" : "/logo blanco.png"} 
+            src={isDark ? logo_negro : logo_blanco} 
             alt="Logo Stitcher" 
             style={{ height: 100, width: 'auto', display: 'inline-block', objectFit: 'contain' }} 
           />
