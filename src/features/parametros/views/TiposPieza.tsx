@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Scissors, Plus, Pencil, Trash2, X, Search, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { obtenerTiposPiezas, crearTipoPieza, actualizarTipoPieza, eliminarTipoPieza } from '../../../services/tipoPiezaService';
 
 const GOLD = "#C9A227";
 const GOLD_LIGHT = "#E6B84A";
@@ -18,12 +19,6 @@ interface TipoPieza {
   nombre: string;
   desc: string;
 }
-
-const seedPiezas: TipoPieza[] = [
-  { id: "PIE-001", nombre: "Cuello", desc: "Pieza superior delantera que rodea el cuello de la prenda" },
-  { id: "PIE-002", nombre: "Manga", desc: "Parte superior del brazo, larga o corta" },
-  { id: "PIE-003", nombre: "Espalda", desc: "Panel posterior principal de la prenda" },
-];
 
 const IdBadge = ({ id }: { id: string }) => (
   <span style={{
@@ -89,7 +84,7 @@ const ConfirmDelete = ({ onCancel, onConfirm, dark, message }: { onCancel: () =>
 };
 
 export default function TiposPieza({ dark }: { dark: boolean }) {
-  const [data, setData] = useState<TipoPieza[]>(seedPiezas);
+  const [data, setData] = useState<TipoPieza[]>([]);
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editing, setEditing] = useState<TipoPieza | null>(null);
@@ -103,6 +98,13 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
   const surfaceBg = dark ? "#252525" : "#F8F8F8";
   const borderNormal = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
 
+  // Cargar datos asíncronos al montar el componente
+  useEffect(() => {
+    obtenerTiposPiezas()
+      .then(res => setData(res))
+      .catch(() => toast.error("Error al cargar los tipos de pieza"));
+  }, []);
+
   const filtered = data.filter(d =>
     [d.id, d.nombre, d.desc].join(" ").toLowerCase().includes(search.toLowerCase())
   );
@@ -114,7 +116,6 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filtered.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
-
 
   function openAdd() {
     const nextCode = nextId("PIE", data.map(d => d.id));
@@ -129,19 +130,22 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
     setModal("edit");
   }
 
-  function save() {
+  async function save() {
     if (!form.nombre.trim()) { toast.error("El nombre es obligatorio"); return; }
     if (modal === "add") {
-      setData([...data, { id: form.id, nombre: form.nombre, desc: form.desc }]);
+      const nuevo = await crearTipoPieza({ id: form.id, nombre: form.nombre, desc: form.desc });
+      setData([...data, nuevo]);
       toast.success("Tipo de pieza creado");
     } else if (editing) {
+      await actualizarTipoPieza(editing.id, { nombre: form.nombre, desc: form.desc });
       setData(data.map(d => d.id === editing.id ? { ...d, nombre: form.nombre, desc: form.desc } : d));
       toast.success("Tipo de pieza actualizado");
     }
     setModal(null);
   }
 
-  function confirmDelete(id: string) {
+  async function confirmDelete(id: string) {
+    await eliminarTipoPieza(id);
     setData(data.filter(d => d.id !== id));
     setDeleting(null);
   }
