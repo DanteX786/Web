@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Truck, Search, Plus, X, AlertTriangle, Pencil, Trash2, Eye, Phone, Mail, MapPin, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { obtenerProveedores, crearProveedor, eliminarProveedor } from '../../../services/proveedorService';
 
 const GOLD = "#C9A227";
 const GOLD_LIGHT = "#E6B84A";
@@ -37,25 +38,33 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
   const subtle = dark ? "#9A9A9A" : "#6B6B6B";
   const borderNormal = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
 
-  const [data, setData] = useState<Proveedor[]>([
-    { id:"PRV-001", nombre:"Textiles Medellín S.A.", nit:"800123456-1", direccion:"Cra 45 #12-34, Medellín", correo:"ventas@textilesmedellin.com", telefono:"3001234567", contacto:"Carlos Pérez", estado:"Activo" },
-    { id:"PRV-002", nombre:"Distribuidora Hilos El Dorado", nit:"900234567-2", direccion:"Cl 80 #20-15, Bogotá", correo:"contacto@hiloseldorado.com", telefono:"3109876543", contacto:"Ana Gómez", estado:"Activo" },
-    { id:"PRV-003", nombre:"Botones & Accesorios Ltda.", nit:"830345678-3", direccion:"Av. 30 #5-22, Cali", correo:"pedidos@botonesaccesorios.com", telefono:"3204567890", contacto:"Luis Torres", estado:"Inactivo" },
-  ]);
+  const [data, setData] = useState<Proveedor[]>([]);
 
   const [busqueda, setBusqueda] = useState('');
   const [modalMode, setModalMode] = useState<'add' | 'edit' | 'view' | null>(null);
   const [current, setCurrent] = useState<Proveedor | null>(null);
   const [deleteItem, setDeleteItem] = useState<Proveedor | null>(null);
   const [formData, setFormData] = useState<Partial<Proveedor>>({ estado: 'Activo' });
+  
   // Estados para controlar la paginación
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5; // Aquí definimos que se muestren 5 proveedores por página
+  const itemsPerPage = 5;
+
+  useEffect(() => {
+    const cargarProveedores = async () => {
+      const datosApi = await obtenerProveedores();
+      if (datosApi && datosApi.length > 0) {
+        setData(datosApi as any);
+      }
+    };
+    
+    cargarProveedores();
+  }, []);
 
   const filtered = data.filter(p => 
     p.nombre.toLowerCase().includes(busqueda.toLowerCase()) || 
     p.nit.includes(busqueda) || 
-    p.id.toLowerCase().includes(busqueda.toLowerCase())
+    String(p.id).toLowerCase().includes(busqueda.toLowerCase())
   );
 
   // Lógica para seccionar los datos por página
@@ -63,7 +72,6 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filtered.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
-
 
   const openAdd = () => {
     const nextNum = data.length + 1;
@@ -84,7 +92,7 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
     setModalMode('view');
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nombre || !formData.nit) {
       toast.error("El nombre y el NIT son obligatorios", {
@@ -94,35 +102,51 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
     }
 
     if (modalMode === 'add') {
-      const nextNum = data.length + 1;
-      const newProv = { 
-        ...formData, 
-        id: `PRV-${String(nextNum).padStart(3, '0')}` 
-      } as Proveedor;
-      setData([...data, newProv]);
-      toast.success("Proveedor registrado exitosamente", {
-        style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-      });
+      const { id, ...datosParaEnviar } = formData as Proveedor;
+      
+      const proveedorCreado = await crearProveedor(datosParaEnviar);
+      
+      if (proveedorCreado) {
+        setData([...data, proveedorCreado as any]);
+        toast.success("Proveedor registrado en la base de datos", {
+          style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
+        });
+      } else {
+        toast.error("Error al guardar en el servidor", {
+          style: { background: DANGER_BG, border: `1px solid ${DANGER}`, color: DANGER_TXT, fontFamily: 'Montserrat, sans-serif' }
+        });
+      }
     } else if (modalMode === 'edit' && current) {
-      setData(data.map(d => d.id === current.id ? { ...d, ...formData } as Proveedor : d));
-      toast.success("Proveedor actualizado exitosamente", {
+      setData(data.map(d => d.id === current.id ? { ...d, ...formData } as any : d));
+      toast.success("Proveedor actualizado localmente", {
         style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
       });
     }
     setModalMode(null);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteItem) return;
-    setData(data.filter(d => d.id !== deleteItem.id));
+
+    // Enviamos la orden de eliminar al backend
+    const exito = await eliminarProveedor(deleteItem.id);
+
+    if (exito) {
+      // Si el servidor confirma, lo quitamos de la pantalla
+      setData(data.filter(d => d.id !== deleteItem.id));
+      toast.success("Proveedor eliminado de la base de datos", {
+        style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
+      });
+    } else {
+      toast.error("Error al intentar eliminar en el servidor", {
+        style: { background: DANGER_BG, border: `1px solid ${DANGER}`, color: DANGER_TXT, fontFamily: 'Montserrat, sans-serif' }
+      });
+    }
     setDeleteItem(null);
-    toast.success("Proveedor eliminado correctamente", {
-      style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-    });
   };
 
   const handleStateChangeInline = (id: string, nuevoEstado: EstadoProveedor) => {
-    setData(data.map(d => d.id === id ? { ...d, estado: nuevoEstado } : d));
+    setData(data.map(d => d.id === id ? { ...d, estado: nuevoEstado } as any : d));
     toast.success(`Estado actualizado a "${nuevoEstado}"`, {
       style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
     });
@@ -215,7 +239,7 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
                           value={row.estado}
                           onChange={(e) => handleStateChangeInline(row.id, e.target.value as EstadoProveedor)}
                           style={{
-                            background: badgeStyle.bg, color: badgeStyle.color, border: 'none',
+                            background: badgeStyle?.bg, color: badgeStyle?.color, border: 'none',
                             borderRadius: 999, padding: '5px 24px 5px 12px', fontSize: 12,
                             fontWeight: 700, cursor: 'pointer', outline: 'none',
                             fontFamily: 'Montserrat, sans-serif', appearance: 'none'
@@ -224,12 +248,11 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
                           <option value="Activo">Activo</option>
                           <option value="Inactivo">Inactivo</option>
                         </select>
-                        <ChevronDown size={13} color={badgeStyle.color} style={{ position: 'absolute', right: 8, pointerEvents: 'none' }} />
+                        <ChevronDown size={13} color={badgeStyle?.color} style={{ position: 'absolute', right: 8, pointerEvents: 'none' }} />
                       </div>
                     </td>
                     <td style={{ padding: '12px 16px', verticalAlign: 'middle', textAlign: 'right' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-                        {/* Ojo Azul a la izquierda */}
                         <button onClick={() => openView(row)} title="Ver" style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: 'transparent', border: `1.5px solid ${BLUE}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={(e)=>{e.currentTarget.style.backgroundColor=`${BLUE}1A`;}} onMouseLeave={(e)=>{e.currentTarget.style.backgroundColor='transparent';}}>
                           <Eye size={14} color={BLUE} />
                         </button>
@@ -285,7 +308,6 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
           </button>
         </div>
       </div>
-
 
       {/* MODAL CREAR / EDITAR */}
       {(modalMode === 'add' || modalMode === 'edit') && (
