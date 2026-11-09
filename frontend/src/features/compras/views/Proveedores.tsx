@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
-import { Truck, Search, Plus, X, AlertTriangle, Pencil, Trash2, Eye, Phone, Mail, MapPin, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, Plus, X, AlertTriangle, Pencil, Trash2, Eye, Phone, Mail, MapPin, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { proveedorService, type Proveedor, type EstadoProveedor } from '../services/proveedorService';
+import { mensajeError } from '../../../shared/utils/api';
 
 const GOLD = "#C9A227";
 const GOLD_LIGHT = "#E6B84A";
@@ -11,18 +13,8 @@ const DANGER_TXT = "#721c24";
 const SUCCESS_BG = "#DCF7E6";
 const SUCCESS_TXT = "#155724";
 
-type EstadoProveedor = "Activo" | "Inactivo";
-
-interface Proveedor {
-  id: string;
-  nombre: string;
-  nit: string;
-  direccion: string;
-  correo: string;
-  telefono: string;
-  contacto: string;
-  estado: EstadoProveedor;
-}
+const estiloError = { background: DANGER_BG, border: `1px solid ${DANGER}`, color: DANGER_TXT, fontFamily: 'Montserrat, sans-serif' };
+const estiloExito = { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' };
 
 interface Props {
   dark?: boolean;
@@ -37,39 +29,39 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
   const subtle = dark ? "#9A9A9A" : "#6B6B6B";
   const borderNormal = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
 
-  const [data, setData] = useState<Proveedor[]>([
-    { id:"PRV-001", nombre:"Textiles Medellín S.A.", nit:"800123456-1", direccion:"Cra 45 #12-34, Medellín", correo:"ventas@textilesmedellin.com", telefono:"3001234567", contacto:"Carlos Pérez", estado:"Activo" },
-    { id:"PRV-002", nombre:"Distribuidora Hilos El Dorado", nit:"900234567-2", direccion:"Cl 80 #20-15, Bogotá", correo:"contacto@hiloseldorado.com", telefono:"3109876543", contacto:"Ana Gómez", estado:"Activo" },
-    { id:"PRV-003", nombre:"Botones & Accesorios Ltda.", nit:"830345678-3", direccion:"Av. 30 #5-22, Cali", correo:"pedidos@botonesaccesorios.com", telefono:"3204567890", contacto:"Luis Torres", estado:"Inactivo" },
-  ]);
+  const [data, setData] = useState<Proveedor[]>([]);
 
   const [busqueda, setBusqueda] = useState('');
   const [modalMode, setModalMode] = useState<'add' | 'edit' | 'view' | null>(null);
   const [current, setCurrent] = useState<Proveedor | null>(null);
   const [deleteItem, setDeleteItem] = useState<Proveedor | null>(null);
   const [formData, setFormData] = useState<Partial<Proveedor>>({ estado: 'Activo' });
-  // Estados para controlar la paginación
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5; // Aquí definimos que se muestren 5 proveedores por página
 
-  const filtered = data.filter(p => 
-    p.nombre.toLowerCase().includes(busqueda.toLowerCase()) || 
-    p.nit.includes(busqueda) || 
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
+  // Carga inicial desde el backend
+  useEffect(() => {
+    proveedorService.listar()
+      .then(setData)
+      .catch((e) => toast.error(mensajeError(e), { style: estiloError }));
+  }, []);
+
+  const filtered = data.filter(p =>
+    p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
+    p.nit.includes(busqueda) ||
     p.id.toLowerCase().includes(busqueda.toLowerCase())
   );
 
-  // Lógica para seccionar los datos por página
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filtered.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
 
-
   const openAdd = () => {
-    const nextNum = data.length + 1;
-    const autoId = `PRV-${String(nextNum).padStart(3, '0')}`;
     setCurrent(null);
-    setFormData({ id: autoId, nombre: '', nit: '', direccion: '', correo: '', telefono: '', contacto: '', estado: 'Activo' });
+    setFormData({ nombre: '', nit: '', direccion: '', correo: '', telefono: '', contacto: '', estado: 'Activo' });
     setModalMode('add');
   };
 
@@ -84,48 +76,62 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
     setModalMode('view');
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.nombre || !formData.nit) {
-      toast.error("El nombre y el NIT son obligatorios", {
-        style: { background: DANGER_BG, border: `1px solid ${DANGER}`, color: DANGER_TXT, fontFamily: 'Montserrat, sans-serif' }
-      });
+    if (!formData.nombre?.trim() || !formData.nit?.trim()) {
+      toast.error("El nombre y el NIT son obligatorios", { style: estiloError });
       return;
     }
 
-    if (modalMode === 'add') {
-      const nextNum = data.length + 1;
-      const newProv = { 
-        ...formData, 
-        id: `PRV-${String(nextNum).padStart(3, '0')}` 
-      } as Proveedor;
-      setData([...data, newProv]);
-      toast.success("Proveedor registrado exitosamente", {
-        style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-      });
-    } else if (modalMode === 'edit' && current) {
-      setData(data.map(d => d.id === current.id ? { ...d, ...formData } as Proveedor : d));
-      toast.success("Proveedor actualizado exitosamente", {
-        style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-      });
+    // El id no se envía: lo genera la base de datos
+    const datos = {
+      nombre: formData.nombre,
+      nit: formData.nit,
+      contacto: formData.contacto,
+      telefono: formData.telefono,
+      correo: formData.correo,
+      direccion: formData.direccion,
+      estado: formData.estado,
+    };
+
+    try {
+      if (modalMode === 'add') {
+        const creado = await proveedorService.crear(datos);
+        setData(prev => [...prev, creado]);
+        toast.success(`Proveedor ${creado.id} registrado`, { style: estiloExito });
+      } else if (modalMode === 'edit' && current) {
+        const actualizado = await proveedorService.actualizar(current.id, datos);
+        setData(prev => prev.map(d => d.id === actualizado.id ? actualizado : d));
+        toast.success("Proveedor actualizado", { style: estiloExito });
+      }
+      setModalMode(null);
+    } catch (e) {
+      // Se deja el modal abierto para que el usuario corrija
+      toast.error(mensajeError(e), { style: estiloError });
     }
-    setModalMode(null);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteItem) return;
-    setData(data.filter(d => d.id !== deleteItem.id));
-    setDeleteItem(null);
-    toast.success("Proveedor eliminado correctamente", {
-      style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-    });
+    try {
+      await proveedorService.eliminar(deleteItem.id);
+      setData(prev => prev.filter(d => d.id !== deleteItem.id));
+      toast.success("Proveedor eliminado", { style: estiloExito });
+    } catch (e) {
+      toast.error(mensajeError(e), { style: estiloError });
+    } finally {
+      setDeleteItem(null);
+    }
   };
 
-  const handleStateChangeInline = (id: string, nuevoEstado: EstadoProveedor) => {
-    setData(data.map(d => d.id === id ? { ...d, estado: nuevoEstado } : d));
-    toast.success(`Estado actualizado a "${nuevoEstado}"`, {
-      style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-    });
+  const handleStateChangeInline = async (id: string, nuevoEstado: EstadoProveedor) => {
+    try {
+      const actualizado = await proveedorService.cambiarEstado(id, nuevoEstado);
+      setData(prev => prev.map(d => d.id === id ? actualizado : d));
+      toast.success(`Estado actualizado a "${nuevoEstado}"`, { style: estiloExito });
+    } catch (e) {
+      toast.error(mensajeError(e), { style: estiloError });
+    }
   };
 
   const getEstadoBadgeStyle = (estado: EstadoProveedor) => {
@@ -137,7 +143,7 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
 
   return (
     <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif', boxSizing: 'border-box' }}>
-      
+
       {/* ENCABEZADO */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
@@ -215,7 +221,7 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
                           value={row.estado}
                           onChange={(e) => handleStateChangeInline(row.id, e.target.value as EstadoProveedor)}
                           style={{
-                            background: badgeStyle.bg, color: badgeStyle.color, border: 'none',
+                            background: badgeStyle?.bg, color: badgeStyle?.color, border: 'none',
                             borderRadius: 999, padding: '5px 24px 5px 12px', fontSize: 12,
                             fontWeight: 700, cursor: 'pointer', outline: 'none',
                             fontFamily: 'Montserrat, sans-serif', appearance: 'none'
@@ -224,12 +230,11 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
                           <option value="Activo">Activo</option>
                           <option value="Inactivo">Inactivo</option>
                         </select>
-                        <ChevronDown size={13} color={badgeStyle.color} style={{ position: 'absolute', right: 8, pointerEvents: 'none' }} />
+                        <ChevronDown size={13} color={badgeStyle?.color} style={{ position: 'absolute', right: 8, pointerEvents: 'none' }} />
                       </div>
                     </td>
                     <td style={{ padding: '12px 16px', verticalAlign: 'middle', textAlign: 'right' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-                        {/* Ojo Azul a la izquierda */}
                         <button onClick={() => openView(row)} title="Ver" style={{ width: 32, height: 32, borderRadius: '50%', backgroundColor: 'transparent', border: `1.5px solid ${BLUE}`, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={(e)=>{e.currentTarget.style.backgroundColor=`${BLUE}1A`;}} onMouseLeave={(e)=>{e.currentTarget.style.backgroundColor='transparent';}}>
                           <Eye size={14} color={BLUE} />
                         </button>
@@ -254,29 +259,29 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
         <div style={{ fontSize: 13, color: subtle }}>
           Mostrando de {filtered.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, filtered.length)} de {filtered.length} registros
         </div>
-        
+
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button 
+          <button
             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
-            style={{ 
-              padding: '6px 16px', borderRadius: 8, border: `1px solid ${borderNormal}`, 
+            style={{
+              padding: '6px 16px', borderRadius: 8, border: `1px solid ${borderNormal}`,
               background: surfaceBg, color: currentPage === 1 ? subtle : fg,
               cursor: currentPage === 1 ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600
             }}
           >
             Anterior
           </button>
-          
+
           <span style={{ fontSize: 13, color: fg, fontWeight: 600, padding: '0 8px' }}>
             Página {currentPage} de {totalPages || 1}
           </span>
 
-          <button 
+          <button
             onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages || totalPages === 0}
-            style={{ 
-              padding: '6px 16px', borderRadius: 8, border: `1px solid ${borderNormal}`, 
+            style={{
+              padding: '6px 16px', borderRadius: 8, border: `1px solid ${borderNormal}`,
               background: surfaceBg, color: currentPage === totalPages || totalPages === 0 ? subtle : fg,
               cursor: currentPage === totalPages || totalPages === 0 ? 'not-allowed' : 'pointer', fontSize: 13, fontWeight: 600
             }}
@@ -285,7 +290,6 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
           </button>
         </div>
       </div>
-
 
       {/* MODAL CREAR / EDITAR */}
       {(modalMode === 'add' || modalMode === 'edit') && (
@@ -298,7 +302,7 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
               </h3>
               <button onClick={() => setModalMode(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: subtle }}><X size={18}/></button>
             </div>
-            
+
             <form onSubmit={handleSave} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>Nombre de la Empresa</label>
@@ -330,8 +334,8 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>Estado</label>
-                <select 
-                  value={formData.estado || 'Activo'} 
+                <select
+                  value={formData.estado || 'Activo'}
                   onChange={e => setFormData({...formData, estado: e.target.value as EstadoProveedor})}
                   style={{ width: '100%', padding: '10px 12px', background: inputBg, border: `1px solid ${borderNormal}`, borderRadius: 8, color: fg, outline: 'none', cursor: 'pointer', fontFamily: 'Montserrat, sans-serif', boxSizing: 'border-box' }}
                 >
@@ -357,7 +361,7 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: fg }}>Detalle del Proveedor</h3>
               <button onClick={() => setModalMode(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: subtle }}><X size={18}/></button>
             </div>
-            
+
             <div style={{ padding: '20px 24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div style={{ background: surfaceBg, padding: 12, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: subtle, textTransform: 'uppercase', marginBottom: 4 }}>ID Proveedor</div>
@@ -416,7 +420,7 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
               </div>
               <h3 style={{ fontSize: 18, fontWeight: 800, color: fg, margin: '0 0 8px' }}>¿Eliminar proveedor?</h3>
               <p style={{ fontSize: 13, color: subtle, margin: '0 0 16px' }}>Esta acción no se puede deshacer.</p>
-              
+
               <div style={{ background: DANGER_BG, border: `1px solid ${DANGER}4D`, borderRadius: 10, padding: '10px 14px', fontSize: 12, color: DANGER_TXT, fontWeight: 600, marginBottom: 20, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <AlertTriangle size={14} color={DANGER} style={{ flexShrink: 0 }} />
                 <span>Se eliminará el proveedor <strong>{deleteItem.nombre}</strong> permanentemente.</span>
