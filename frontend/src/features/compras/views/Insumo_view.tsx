@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Search, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { mensajeError } from '../../../shared/utils/api';
+import { insumoService, type Insumo as InsumoApi, type TipoInsumo } from '../services/insumoService';
+
 // ==========================================
 // CONSTANTES DE DISEÑO - SISTEMA STITCHER
 // ==========================================
@@ -12,6 +15,13 @@ const DANGER_BG = "#FDECEA";
 const DANGER_TXT = "#721c24";
 const SUCCESS_BG = "#DCF7E6";
 const SUCCESS_TXT = "#155724";
+
+const ESTILO_ERROR = { background: DANGER_BG, border: `1px solid ${DANGER}`, color: DANGER_TXT, fontFamily: 'Montserrat, sans-serif' };
+const ESTILO_OK = { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' };
+const notificarError = (msg: string) => toast.error(msg, { style: ESTILO_ERROR });
+const notificarOk = (msg: string) => toast.success(msg, { style: ESTILO_OK });
+
+const STOCK_BAJO = 10;
 
 interface Insumo {
   id: string;
@@ -26,28 +36,23 @@ interface Props {
   dark?: boolean;
 }
 
+/** Convierte un insumo de la API al formato que usa esta vista. */
+const aInsumo = (i: InsumoApi): Insumo => ({
+  id: i.id,
+  nombre: i.nombre,
+  descripcion: i.descripcion ?? '',
+  stock: i.stock,
+  tipoId: i.tipo_id ?? '',
+  tipoNombre: i.tipo_nombre ?? '',
+});
+
 export const InsumosView: React.FC<Props> = ({ dark = false }) => {
   const [busqueda, setBusqueda] = useState('');
   
-  // Lista de 10 registros
-  const [insumos, setInsumos] = useState<Insumo[]>([
-    { id: 'INS-001', nombre: 'Hilo', descripcion: 'Hilo de costura estándar', stock: 20, tipoId: 'TIPI-001', tipoNombre: 'Armado' },
-    { id: 'INS-002', nombre: 'Botones', descripcion: 'Botones plásticos surtidos', stock: 40, tipoId: 'TIPI-002', tipoNombre: 'Detalle' },
-    { id: 'INS-003', nombre: 'Marquillas', descripcion: 'Marquillas tejidas con logo', stock: 8, tipoId: 'TIPI-002', tipoNombre: 'Detalle' },
-    { id: 'INS-004', nombre: 'Cremallera', descripcion: 'Cremallera separable de metal 50cm', stock: 15, tipoId: 'TIPI-002', tipoNombre: 'Detalle' },
-    { id: 'INS-005', nombre: 'Elástico', descripcion: 'Elástico tejido de 3cm para pretinas', stock: 50, tipoId: 'TIPI-001', tipoNombre: 'Armado' },
-    { id: 'INS-006', nombre: 'Sesgo', descripcion: 'Sesgo de poliéster para bordes y cuello', stock: 30, tipoId: 'TIPI-001', tipoNombre: 'Armado' },
-    { id: 'INS-007', nombre: 'Bolsas de empaque', descripcion: 'Bolsas plásticas autoadhesivas', stock: 5, tipoId: 'TIPI-003', tipoNombre: 'Acabado' },
-    { id: 'INS-008', nombre: 'Etiqueta de talla', descripcion: 'Etiquetas textiles de talla M y L', stock: 60, tipoId: 'TIPI-002', tipoNombre: 'Detalle' },
-    { id: 'INS-009', nombre: 'Fusión / Entretela', descripcion: 'Entretela termoadhesiva para cuellos', stock: 12, tipoId: 'TIPI-001', tipoNombre: 'Armado' },
-    { id: 'INS-010', nombre: 'Ganchos colgadores', descripcion: 'Ganchos plásticos para presentación final', stock: 25, tipoId: 'TIPI-003', tipoNombre: 'Acabado' }
-  ]);
-
-  const tiposDisponibles = [
-    { id: 'TIPI-001', nombre: 'Armado' },
-    { id: 'TIPI-002', nombre: 'Detalle' },
-    { id: 'TIPI-003', nombre: 'Acabado' }
-  ];
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [tiposDisponibles, setTiposDisponibles] = useState<TipoInsumo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -55,22 +60,34 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const [stock, setStock] = useState<number | ''>('');
-  const [tipoIdSeleccionado, setTipoIdSeleccionado] = useState('TIPI-001');
+  const [tipoIdSeleccionado, setTipoIdSeleccionado] = useState('');
   const [deleteItem, setDeleteItem] = useState<Insumo | null>(null);
 
-  // EFECTO PARA LANZAR LA NOTIFICACIÓN AUTOMÁTICA DE STOCK BAJO AL CARGAR
+  // CARGA INICIAL + NOTIFICACIÓN AUTOMÁTICA DE STOCK BAJO
   useEffect(() => {
-    const insumosBajos = insumos.filter(i => i.stock <= 10);
-    if (insumosBajos.length > 0) {
-      toast.warning(`¡Atención! Hay ${insumosBajos.length} insumo(s) con stock bajo en el taller.`, {
-        style: { 
-          background: DANGER_BG, 
-          border: `1px solid ${DANGER}`, 
-          color: DANGER_TXT, 
-          fontFamily: 'Montserrat, sans-serif' 
+    const cargar = async () => {
+      setLoading(true);
+      try {
+        const [lista, tipos] = await Promise.all([
+          insumoService.listar(),
+          insumoService.listarTipos(),
+        ]);
+        setInsumos(lista.map(aInsumo));
+        setTiposDisponibles(tipos);
+
+        const insumosBajos = lista.filter(i => i.stock <= STOCK_BAJO);
+        if (insumosBajos.length > 0) {
+          toast.warning(`¡Atención! Hay ${insumosBajos.length} insumo(s) con stock bajo en el taller.`, {
+            style: ESTILO_ERROR
+          });
         }
-      });
-    }
+      } catch (e) {
+        notificarError(mensajeError(e));
+      } finally {
+        setLoading(false);
+      }
+    };
+    cargar();
   }, []);
 
   const bg = dark ? "#121212" : "#F8F9FA";
@@ -83,13 +100,11 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
 
   const handleOpenCreate = () => {
     setEditingId(null);
-    const nextNum = insumos.length + 1;
-    const autoId = `INS-${String(nextNum).padStart(3, '0')}`;
-    setFormId(autoId);
+    setFormId('Se genera al guardar');
     setNombre('');
     setDescripcion('');
     setStock('');
-    setTipoIdSeleccionado('TIPI-001');
+    setTipoIdSeleccionado(tiposDisponibles[0]?.id ?? '');
     setIsModalOpen(true);
   };
 
@@ -103,59 +118,65 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
+
     if (!nombre.trim()) {
-      toast.error('El nombre es obligatorio', {
-        style: { background: DANGER_BG, border: `1px solid ${DANGER}`, color: DANGER_TXT, fontFamily: 'Montserrat, sans-serif' }
-      });
+      notificarError('El nombre es obligatorio');
       return;
     }
 
-    if (stock === '' || Number(stock) < 0) {
-      toast.error('Ingrese un stock válido', {
-        style: { background: DANGER_BG, border: `1px solid ${DANGER}`, color: DANGER_TXT, fontFamily: 'Montserrat, sans-serif' }
-      });
+    if (!editingId && (stock === '' || Number(stock) < 0 || !Number.isInteger(Number(stock)))) {
+      notificarError('Ingrese un stock válido (número entero, 0 o mayor)');
       return;
     }
 
-    const tipoObj = tiposDisponibles.find(t => t.id === tipoIdSeleccionado) || { id: tipoIdSeleccionado, nombre: 'General' };
-
-    if (editingId) {
-      setInsumos(insumos.map(i => i.id === editingId ? {
-        ...i,
-        nombre,
-        descripcion,
-        stock: Number(stock),
-        tipoId: tipoObj.id,
-        tipoNombre: tipoObj.nombre
-      } : i));
-      toast.success('Insumo actualizado correctamente', {
-        style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-      });
-    } else {
-      setInsumos([...insumos, {
-        id: formId,
-        nombre,
-        descripcion,
-        stock: Number(stock),
-        tipoId: tipoObj.id,
-        tipoNombre: tipoObj.nombre
-      }]);
-      toast.success('Insumo creado correctamente', {
-        style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-      });
+    if (!tipoIdSeleccionado) {
+      notificarError('Seleccione un tipo de insumo');
+      return;
     }
-    setIsModalOpen(false);
+
+    setSaving(true);
+    try {
+      if (editingId) {
+        // El stock no se envía: lo modifican las compras y la producción
+        const actualizado = await insumoService.actualizar(editingId, {
+          nombre: nombre.trim(),
+          descripcion: descripcion.trim() || null,
+          tipo_id: tipoIdSeleccionado,
+        });
+        setInsumos(prev => prev.map(i => i.id === editingId ? aInsumo(actualizado) : i));
+        notificarOk('Insumo actualizado correctamente');
+      } else {
+        const nuevo = await insumoService.crear({
+          nombre: nombre.trim(),
+          descripcion: descripcion.trim() || null,
+          stock: Number(stock),
+          tipo_id: tipoIdSeleccionado,
+        });
+        setInsumos(prev => [...prev, aInsumo(nuevo)]);
+        notificarOk('Insumo creado correctamente');
+      }
+      setIsModalOpen(false);
+    } catch (err) {
+      notificarError(mensajeError(err));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteItem) return;
-    setInsumos(insumos.filter(i => i.id !== deleteItem.id));
-    setDeleteItem(null);
-    toast.success('Insumo eliminado', {
-      style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-    });
+    try {
+      await insumoService.eliminar(deleteItem.id);
+      setInsumos(prev => prev.filter(i => i.id !== deleteItem.id));
+      notificarOk('Insumo eliminado');
+    } catch (err) {
+      notificarError(mensajeError(err));
+    } finally {
+      setDeleteItem(null);
+    }
   };
 
   const insumosFiltrados = insumos.filter(i =>
@@ -248,12 +269,12 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
             {insumosFiltrados.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13 }}>
-                  No se encontraron registros.
+                  {loading ? 'Cargando insumos...' : 'No se encontraron registros.'}
                 </td>
               </tr>
             ) : (
               currentItems.map((insumo) => {
-                const stockBajo = insumo.stock <= 10;
+                const stockBajo = insumo.stock <= STOCK_BAJO;
                 return (
                   <tr key={insumo.id} style={{ borderBottom: `1px solid ${dark ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.04)'}` }}>
                     
@@ -474,16 +495,22 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: subtle, display: 'block', marginBottom: 6 }}>
-                    Stock Inicial
+                    {editingId ? 'Stock actual' : 'Stock Inicial'}
                   </label>
                   <input
                     type="number"
+                    min={0}
+                    step={1}
                     value={stock}
+                    disabled={!!editingId}
+                    title={editingId ? 'El stock se actualiza con las compras y la producción' : undefined}
                     onChange={(e) => setStock(e.target.value === '' ? '' : Number(e.target.value))}
                     placeholder="Ej: 20"
                     style={{
                       width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 14,
-                      backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`,
+                      backgroundColor: editingId ? (dark ? '#222222' : '#EFEFEF') : inputBg,
+                      color: editingId ? subtle : fg, border: `1px solid ${borderNormal}`,
+                      cursor: editingId ? 'not-allowed' : 'text',
                       outline: 'none', fontFamily: 'Montserrat, sans-serif', boxSizing: 'border-box',
                       transition: 'border-color 0.2s'
                     }}
@@ -506,6 +533,7 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
                       cursor: 'pointer'
                     }}
                   >
+                    {tiposDisponibles.length === 0 && <option value="">Sin tipos registrados</option>}
                     {tiposDisponibles.map((t) => (
                       <option key={t.id} value={t.id}>
                         {t.id} - {t.nombre}
@@ -529,13 +557,14 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
                 </button>
                 <button
                   type="submit"
+                  disabled={saving}
                   style={{
                     padding: '8px 24px', borderRadius: 8, border: 'none',
                     background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212',
                     fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'Montserrat, sans-serif'
                   }}
                 >
-                  Guardar
+                  {saving ? 'Guardando...' : 'Guardar'}
                 </button>
               </div>
             </form>
@@ -607,4 +636,4 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
 
     </div>
   );
-};
+};

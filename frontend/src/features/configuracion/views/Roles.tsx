@@ -1,5 +1,6 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import {
   Box,
   Typography,
@@ -33,6 +34,9 @@ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined';
 import CloseIcon from '@mui/icons-material/Close';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 
+import { mensajeError } from '../../../shared/utils/api';
+import { rolService, type Permiso, type Rol } from '../services/rolService';
+
 interface RolesViewProps {
   dark?: boolean;
 }
@@ -40,63 +44,24 @@ interface RolesViewProps {
 interface RoleData {
   id: string;
   description: string;
-  permissionsCount: string;
-  permissionsList: string[];
+  permissionsList: string[]; // IDs de los permisos asignados
   isActive: boolean;
 }
 
-const ALL_PERMISSIONS = [
-  'Dashboard',
-  'Clientes',
-  'Proveedores',
-  'Remisiones',
-  'Órdenes de Pedido',
-  'Ventas',
-  'Envíos',
-  'Tipo de Insumos',
-  'Insumos',
-  'Compras',
-  'Gestión de Producción',
-  'Registro Diario',
-  'Catálogo de Piezas',
-  'Tipos de Maquinaria',
-  'Roles',
-  'Permisos',
-  'Empleados',
-];
+/** Convierte un rol de la API al formato que usa esta vista. */
+const aRoleData = (rol: Rol): RoleData => ({
+  id: rol.id,
+  description: rol.descripcion,
+  permissionsList: rol.permisos.map((p) => p.id),
+  isActive: rol.estado === 'Activo',
+});
 
-const initialRows: RoleData[] = [
-  {
-    id: 'ROL-01',
-    description: 'Admin',
-    permissionsCount: '17 módulos',
-    permissionsList: ALL_PERMISSIONS,
-    isActive: true,
-  },
-  {
-    id: 'ROL-02',
-    description: 'Empleado',
-    permissionsCount: '5 módulos',
-    permissionsList: [
-      'Dashboard',
-      'Ventas',
-      'Clientes',
-      'Órdenes de Pedido',
-      'Envíos',
-    ],
-    isActive: true,
-  },
-  {
-    id: 'ROL-03',
-    description: 'Cliente',
-    permissionsCount: '0 módulos',
-    permissionsList: [],
-    isActive: false,
-  },
-];
+const esRolAdmin = (descripcion: string) =>
+  ['admin', 'administrador'].includes(descripcion.trim().toLowerCase());
 
 interface RoleRowProps {
   row: RoleData;
+  allPermissions: Permiso[];
   isDarkMode: boolean;
   onEdit: (role: RoleData) => void;
   onDelete: (role: RoleData) => void;
@@ -105,6 +70,7 @@ interface RoleRowProps {
 
 function RoleRow({
   row,
+  allPermissions,
   isDarkMode,
   onEdit,
   onDelete,
@@ -409,16 +375,16 @@ function RoleRow({
                   overflow: 'hidden',
                 }}
               >
-                {ALL_PERMISSIONS.map((perm, index) => {
-                  const hasPerm = row.permissionsList.includes(perm);
+                {allPermissions.map((perm, index) => {
+                  const hasPerm = row.permissionsList.includes(perm.id);
 
                   return (
                     <Box
-                      key={perm}
+                      key={perm.id}
                       sx={{
                         p: 1.5,
                         borderBottom:
-                          index < ALL_PERMISSIONS.length - 2
+                          index < allPermissions.length - 2
                             ? `1px solid ${borderCol}`
                             : 'none',
                         borderRight:
@@ -448,7 +414,7 @@ function RoleRow({
                               color: isDarkMode ? '#CCC' : '#555',
                             }}
                           >
-                            {perm}
+                            {perm.descripcion}
                           </Typography>
                         }
                         sx={{ margin: 0 }}
@@ -470,7 +436,10 @@ function RoleRow({
 export default function RolesView({ dark = false }: RolesViewProps) {
   const isDarkMode = !!dark;
 
-  const [rows, setRows] = useState<RoleData[]>(initialRows);
+  const [rows, setRows] = useState<RoleData[]>([]);
+  const [allPermissions, setAllPermissions] = useState<Permiso[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -491,6 +460,26 @@ export default function RolesView({ dark = false }: RolesViewProps) {
   const textSec = isDarkMode ? '#AAAAAA' : '#828282';
 
   const itemsPerPage = 5;
+
+  const cargarDatos = async () => {
+    setLoading(true);
+    try {
+      const [roles, permisos] = await Promise.all([
+        rolService.listar(),
+        rolService.listarPermisos(),
+      ]);
+      setRows(roles.map(aRoleData));
+      setAllPermissions(permisos);
+    } catch (e) {
+      toast.error(mensajeError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarDatos();
+  }, []);
 
   const handleOpenAdd = () => {
     setEditingRole(null);
@@ -525,72 +514,76 @@ export default function RolesView({ dark = false }: RolesViewProps) {
   };
 
   const handleToggleAll = () => {
-    if (formPerms.length === ALL_PERMISSIONS.length) {
+    if (formPerms.length === allPermissions.length) {
       setFormPerms([]);
     } else {
-      setFormPerms([...ALL_PERMISSIONS]);
+      setFormPerms(allPermissions.map((p) => p.id));
     }
   };
 
-  const handleToggleStatus = (id: string) => {
-    setRows((prev) =>
-      prev.map((r) =>
-        r.id === id ? { ...r, isActive: !r.isActive } : r
-      )
-    );
-  };
-
-  const handleSaveRole = () => {
-    if (!formDesc.trim() || formPerms.length === 0) return;
-
-    if (editingRole) {
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === editingRole.id
-            ? {
-                ...r,
-                description: formDesc.trim(),
-                permissionsList: [...formPerms],
-                permissionsCount: `${formPerms.length} módulos`,
-                isActive: formIsActive,
-              }
-            : r
-        )
+  const handleToggleStatus = async (id: string) => {
+    const role = rows.find((r) => r.id === id);
+    if (!role) return;
+    try {
+      const actualizado = await rolService.cambiarEstado(
+        id,
+        role.isActive ? 'Inactivo' : 'Activo'
       );
-    } else {
-      const nextNumber =
-        rows.reduce((max, role) => {
-          const match = role.id.match(/ROL-(\d+)/);
-          return match ? Math.max(max, Number(match[1])) : max;
-        }, 0) + 1;
-
-      const newId = `ROL-${String(nextNumber).padStart(2, '0')}`;
-
-      const newRole: RoleData = {
-        id: newId,
-        description: formDesc.trim(),
-        permissionsCount: `${formPerms.length} módulos`,
-        permissionsList: [...formPerms],
-        isActive: formIsActive,
-      };
-
-      setRows((prev) => [...prev, newRole]);
-      setCurrentPage(Math.ceil((rows.length + 1) / itemsPerPage));
+      setRows((prev) =>
+        prev.map((r) => (r.id === id ? aRoleData(actualizado) : r))
+      );
+      toast.success(`Rol ${actualizado.estado.toLowerCase()}`);
+    } catch (e) {
+      toast.error(mensajeError(e));
     }
-
-    handleCloseModal();
   };
 
-  const handleDeleteRoleAttempt = (role: RoleData) => {
-    if (
-      role.id === 'ROL-01' ||
-      role.description.toLowerCase() === 'admin'
-    ) {
+  const handleSaveRole = async () => {
+    if (!formDesc.trim() || formPerms.length === 0 || saving) return;
+
+    const datos = {
+      descripcion: formDesc.trim(),
+      estado: formIsActive ? ('Activo' as const) : ('Inactivo' as const),
+      permisos: formPerms,
+    };
+
+    setSaving(true);
+    try {
+      if (editingRole) {
+        const actualizado = await rolService.actualizar(editingRole.id, datos);
+        setRows((prev) =>
+          prev.map((r) => (r.id === editingRole.id ? aRoleData(actualizado) : r))
+        );
+        toast.success('Rol actualizado correctamente');
+      } else {
+        const nuevo = await rolService.crear(datos);
+        setRows((prev) => [...prev, aRoleData(nuevo)]);
+        setCurrentPage(Math.ceil((rows.length + 1) / itemsPerPage));
+        toast.success('Rol creado correctamente');
+      }
+      handleCloseModal();
+    } catch (e) {
+      toast.error(mensajeError(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteRoleAttempt = async (role: RoleData) => {
+    if (esRolAdmin(role.description)) {
       setAdminAlertOpen(true);
       return;
     }
 
-    setRows((prev) => prev.filter((r) => r.id !== role.id));
+    if (!window.confirm(`¿Seguro deseas eliminar el rol ${role.description}?`)) return;
+
+    try {
+      await rolService.eliminar(role.id);
+      setRows((prev) => prev.filter((r) => r.id !== role.id));
+      toast.success('Rol eliminado');
+    } catch (e) {
+      toast.error(mensajeError(e));
+    }
   };
 
   const filteredRows = rows.filter(
@@ -781,6 +774,7 @@ export default function RolesView({ dark = false }: RolesViewProps) {
                 <RoleRow
                   key={row.id}
                   row={row}
+                  allPermissions={allPermissions}
                   isDarkMode={isDarkMode}
                   onEdit={handleOpenEdit}
                   onDelete={handleDeleteRoleAttempt}
@@ -795,7 +789,7 @@ export default function RolesView({ dark = false }: RolesViewProps) {
                     align="center"
                     sx={{ py: 4, color: textSec }}
                   >
-                    No se encontraron roles.
+                    {loading ? 'Cargando roles...' : 'No se encontraron roles.'}
                   </TableCell>
                 </TableRow>
               )}
@@ -930,18 +924,7 @@ export default function RolesView({ dark = false }: RolesViewProps) {
               <TextField
                 fullWidth
                 size="small"
-                value={
-                  editingRole
-                    ? editingRole.id
-                    : `ROL-${String(
-                        rows.reduce((max, role) => {
-                          const match = role.id.match(/ROL-(\d+)/);
-                          return match
-                            ? Math.max(max, Number(match[1]))
-                            : max;
-                        }, 0) + 1
-                      ).padStart(2, '0')}`
-                }
+                value={editingRole ? editingRole.id : 'Se genera al guardar'}
                 disabled
                 sx={{
                   backgroundColor: isDarkMode ? '#2A2A2A' : '#F3F4F6',
@@ -1077,7 +1060,7 @@ export default function RolesView({ dark = false }: RolesViewProps) {
               </Typography>
 
               <Chip
-                label={`${formPerms.length}/${ALL_PERMISSIONS.length}`}
+                label={`${formPerms.length}/${allPermissions.length}`}
                 size="small"
                 sx={{
                   backgroundColor: lightGoldBg,
@@ -1099,7 +1082,7 @@ export default function RolesView({ dark = false }: RolesViewProps) {
                 borderRadius: 2,
               }}
             >
-              {formPerms.length === ALL_PERMISSIONS.length
+              {allPermissions.length > 0 && formPerms.length === allPermissions.length
                 ? 'Desmarcar todos'
                 : 'Marcar todos'}
             </Button>
@@ -1117,13 +1100,13 @@ export default function RolesView({ dark = false }: RolesViewProps) {
               overflow: 'hidden',
             }}
           >
-            {ALL_PERMISSIONS.map((perm, index) => (
+            {allPermissions.map((perm, index) => (
               <Box
-                key={perm}
+                key={perm.id}
                 sx={{
                   p: 1.5,
                   borderBottom:
-                    index < ALL_PERMISSIONS.length - 2
+                    index < allPermissions.length - 2
                       ? `1px solid ${borderCol}`
                       : 'none',
                   borderRight: {
@@ -1138,8 +1121,8 @@ export default function RolesView({ dark = false }: RolesViewProps) {
                   control={
                     <Checkbox
                       size="small"
-                      checked={formPerms.includes(perm)}
-                      onChange={() => handleTogglePermission(perm)}
+                      checked={formPerms.includes(perm.id)}
+                      onChange={() => handleTogglePermission(perm.id)}
                       sx={{
                         color: borderCol,
                         '&.Mui-checked': { color: goldColor },
@@ -1154,7 +1137,7 @@ export default function RolesView({ dark = false }: RolesViewProps) {
                         color: isDarkMode ? '#CCC' : '#555',
                       }}
                     >
-                      {perm}
+                      {perm.descripcion}
                     </Typography>
                   }
                   sx={{ margin: 0 }}
@@ -1190,7 +1173,7 @@ export default function RolesView({ dark = false }: RolesViewProps) {
           <Button
             onClick={handleSaveRole}
             variant="contained"
-            disabled={!formDesc.trim() || formPerms.length === 0}
+            disabled={!formDesc.trim() || formPerms.length === 0 || saving}
             sx={{
               backgroundColor: goldColor,
               color: '#000',
@@ -1207,7 +1190,7 @@ export default function RolesView({ dark = false }: RolesViewProps) {
               },
             }}
           >
-            Guardar rol
+            {saving ? 'Guardando...' : 'Guardar rol'}
           </Button>
         </DialogActions>
       </Dialog>
