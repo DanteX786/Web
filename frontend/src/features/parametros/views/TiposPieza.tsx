@@ -1,29 +1,13 @@
-import React, { useState } from 'react';
-import { Scissors, Plus, Pencil, Trash2, X, Search, AlertTriangle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Plus, Pencil, Trash2, X, Search, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { tipoPiezaService, type TipoPieza } from '../services/tipoPiezaService';
+import { mensajeError } from '../../../shared/utils/api';
 
 const GOLD = "#C9A227";
 const GOLD_LIGHT = "#E6B84A";
 const DANGER = "#DC3545";
 const DANGER_BG = "#FDECEA";
-
-function nextId(prefix: string, existing: string[]): string {
-  const nums = existing.map(id => parseInt(id.replace(prefix + "-", "")) || 0);
-  const next = nums.length > 0 ? Math.max(...nums) + 1 : 1;
-  return `${prefix}-${String(next).padStart(3, "0")}`;
-}
-
-interface TipoPieza {
-  id: string;
-  nombre: string;
-  desc: string;
-}
-
-const seedPiezas: TipoPieza[] = [
-  { id: "PIE-001", nombre: "Cuello", desc: "Pieza superior delantera que rodea el cuello de la prenda" },
-  { id: "PIE-002", nombre: "Manga", desc: "Parte superior del brazo, larga o corta" },
-  { id: "PIE-003", nombre: "Espalda", desc: "Panel posterior principal de la prenda" },
-];
 
 const IdBadge = ({ id }: { id: string }) => (
   <span style={{
@@ -57,7 +41,8 @@ const IconBtn = ({ variant, onClick, dark }: { variant: "edit" | "delete", onCli
   );
 };
 
-const ConfirmDelete = ({ onCancel, onConfirm, dark, message }: { onCancel: () => void, onConfirm: () => void, dark: boolean, message: string }) => {
+// El mensaje de éxito lo muestra el componente padre SOLO si el backend confirma el borrado
+const ConfirmDelete = ({ onCancel, onConfirm, dark }: { onCancel: () => void, onConfirm: () => void, dark: boolean }) => {
   const fg = dark ? "#F8F9FA" : "#121212";
   const subtle = dark ? "#9A9A9A" : "#6B6B6B";
   const cardBg = dark ? "#1E1E1E" : "#FFFFFF";
@@ -78,7 +63,7 @@ const ConfirmDelete = ({ onCancel, onConfirm, dark, message }: { onCancel: () =>
             <button onClick={onCancel} style={{ flex: 1, padding: 10, borderRadius: 10, background: dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)", color: fg, fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer", fontFamily: "Montserrat, sans-serif" }}>
               Cancelar
             </button>
-            <button onClick={() => { onConfirm(); toast.success(message); }} style={{ flex: 1, padding: 10, borderRadius: 10, background: DANGER, color: "#FFFFFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer", fontFamily: "Montserrat, sans-serif" }}>
+            <button onClick={onConfirm} style={{ flex: 1, padding: 10, borderRadius: 10, background: DANGER, color: "#FFFFFF", fontWeight: 700, fontSize: 14, border: "none", cursor: "pointer", fontFamily: "Montserrat, sans-serif" }}>
               Sí, eliminar
             </button>
           </div>
@@ -89,11 +74,11 @@ const ConfirmDelete = ({ onCancel, onConfirm, dark, message }: { onCancel: () =>
 };
 
 export default function TiposPieza({ dark }: { dark: boolean }) {
-  const [data, setData] = useState<TipoPieza[]>(seedPiezas);
+  const [data, setData] = useState<TipoPieza[]>([]);
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editing, setEditing] = useState<TipoPieza | null>(null);
-  const [form, setForm] = useState({ id: "", nombre: "", desc: "" });
+  const [form, setForm] = useState({ nombre: "", desc: "" });
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const fg = dark ? "#F8F9FA" : "#121212";
@@ -103,11 +88,18 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
   const surfaceBg = dark ? "#252525" : "#F8F8F8";
   const borderNormal = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
 
+  // Carga inicial desde el backend
+  useEffect(() => {
+    tipoPiezaService.listar()
+      .then(setData)
+      .catch((e) => toast.error(mensajeError(e)));
+  }, []);
+
   const filtered = data.filter(d =>
-    [d.id, d.nombre, d.desc].join(" ").toLowerCase().includes(search.toLowerCase())
+    [d.id, d.nombre, d.desc ?? ""].join(" ").toLowerCase().includes(search.toLowerCase())
   );
 
-  // Lógica para seccionar los datos por página
+  // Paginación
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -115,40 +107,52 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
   const currentItems = filtered.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
 
-
   function openAdd() {
-    const nextCode = nextId("PIE", data.map(d => d.id));
-    setForm({ id: nextCode, nombre: "", desc: "" });
+    setForm({ nombre: "", desc: "" });
     setEditing(null);
     setModal("add");
   }
 
   function openEdit(item: TipoPieza) {
-    setForm({ id: item.id, nombre: item.nombre, desc: item.desc });
+    setForm({ nombre: item.nombre, desc: item.desc ?? "" });
     setEditing(item);
     setModal("edit");
   }
 
-  function save() {
+  async function save() {
     if (!form.nombre.trim()) { toast.error("El nombre es obligatorio"); return; }
-    if (modal === "add") {
-      setData([...data, { id: form.id, nombre: form.nombre, desc: form.desc }]);
-      toast.success("Tipo de pieza creado");
-    } else if (editing) {
-      setData(data.map(d => d.id === editing.id ? { ...d, nombre: form.nombre, desc: form.desc } : d));
-      toast.success("Tipo de pieza actualizado");
+    try {
+      if (modal === "add") {
+        const nuevo = await tipoPiezaService.crear({ nombre: form.nombre, desc: form.desc });
+        setData(prev => [...prev, nuevo]);
+        toast.success(`Tipo de pieza ${nuevo.id} creado`);
+      } else if (editing) {
+        const actualizado = await tipoPiezaService.actualizar(editing.id, { nombre: form.nombre, desc: form.desc });
+        setData(prev => prev.map(d => d.id === actualizado.id ? actualizado : d));
+        toast.success("Tipo de pieza actualizado");
+      }
+      setModal(null);
+    } catch (e) {
+      // Se deja el modal abierto para que el usuario corrija
+      toast.error(mensajeError(e));
     }
-    setModal(null);
   }
 
-  function confirmDelete(id: string) {
-    setData(data.filter(d => d.id !== id));
-    setDeleting(null);
+  async function confirmDelete(id: string) {
+    try {
+      await tipoPiezaService.eliminar(id);
+      setData(prev => prev.filter(d => d.id !== id));
+      toast.success("Tipo de pieza eliminado");
+    } catch (e) {
+      toast.error(mensajeError(e));
+    } finally {
+      setDeleting(null);
+    }
   }
 
   return (
     <div style={{ padding: 24, fontFamily: "Montserrat, sans-serif" }}>
-      
+
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
@@ -196,11 +200,17 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
             </tr>
           </thead>
           <tbody>
-            {currentItems.map(item => (
+            {currentItems.length === 0 ? (
+              <tr>
+                <td colSpan={4} style={{ textAlign: "center", padding: 24, color: subtle, fontSize: 13 }}>
+                  No se encontraron registros.
+                </td>
+              </tr>
+            ) : currentItems.map(item => (
               <tr key={item.id} style={{ borderBottom: `1px solid ${dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)"}` }}>
                 <td style={{ padding: "10px 12px" }}><IdBadge id={item.id} /></td>
                 <td style={{ padding: "10px 12px", fontSize: 13, fontWeight: 500, color: fg }}>{item.nombre}</td>
-                <td style={{ padding: "10px 12px", fontSize: 13, color: subtle, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.desc}</td>
+                <td style={{ padding: "10px 12px", fontSize: 13, color: subtle, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.desc || "Sin descripción"}</td>
                 <td style={{ padding: "10px 12px" }}>
                   <div style={{ display: "flex", gap: 6 }}>
                     <IconBtn variant="edit" onClick={() => openEdit(item)} dark={dark} />
@@ -218,9 +228,9 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
         <span style={{ fontSize: 12, color: subtle, fontFamily: 'Montserrat, sans-serif' }}>
           Mostrando de {filtered.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, filtered.length)} de {filtered.length} registros
         </span>
-        
+
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button 
+          <button
             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
             style={{
@@ -233,12 +243,12 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
           >
             Anterior
           </button>
-          
+
           <span style={{ fontSize: 13, fontWeight: 700, color: fg, fontFamily: 'Montserrat, sans-serif', padding: '0 8px' }}>
             Página {currentPage} de {totalPages || 1}
           </span>
 
-          <button 
+          <button
             onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages || totalPages === 0}
             style={{
@@ -259,22 +269,22 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
           <div style={{ width: "100%", maxWidth: 520, borderRadius: 16, background: cardBg, border: `1px solid ${GOLD}40`, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", overflow: "hidden" }}>
             <div style={{ height: 2, background: `linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT}, transparent)` }} />
-            
+
             <div style={{ padding: "16px 24px", borderBottom: `1px solid ${GOLD}25`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: 16, fontWeight: 700, color: fg, fontFamily: "Montserrat, sans-serif" }}>
                 {modal === "add" ? "Agregar Tipo de Pieza" : "Editar Tipo de Pieza"}
               </span>
               <button onClick={() => setModal(null)} style={{ background: "transparent", border: "none", cursor: "pointer", color: subtle }}><X size={18} /></button>
             </div>
-            
+
             <div style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                 <div>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 700, textTransform: "uppercase", color: subtle, marginBottom: 6 }}>
-                    {modal === "add" ? "Código (Auto)" : "Código de Pieza"}
+                    Código de Pieza
                   </label>
                   <input
-                    value={form.id} disabled
+                    value={editing ? editing.id : "Se genera automáticamente"} disabled
                     style={{ width: "100%", padding: "10px 12px", background: surfaceBg, border: `1px solid ${borderNormal}`, borderRadius: 8, fontSize: 14, color: subtle, fontFamily: "Montserrat, sans-serif", outline: "none", boxSizing: "border-box", cursor: "not-allowed" }}
                   />
                 </div>
@@ -315,7 +325,7 @@ export default function TiposPieza({ dark }: { dark: boolean }) {
       )}
 
       {deleting && (
-        <ConfirmDelete dark={dark} message="Tipo de pieza eliminado" onCancel={() => setDeleting(null)} onConfirm={() => confirmDelete(deleting)} />
+        <ConfirmDelete dark={dark} onCancel={() => setDeleting(null)} onConfirm={() => confirmDelete(deleting)} />
       )}
     </div>
   );

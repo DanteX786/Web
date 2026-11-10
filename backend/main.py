@@ -18,6 +18,7 @@ from app.presentation.api.seguimiento_router import router as seguimiento_router
 # ---- Routers de Jordy ----
 from app.presentation.api.proveedor_router import router as proveedor_router
 from app.presentation.api.tipo_maquina_router import router as tipo_maquina_router
+from app.presentation.api.tipo_pieza_router import router as tipo_pieza_router
 
 # ---- Routers de (tu nombre) ----
 from app.presentation.api.rol_router import router as rol_router
@@ -78,6 +79,8 @@ app.include_router(registro_diario_router)
 app.include_router(seguimiento_router)
 app.include_router(proveedor_router)  # PB-36
 app.include_router(tipo_maquina_router)  # PB-39
+app.include_router(tipo_pieza_router)  # PB-40
+
 # app.include_router(...)  <- routers de los demás módulos
 app.include_router(rol_router)
 app.include_router(empleado_router)
@@ -85,3 +88,4 @@ app.include_router(insumo_router)
 app.include_router(cliente_router)
 app.include_router(tipo_insumo_router)
 app.include_router(compra_router)
+
