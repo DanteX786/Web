@@ -15,6 +15,9 @@ from app.presentation.api.registro_diario_router import router as registro_diari
 from app.presentation.api.seguimiento_router import router as seguimiento_router
 # ---- Aquí cada compañero agrega el import de sus routers ----
 
+# ---- Routers de Jordy ----
+from app.presentation.api.proveedor_router import router as proveedor_router
+
 app = FastAPI(title="Eslabón API", version="1.0.0")
 
 app.add_middleware(
@@ -62,4 +65,5 @@ app.include_router(produccion_router)
 app.include_router(asignaciones_router)
 app.include_router(registro_diario_router)
 app.include_router(seguimiento_router)
+app.include_router(proveedor_router)  # PB-36
 # app.include_router(...)  <- routers de los demás módulos
