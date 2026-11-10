@@ -1,5 +1,6 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import {
   Box,
   Typography,
@@ -33,6 +34,10 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
 import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
+import { mensajeError } from '../../../shared/utils/api';
+import { empleadoService, type Empleado, type EmpleadoDatos } from '../services/empleadoService';
+import { rolService, type Rol } from '../../configuracion/services/rolService';
+
 interface Employee {
   id: string;
   nombre: string;
@@ -50,41 +55,20 @@ interface EmpleadosModuloProps {
   dark?: boolean;
 }
 
-const initialEmployees: Employee[] = [
-  {
-    id: 'EMP-001',
-    nombre: 'Andres',
-    telefono: '3024243019',
-    direccion: 'Cra 45099',
-    correo: 'andres@taller.com',
-    codRol: 'ROL-02',
-    rol: 'Empleado',
-    identificacion: '10293120',
-    estado: 'ACTIVO',
-  },
-  {
-    id: 'EMP-002',
-    nombre: 'Juan',
-    telefono: '3024243019',
-    direccion: 'Cra 567',
-    correo: 'juan@taller.com',
-    codRol: 'ROL-02',
-    rol: 'Empleado',
-    identificacion: '10293121',
-    estado: 'ACTIVO',
-  },
-  {
-    id: 'EMP-003',
-    nombre: 'Emerson',
-    telefono: '3024243019',
-    direccion: 'Cra 4577',
-    correo: 'emerson@taller.com',
-    codRol: 'ROL-02',
-    rol: 'Empleado',
-    identificacion: '10293122',
-    estado: 'ACTIVO',
-  },
-];
+/** Convierte un empleado de la API al formato que usa esta vista. */
+const aEmployee = (e: Empleado): Employee => ({
+  id: e.id,
+  nombre: e.nombre,
+  telefono: e.telefono ?? '',
+  direccion: e.direccion ?? '',
+  correo: e.correo ?? '',
+  codRol: e.id_rol ?? '',
+  rol: e.rol ?? '',
+  identificacion: e.identificacion,
+  estado: e.estado === 'Activo' ? 'ACTIVO' : 'INACTIVO',
+});
+
+const PATRON_CORREO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 const styles = {
   goldText: {
@@ -138,8 +122,30 @@ const styles = {
 export default function EmpleadosModulo({
   dark = false,
 }: EmpleadosModuloProps) {
-  const [employees, setEmployees] =
-    useState<Employee[]>(initialEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [roles, setRoles] = useState<Rol[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const cargarDatos = async () => {
+    setLoading(true);
+    try {
+      const [empleados, listaRoles] = await Promise.all([
+        empleadoService.listar(),
+        rolService.listar(),
+      ]);
+      setEmployees(empleados.map(aEmployee));
+      setRoles(listaRoles);
+    } catch (e) {
+      toast.error(mensajeError(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarDatos();
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -184,18 +190,21 @@ export default function EmpleadosModulo({
     indexOfLastItem
   );
 
-  const handleToggleStatus = (id: string) => {
-    setEmployees((prev) =>
-      prev.map((emp) =>
-        emp.id === id
-          ? {
-              ...emp,
-              estado:
-                emp.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO',
-            }
-          : emp
-      )
-    );
+  const handleToggleStatus = async (id: string) => {
+    const emp = employees.find((e) => e.id === id);
+    if (!emp) return;
+    try {
+      const actualizado = await empleadoService.cambiarEstado(
+        id,
+        emp.estado === 'ACTIVO' ? 'Inactivo' : 'Activo'
+      );
+      setEmployees((prev) =>
+        prev.map((e) => (e.id === id ? aEmployee(actualizado) : e))
+      );
+      toast.success(`Empleado ${actualizado.estado.toLowerCase()}`);
+    } catch (e) {
+      toast.error(mensajeError(e));
+    }
   };
 
   const handleOpenDeleteDialog = (employee: Employee) => {
@@ -203,16 +212,23 @@ export default function EmpleadosModulo({
     setOpenDeleteModal(true);
   };
 
-  const handleConfirmDelete = () => {
-    if (employeeToDelete) {
+  const handleConfirmDelete = async () => {
+    if (!employeeToDelete) return;
+    try {
+      await empleadoService.eliminar(employeeToDelete.id);
       setEmployees((prev) =>
         prev.filter((emp) => emp.id !== employeeToDelete.id)
       );
-
+      toast.success('Empleado eliminado');
+    } catch (e) {
+      toast.error(mensajeError(e));
+    } finally {
       setOpenDeleteModal(false);
       setEmployeeToDelete(null);
     }
   };
+
+  const rolesActivos = roles.filter((r) => r.estado === 'Activo');
 
   const handleOpenModal = (
     mode: 'ADD' | 'EDIT',
@@ -225,7 +241,8 @@ export default function EmpleadosModulo({
       employee
         ? {
             ...employee,
-            confirmPassword: employee.password || '',
+            password: '',
+            confirmPassword: '',
           }
         : {
             id: '',
@@ -233,8 +250,8 @@ export default function EmpleadosModulo({
             telefono: '',
             direccion: '',
             correo: '',
-            codRol: 'ROL-02',
-            rol: 'Empleado',
+            codRol: rolesActivos[0]?.id ?? '',
+            rol: rolesActivos[0]?.descripcion ?? '',
             identificacion: '',
             estado: 'ACTIVO',
             password: '',
@@ -245,13 +262,14 @@ export default function EmpleadosModulo({
     setOpenModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const {
       nombre,
       telefono,
       direccion,
       correo,
       identificacion,
+      codRol,
       password,
       confirmPassword,
     } = formData;
@@ -269,6 +287,16 @@ export default function EmpleadosModulo({
       return;
     }
 
+    if (!PATRON_CORREO.test((correo ?? '').trim())) {
+      setErrorMessage('El correo no tiene un formato válido.');
+      return;
+    }
+
+    if (!codRol) {
+      setErrorMessage('Selecciona un rol.');
+      return;
+    }
+
     if (
       modalMode === 'ADD' &&
       (!password || !confirmPassword)
@@ -279,6 +307,11 @@ export default function EmpleadosModulo({
       return;
     }
 
+    if (password && password.length < 6) {
+      setErrorMessage('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
     if (password && password !== confirmPassword) {
       setErrorMessage('Las contraseñas no coinciden.');
       return;
@@ -286,51 +319,43 @@ export default function EmpleadosModulo({
 
     setErrorMessage('');
 
-    if (modalMode === 'ADD') {
-      const maxId = employees.reduce((max, emp) => {
-        const match = emp.id.match(/EMP-(\d+)/);
-        return match
-          ? Math.max(max, Number(match[1]))
-          : max;
-      }, 0);
+    const datos: EmpleadoDatos = {
+      nombre: (nombre ?? '').trim(),
+      telefono: (telefono ?? '').trim(),
+      direccion: (direccion ?? '').trim(),
+      correo: (correo ?? '').trim(),
+      identificacion: (identificacion ?? '').trim(),
+      id_rol: codRol,
+      estado: formData.estado === 'ACTIVO' ? 'Activo' : 'Inactivo',
+    };
+    // Al editar, si la contraseña queda vacía se conserva la actual
+    if (password) datos.contrasena = password;
 
-      const newId = `EMP-${String(maxId + 1).padStart(3, '0')}`;
-
-      const { confirmPassword: _confirmPassword, ...employeeData } =
-        formData;
-
-      const newEmployee = {
-        ...employeeData,
-        id: newId,
-      } as Employee;
-
-      setEmployees((prev) => [...prev, newEmployee]);
-
-      setCurrentPage(
-        Math.ceil((employees.length + 1) / itemsPerPage)
-      );
-    } else {
-      const { confirmPassword: _confirmPassword, ...employeeData } =
-        formData;
-
-      setEmployees((prev) =>
-        prev.map((emp) =>
-          emp.id === formData.id
-            ? (employeeData as Employee)
-            : emp
-        )
-      );
+    setSaving(true);
+    try {
+      if (modalMode === 'ADD') {
+        const nuevo = await empleadoService.crear(datos);
+        setEmployees((prev) => [...prev, aEmployee(nuevo)]);
+        setCurrentPage(
+          Math.ceil((employees.length + 1) / itemsPerPage)
+        );
+        toast.success('Empleado creado correctamente');
+      } else if (formData.id) {
+        const actualizado = await empleadoService.actualizar(formData.id, datos);
+        setEmployees((prev) =>
+          prev.map((emp) =>
+            emp.id === formData.id ? aEmployee(actualizado) : emp
+          )
+        );
+        toast.success('Empleado actualizado correctamente');
+      }
+      setOpenModal(false);
+    } catch (e) {
+      setErrorMessage(mensajeError(e));
+    } finally {
+      setSaving(false);
     }
-
-    setOpenModal(false);
   };
-
-  const autoId = `EMP-${String(
-    employees.reduce((max, emp) => {
-      const match = emp.id.match(/EMP-(\d+)/);
-      return match ? Math.max(max, Number(match[1])) : max;
-    }, 0) + 1
-  ).padStart(3, '0')}`;
 
   return (
     <Box
@@ -661,7 +686,7 @@ export default function EmpleadosModulo({
                   align="center"
                   sx={{ py: 4, color: dark ? '#bbb' : '#888' }}
                 >
-                  No se encontraron empleados.
+                  {loading ? 'Cargando empleados...' : 'No se encontraron empleados.'}
                 </TableCell>
               </TableRow>
             )}
@@ -811,7 +836,7 @@ export default function EmpleadosModulo({
               <TextField
                 fullWidth
                 disabled
-                value={modalMode === 'ADD' ? autoId : formData.id}
+                value={modalMode === 'ADD' ? 'Se genera al guardar' : formData.id}
                 sx={styles.modalInput}
               />
             </Box>
@@ -901,27 +926,31 @@ export default function EmpleadosModulo({
             <Box>
               <Typography sx={styles.modalLabel}>ROL</Typography>
               <Select
-                value={formData.rol || 'Empleado'}
+                value={formData.codRol || ''}
+                displayEmpty
                 onChange={(e) => {
-                  const val = e.target.value as string;
-                  const cod =
-                    val === 'Administrador' ? 'ROL-01' : 'ROL-02';
+                  const cod = e.target.value as string;
+                  const rolElegido = roles.find((r) => r.id === cod);
 
                   setFormData({
                     ...formData,
-                    rol: val,
                     codRol: cod,
+                    rol: rolElegido?.descripcion ?? '',
                   });
                 }}
                 fullWidth
                 sx={styles.modalInput}
               >
-                <MenuItem value="Administrador">
-                  ROL-01 — Admin
+                <MenuItem value="" disabled>
+                  Selecciona un rol
                 </MenuItem>
-                <MenuItem value="Empleado">
-                  ROL-02 — Empleado
-                </MenuItem>
+                {roles
+                  .filter((r) => r.estado === 'Activo' || r.id === formData.codRol)
+                  .map((r) => (
+                    <MenuItem key={r.id} value={r.id}>
+                      {r.id} — {r.descripcion}
+                    </MenuItem>
+                  ))}
               </Select>
             </Box>
 
@@ -972,7 +1001,7 @@ export default function EmpleadosModulo({
               <TextField
                 fullWidth
                 type="password"
-                placeholder="........"
+                placeholder={modalMode === 'EDIT' ? 'Vacía = no cambiar' : '........'}
                 value={formData.password || ''}
                 onChange={(e) =>
                   setFormData({
@@ -1022,9 +1051,10 @@ export default function EmpleadosModulo({
           <Button
             onClick={handleSave}
             variant="contained"
+            disabled={saving}
             sx={{ ...styles.btnGold, px: 4 }}
           >
-            Guardar
+            {saving ? 'Guardando...' : 'Guardar'}
           </Button>
         </DialogActions>
       </Dialog>
