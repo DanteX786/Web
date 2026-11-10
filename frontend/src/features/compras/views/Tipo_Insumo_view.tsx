@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, Search, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  tipoInsumoService,
+  type EstadoTipoInsumo,
+  type TipoInsumo,
+} from '../services/tipoInsumoService';
 
 // ==========================================
 // CONSTANTES DE DISEÑO - SISTEMA STITCHER
@@ -13,11 +18,19 @@ const DANGER_TXT = "#721c24";
 const SUCCESS_BG = "#DCF7E6";
 const SUCCESS_TXT = "#155724";
 
-interface TipoInsumo {
-  id: string;
-  nombre: string;
-  descripcion: string;
-}
+const ESTILO_OK = { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' };
+const ESTILO_ERROR = { background: DANGER_BG, border: `1px solid ${DANGER}`, color: DANGER_TXT, fontFamily: 'Montserrat, sans-serif' };
+
+/** Saca el mensaje de error que manda el backend (detail) para mostrarlo en el toast. */
+const mensajeError = (error: unknown, porDefecto: string): string => {
+  const detalle = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (typeof detalle === 'string') return detalle;
+  if (Array.isArray(detalle) && detalle.length > 0) {
+    return detalle.map((d: { loc?: unknown[]; msg?: string }) =>
+      `${String(d.loc?.[d.loc.length - 1] ?? '')}: ${d.msg ?? ''}`).join(' | ');
+  }
+  return porDefecto;
+};
 
 interface Props {
   dark?: boolean;
@@ -26,19 +39,18 @@ interface Props {
 export const TipoInsumoView: React.FC<Props> = ({ dark = false }) => {
   const [busqueda, setBusqueda] = useState('');
   
-  // Lista inicial de registros
-  const [tipos, setTipos] = useState<TipoInsumo[]>([
-    { id: 'TIPI-001', nombre: 'Armado', descripcion: 'Insumos principales para la estructura y costura base de la prenda' },
-    { id: 'TIPI-002', nombre: 'Detalle', descripcion: 'Elementos decorativos, ajustes o componentes visibles' },
-    { id: 'TIPI-003', nombre: 'Acabado', descripcion: 'Insumos destinados al empaque, presentación y terminación final' },
-    { id: 'TIPI-004', nombre: 'Textil', descripcion: 'Tejidos y telas auxiliares para refuerzos internos' },
-    { id: 'TIPI-005', nombre: 'Metalería', descripcion: 'Broches, hebillas y herrajes metálicos especializados' },
-    { id: 'TIPI-006', nombre: 'Elásticos', descripcion: 'Bandas elásticas y resortes para pretinas y puños' },
-    { id: 'TIPI-007', nombre: 'Cintas', descripcion: 'Cintas decorativas, sesgos y listones de refuerzo' },
-    { id: 'TIPI-008', nombre: 'Etiquetado', descripcion: 'Marquillas, etiquetas de composición y tallas' },
-    { id: 'TIPI-009', nombre: 'Adhesivos', descripcion: 'Entretelas termoadhesivas y pegamentos textiles' },
-    { id: 'TIPI-010', nombre: 'Empaque', descripcion: 'Bolsas plásticas, ganchos y protectores de envío' }
-  ]);
+  const [tipos, setTipos] = useState<TipoInsumo[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+  const [estado, setEstado] = useState<EstadoTipoInsumo>('Activo');
+
+  // Cargar los tipos de insumo desde la API al abrir la pantalla
+  useEffect(() => {
+    tipoInsumoService.listar()
+      .then(setTipos)
+      .catch((error) => toast.error(mensajeError(error, 'No se pudieron cargar los tipos de insumo. ¿Está encendido el backend?'), { style: ESTILO_ERROR }))
+      .finally(() => setCargando(false));
+  }, []);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -57,11 +69,10 @@ export const TipoInsumoView: React.FC<Props> = ({ dark = false }) => {
 
   const handleOpenCreate = () => {
     setEditingId(null);
-    const nextNum = tipos.length + 1;
-    const autoId = `TIPI-${String(nextNum).padStart(3, '0')}`;
-    setFormId(autoId);
+    setFormId('Se genera al guardar');
     setNombre('');
     setDescripcion('');
+    setEstado('Activo');
     setIsModalOpen(true);
   };
 
@@ -69,53 +80,54 @@ export const TipoInsumoView: React.FC<Props> = ({ dark = false }) => {
     setEditingId(tipo.id);
     setFormId(tipo.id);
     setNombre(tipo.nombre);
-    setDescripcion(tipo.descripcion);
+    setDescripcion(tipo.descripcion ?? '');
+    setEstado(tipo.estado);
     setIsModalOpen(true);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nombre.trim()) {
-      toast.error('El nombre es obligatorio', {
-        style: { background: DANGER_BG, border: `1px solid ${DANGER}`, color: DANGER_TXT, fontFamily: 'Montserrat, sans-serif' }
-      });
+      toast.error('El nombre es obligatorio', { style: ESTILO_ERROR });
       return;
     }
 
-    if (editingId) {
-      setTipos(tipos.map(t => t.id === editingId ? {
-        ...t,
-        nombre,
-        descripcion
-      } : t));
-      toast.success('Tipo de insumo actualizado correctamente', {
-        style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-      });
-    } else {
-      setTipos([...tipos, {
-        id: formId,
-        nombre,
-        descripcion
-      }]);
-      toast.success('Tipo de insumo creado correctamente', {
-        style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-      });
+    const datos = { nombre: nombre.trim(), descripcion: descripcion.trim() || null, estado };
+    setGuardando(true);
+    try {
+      if (editingId) {
+        const actualizado = await tipoInsumoService.actualizar(editingId, datos);
+        setTipos(tipos.map(t => t.id === editingId ? actualizado : t));
+        toast.success('Tipo de insumo actualizado correctamente', { style: ESTILO_OK });
+      } else {
+        const nuevo = await tipoInsumoService.crear(datos);
+        setTipos([...tipos, nuevo]);
+        toast.success(`Tipo de insumo ${nuevo.id} creado correctamente`, { style: ESTILO_OK });
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      toast.error(mensajeError(error, 'No se pudo guardar el tipo de insumo.'), { style: ESTILO_ERROR });
+    } finally {
+      setGuardando(false);
     }
-    setIsModalOpen(false);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteItem) return;
-    setTipos(tipos.filter(t => t.id !== deleteItem.id));
-    setDeleteItem(null);
-    toast.success('Tipo de insumo eliminado', {
-      style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-    });
+    try {
+      await tipoInsumoService.eliminar(deleteItem.id);
+      setTipos(tipos.filter(t => t.id !== deleteItem.id));
+      toast.success('Tipo de insumo eliminado', { style: ESTILO_OK });
+    } catch (error) {
+      toast.error(mensajeError(error, 'No se pudo eliminar el tipo de insumo.'), { style: ESTILO_ERROR });
+    } finally {
+      setDeleteItem(null);
+    }
   };
 
   const tiposFiltrados = tipos.filter(t =>
     t.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    t.descripcion.toLowerCase().includes(busqueda.toLowerCase()) ||
+    (t.descripcion ?? '').toLowerCase().includes(busqueda.toLowerCase()) ||
     t.id.toLowerCase().includes(busqueda.toLowerCase())
   );
 
@@ -187,15 +199,24 @@ export const TipoInsumoView: React.FC<Props> = ({ dark = false }) => {
               <th style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 700, color: GOLD, letterSpacing: '0.05em', padding: '12px 16px', whiteSpace: 'nowrap' }}>
                 Descripción
               </th>
+              <th style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 700, color: GOLD, letterSpacing: '0.05em', padding: '12px 16px', whiteSpace: 'nowrap' }}>
+                Estado
+              </th>
               <th style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 700, color: GOLD, letterSpacing: '0.05em', padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                 Acciones
               </th>
             </tr>
           </thead>
           <tbody>
-            {tiposFiltrados.length === 0 ? (
+            {cargando ? (
               <tr>
-                <td colSpan={4} style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13 }}>
+                <td colSpan={5} style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13 }}>
+                  Cargando tipos de insumo...
+                </td>
+              </tr>
+            ) : tiposFiltrados.length === 0 ? (
+              <tr>
+                <td colSpan={5} style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13 }}>
                   No se encontraron registros.
                 </td>
               </tr>
@@ -219,7 +240,18 @@ export const TipoInsumoView: React.FC<Props> = ({ dark = false }) => {
                   </td>
 
                   <td style={{ padding: '12px 16px', verticalAlign: 'middle', fontSize: 12, color: subtle, maxWidth: 450 }}>
-                    {tipo.descripcion}
+                    {tipo.descripcion ?? '—'}
+                  </td>
+
+                  <td style={{ padding: '12px 16px', verticalAlign: 'middle' }}>
+                    <span style={{
+                      background: tipo.estado === 'Activo' ? SUCCESS_BG : DANGER_BG,
+                      color: tipo.estado === 'Activo' ? SUCCESS_TXT : DANGER_TXT,
+                      borderRadius: 999, padding: '4px 12px', fontSize: 11, fontWeight: 700,
+                      textTransform: 'uppercase', whiteSpace: 'nowrap'
+                    }}>
+                      {tipo.estado}
+                    </span>
                   </td>
 
                   <td style={{ padding: '12px 16px', verticalAlign: 'middle', textAlign: 'right' }}>
@@ -339,7 +371,7 @@ export const TipoInsumoView: React.FC<Props> = ({ dark = false }) => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: subtle, display: 'block', marginBottom: 6 }}>
-                    ID (Auto)
+                    {editingId ? 'ID' : 'ID (Auto)'}
                   </label>
                   <input
                     type="text"
@@ -394,6 +426,24 @@ export const TipoInsumoView: React.FC<Props> = ({ dark = false }) => {
                 />
               </div>
 
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: subtle, display: 'block', marginBottom: 6 }}>
+                  Estado
+                </label>
+                <select
+                  value={estado}
+                  onChange={(e) => setEstado(e.target.value as EstadoTipoInsumo)}
+                  style={{
+                    width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 14,
+                    backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`,
+                    outline: 'none', fontFamily: 'Montserrat, sans-serif', boxSizing: 'border-box'
+                  }}
+                >
+                  <option value="Activo">Activo</option>
+                  <option value="Inactivo">Inactivo</option>
+                </select>
+              </div>
+
               <div style={{ padding: '16px 24px', margin: '-20px -24px -20px', marginTop: 12, borderTop: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'flex-end', gap: 12, backgroundColor: dark ? '#252525' : '#FAFAFA' }}>
                 <button
                   type="button"
@@ -408,13 +458,15 @@ export const TipoInsumoView: React.FC<Props> = ({ dark = false }) => {
                 </button>
                 <button
                   type="submit"
+                  disabled={guardando}
                   style={{
                     padding: '8px 24px', borderRadius: 8, border: 'none',
                     background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212',
-                    fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: 'Montserrat, sans-serif'
+                    fontWeight: 700, fontSize: 13, fontFamily: 'Montserrat, sans-serif',
+                    cursor: guardando ? 'wait' : 'pointer', opacity: guardando ? 0.7 : 1
                   }}
                 >
-                  Guardar
+                  {guardando ? 'Guardando...' : 'Guardar'}
                 </button>
               </div>
             </form>
@@ -446,7 +498,7 @@ export const TipoInsumoView: React.FC<Props> = ({ dark = false }) => {
                 ¿Eliminar tipo de insumo?
               </h3>
               <p style={{ fontSize: 13, color: subtle, margin: '0 0 16px' }}>
-                Esta acción no se puede deshacer.
+                Esta acción no se puede deshacer. Si hay insumos con este tipo, no se podrá eliminar.
               </p>
 
               <div style={{

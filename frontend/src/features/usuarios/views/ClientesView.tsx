@@ -3,6 +3,12 @@ import {
   Plus, Trash2, Pencil, X, Search, AlertTriangle, CheckCircle 
 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  clienteService,
+  type CategoriaCliente,
+  type Cliente,
+  type EstadoCliente,
+} from '../services/clienteService';
 
 // ==========================================
 // PALETA DE COLORES - SISTEMA DE DISEÑO BASE
@@ -16,15 +22,18 @@ const SUCCESS      = "#28A745";
 const SUCCESS_BG   = "#DCF7E6";
 const SUCCESS_TXT  = "#155724";
 
-export interface Cliente {
-  id: string;
-  nombre: string;
-  identificacion: string;
-  direccion: string;
-  correo: string;
-  telefono: string;
-  estado: 'ACTIVO' | 'INACTIVO';
-}
+export type { Cliente };
+
+/** Saca el mensaje de error que manda el backend (detail) para mostrarlo en el toast. */
+const mensajeError = (error: unknown, porDefecto: string): string => {
+  const detalle = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (typeof detalle === 'string') return detalle;
+  if (Array.isArray(detalle) && detalle.length > 0) {
+    return detalle.map((d: { loc?: unknown[]; msg?: string }) =>
+      `${String(d.loc?.[d.loc.length - 1] ?? '')}: ${d.msg ?? ''}`).join(' | ');
+  }
+  return porDefecto;
+};
 
 // ==========================================
 // COMPONENTES DE DISEÑO BASE COMPARTIDOS
@@ -139,7 +148,7 @@ export const ConfirmDelete: React.FC<{
             borderRadius: 10, padding: '10px 14px', fontSize: 12,
             color: DANGER_TXT, fontWeight: 600, marginBottom: 20
           }}>
-            Esta acción eliminará el registro del cliente de forma permanente.
+            {message}
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
             <button
@@ -152,10 +161,7 @@ export const ConfirmDelete: React.FC<{
               Cancelar
             </button>
             <button
-              onClick={() => {
-                onConfirm();
-                toast.success(message);
-              }}
+              onClick={onConfirm}
               style={{
                 flex: 1, padding: '10px', borderRadius: 8, border: 'none',
                 background: DANGER, color: '#FFFFFF', fontWeight: 700, fontSize: 13, cursor: 'pointer'
@@ -182,11 +188,29 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
-  const [clientes, setClientes] = useState<Cliente[]>([
-    { id: '00-1', nombre: 'QueNOTA', identificacion: '10458231', direccion: 'Cra 45 #20-432', correo: 'guenota@gmail.com', telefono: '3049820982', estado: 'ACTIVO' },
-    { id: '00-2', nombre: 'Offcors', identificacion: '9032145', direccion: 'Cra 43 #43s', correo: 'offcors@gmail.com', telefono: '3092903093', estado: 'ACTIVO' },
-    { id: '00-3', nombre: 'Nike', identificacion: '8801234', direccion: 'Cra 48 #99', correo: 'nike@gmail.com', telefono: '90980981', estado: 'ACTIVO' }
-  ]);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [categorias, setCategorias] = useState<CategoriaCliente[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+
+  // Cargar clientes y categorías desde la API al abrir la pantalla
+  useEffect(() => {
+    const cargar = async () => {
+      try {
+        const [listaClientes, listaCategorias] = await Promise.all([
+          clienteService.listar(),
+          clienteService.listarCategorias(),
+        ]);
+        setClientes(listaClientes);
+        setCategorias(listaCategorias);
+      } catch (error) {
+        toast.error(mensajeError(error, 'No se pudieron cargar los clientes. ¿Está encendido el backend?'));
+      } finally {
+        setCargando(false);
+      }
+    };
+    cargar();
+  }, []);
 
   const [modalForm, setModalForm] = useState(false);
   const [clienteEditar, setClienteEditar] = useState<Cliente | null>(null);
@@ -194,11 +218,13 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
 
   // Estados del formulario
   const [formNombre, setFormNombre] = useState('');
-  const [formIdentificacion, setFormIdentificacion] = useState('');
+  const [formNit, setFormNit] = useState('');
+  const [formCategoria, setFormCategoria] = useState('');
+  const [formContrasena, setFormContrasena] = useState('');
   const [formDireccion, setFormDireccion] = useState('');
   const [formCorreo, setFormCorreo] = useState('');
   const [formTelefono, setFormTelefono] = useState('');
-  const [formEstado, setFormEstado] = useState<'ACTIVO' | 'INACTIVO'>('ACTIVO');
+  const [formEstado, setFormEstado] = useState<EstadoCliente>('Activo');
 
   // Cerrar el desplegable si se hace clic fuera
   useEffect(() => {
@@ -215,76 +241,103 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
     if (cli) {
       setClienteEditar(cli);
       setFormNombre(cli.nombre);
-      setFormIdentificacion(cli.identificacion);
-      setFormDireccion(cli.direccion);
+      setFormNit(cli.nit);
+      setFormCategoria(cli.id_categoria);
+      setFormDireccion(cli.direccion ?? '');
       setFormCorreo(cli.correo);
-      setFormTelefono(cli.telefono);
+      setFormTelefono(cli.telefono ?? '');
       setFormEstado(cli.estado);
     } else {
       setClienteEditar(null);
       setFormNombre('');
-      setFormIdentificacion('');
+      setFormNit('');
+      setFormCategoria(categorias[0]?.id ?? '');
       setFormDireccion('');
       setFormCorreo('');
       setFormTelefono('');
-      setFormEstado('ACTIVO');
+      setFormEstado('Activo');
     }
+    setFormContrasena('');
     setModalForm(true);
   };
 
-  const handleGuardarCliente = () => {
-    if (!formNombre.trim() || !formIdentificacion.trim() || !formDireccion.trim() || !formCorreo.trim() || !formTelefono.trim()) {
+  const handleGuardarCliente = async () => {
+    if (!formNombre.trim() || !formNit.trim() || !formDireccion.trim() || !formCorreo.trim() || !formTelefono.trim() || !formCategoria) {
       toast.error('Todos los campos son obligatorios para guardar el cliente.');
       return;
     }
-
-    if (clienteEditar) {
-      setClientes(clientes.map(c => c.id === clienteEditar.id ? {
-        ...c,
-        nombre: formNombre,
-        identificacion: formIdentificacion,
-        direccion: formDireccion,
-        correo: formCorreo,
-        telefono: formTelefono,
-        estado: formEstado
-      } : c));
-      toast.success('Cliente actualizado exitosamente');
-    } else {
-      const nextNum = clientes.length + 1;
-      const nuevoId = `00-${nextNum}`;
-      const nuevoCliente: Cliente = {
-        id: nuevoId,
-        nombre: formNombre,
-        identificacion: formIdentificacion,
-        direccion: formDireccion,
-        correo: formCorreo,
-        telefono: formTelefono,
-        estado: formEstado
-      };
-      setClientes([...clientes, nuevoCliente]);
-      toast.success('Nuevo cliente registrado con éxito');
+    if (!clienteEditar && formContrasena.length < 6) {
+      toast.error('La contraseña debe tener al menos 6 caracteres.');
+      return;
     }
-    setModalForm(false);
+    if (clienteEditar && formContrasena && formContrasena.length < 6) {
+      toast.error('La nueva contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
+
+    const datos = {
+      nombre: formNombre.trim(),
+      direccion: formDireccion.trim(),
+      correo: formCorreo.trim(),
+      telefono: formTelefono.trim(),
+      id_categoria: formCategoria,
+      estado: formEstado,
+    };
+
+    setGuardando(true);
+    try {
+      if (clienteEditar) {
+        const actualizado = await clienteService.actualizar(clienteEditar.nit, {
+          ...datos,
+          ...(formContrasena ? { contrasena: formContrasena } : {}),
+        });
+        setClientes(clientes.map(c => c.nit === actualizado.nit ? actualizado : c));
+        toast.success('Cliente actualizado exitosamente');
+      } else {
+        const nuevo = await clienteService.crear({ ...datos, nit: formNit.trim(), contrasena: formContrasena });
+        setClientes([...clientes, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+        toast.success('Nuevo cliente registrado con éxito');
+      }
+      setModalForm(false);
+    } catch (error) {
+      toast.error(mensajeError(error, 'No se pudo guardar el cliente.'));
+    } finally {
+      setGuardando(false);
+    }
   };
 
-  const handleEstadoInline = (id: string, nuevoEstado: 'ACTIVO' | 'INACTIVO') => {
-    setClientes(clientes.map(c => c.id === id ? { ...c, estado: nuevoEstado } : c));
-    toast.success(`Estado actualizado a ${nuevoEstado}`);
+  const handleEstadoInline = async (nit: string, nuevoEstado: EstadoCliente) => {
+    try {
+      const actualizado = await clienteService.cambiarEstado(nit, nuevoEstado);
+      setClientes(clientes.map(c => c.nit === nit ? actualizado : c));
+      toast.success(`Estado actualizado a ${nuevoEstado}`);
+    } catch (error) {
+      toast.error(mensajeError(error, 'No se pudo cambiar el estado.'));
+    }
+  };
+
+  const handleEliminar = async () => {
+    if (!modalDelete) return;
+    try {
+      await clienteService.eliminar(modalDelete.nit);
+      setClientes(clientes.filter(c => c.nit !== modalDelete.nit));
+      toast.success('Cliente eliminado correctamente');
+    } catch (error) {
+      toast.error(mensajeError(error, 'No se pudo eliminar el cliente.'));
+    } finally {
+      setModalDelete(null);
+    }
   };
 
   // Filtrado optimizado para la tabla y las sugerencias desplegables
   const clientesFiltrados = clientes.filter(c => {
     const query = busqueda.toLowerCase().trim();
     if (!query) return true;
-    const idLimpio = c.id.toLowerCase();
-    const numeroBusqueda = query.replace(/^0+/, '');
-
     return (
-      idLimpio.includes(query) ||
-      (numeroBusqueda !== '' && idLimpio.endsWith(`-${numeroBusqueda}`)) ||
+      c.nit.toLowerCase().includes(query) ||
       c.nombre.toLowerCase().includes(query) ||
-      c.identificacion.toLowerCase().includes(query) ||
-      c.correo.toLowerCase().includes(query)
+      c.correo.toLowerCase().includes(query) ||
+      (c.nombre_categoria ?? '').toLowerCase().includes(query)
     );
   });
 
@@ -319,7 +372,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
             <Search size={14} color={subtle} style={{ position: 'absolute', left: 12, zIndex: 2 }} />
             <input
               type="text"
-              placeholder="Buscar por ID (ej. 1, 00-1)..."
+              placeholder="Buscar por NIT, nombre o correo..."
               value={busqueda}
               onChange={(e) => {
                 setBusqueda(e.target.value);
@@ -343,9 +396,9 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
               }}>
                 {clientesFiltrados.map((c) => (
                   <div
-                    key={c.id}
+                    key={c.nit}
                     onClick={() => {
-                      setBusqueda(c.id);
+                      setBusqueda(c.nit);
                       setShowDropdown(false);
                     }}
                     style={{
@@ -358,7 +411,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                     onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
                   >
                     <span style={{ background: GOLD + "1F", color: GOLD, fontFamily: "monospace", fontWeight: 700, padding: "2px 6px", borderRadius: 4 }}>
-                      {c.id}
+                      {c.nit}
                     </span>
                     <span style={{ fontWeight: 600, color: fg, flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {c.nombre}
@@ -383,8 +436,14 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
         </div>
       </div>
 
-      <TableShell headers={['ID CLIENTE', 'NOMBRE', 'IDENTIFICACIÓN', 'DIRECCIÓN', 'CORREO', 'TELÉFONO', 'ESTADO', 'ACCIONES']} dark={dark}>
-        {clientesFiltrados.length === 0 ? (
+      <TableShell headers={['NIT', 'NOMBRE', 'CATEGORÍA', 'DIRECCIÓN', 'CORREO', 'TELÉFONO', 'ESTADO', 'ACCIONES']} dark={dark}>
+        {cargando ? (
+          <tr>
+            <td colSpan={8} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
+              Cargando clientes...
+            </td>
+          </tr>
+        ) : clientesFiltrados.length === 0 ? (
           <tr>
             <td colSpan={8} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
               No se encontraron registros de clientes.
@@ -392,20 +451,20 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
           </tr>
         ) : (
           currentClientes.map((cli) => {
-            const isActive = cli.estado === 'ACTIVO';
+            const isActive = cli.estado === 'Activo';
             return (
-              <tr key={cli.id} style={{ borderBottom: `1px solid ${borderNormal}` }}>
+              <tr key={cli.nit} style={{ borderBottom: `1px solid ${borderNormal}` }}>
                 <td style={{ padding: '12px 14px' }}>
-                  <IdBadge id={cli.id} />
+                  <IdBadge id={cli.nit} />
                 </td>
                 <td style={{ padding: '12px 14px', fontWeight: 700, color: fg, fontSize: 13 }}>
                   {cli.nombre}
                 </td>
-                <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 12, color: subtle }}>
-                  {cli.identificacion}
+                <td style={{ padding: '12px 14px', fontSize: 12, color: subtle }}>
+                  {cli.nombre_categoria ?? cli.id_categoria}
                 </td>
                 <td style={{ padding: '12px 14px', fontSize: 12, color: subtle }}>
-                  {cli.direccion}
+                  {cli.direccion ?? '—'}
                 </td>
                 <td style={{ padding: '12px 14px', fontSize: 12 }}>
                   <a href={`mailto:${cli.correo}`} style={{ color: '#4A90E2', textDecoration: 'none' }}>
@@ -413,12 +472,12 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                   </a>
                 </td>
                 <td style={{ padding: '12px 14px', fontSize: 12, fontFamily: 'monospace', color: subtle }}>
-                  {cli.telefono}
+                  {cli.telefono ?? '—'}
                 </td>
                 <td style={{ padding: '12px 14px' }}>
                   <select
                     value={cli.estado}
-                    onChange={(e) => handleEstadoInline(cli.id, e.target.value as any)}
+                    onChange={(e) => handleEstadoInline(cli.nit, e.target.value as EstadoCliente)}
                     style={{
                       backgroundColor: isActive ? SUCCESS_BG : DANGER_BG,
                       color: isActive ? SUCCESS_TXT : DANGER_TXT,
@@ -427,8 +486,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                       fontFamily: 'Montserrat, sans-serif'
                     }}
                   >
-                    <option value="ACTIVO">ACTIVO</option>
-                    <option value="INACTIVO">INACTIVO</option>
+                    <option value="Activo">ACTIVO</option>
+                    <option value="Inactivo">INACTIVO</option>
                   </select>
                 </td>
                 <td style={{ padding: '12px 14px' }}>
@@ -513,12 +572,14 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
 
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <Field label="ID (Auto)" dark={dark}>
+                <Field label={clienteEditar ? 'NIT (no editable)' : 'NIT / Identificación'} dark={dark}>
                   <input
                     type="text"
-                    disabled
-                    value={clienteEditar ? clienteEditar.id : `00-${clientes.length + 1}`}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: subtle, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
+                    disabled={!!clienteEditar}
+                    placeholder="Ej: 10458231"
+                    value={formNit}
+                    onChange={(e) => setFormNit(e.target.value.replace(/[^0-9-]/g, ''))}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: clienteEditar ? subtle : fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
                   />
                 </Field>
                 <Field label="Nombre (Solo Letras)" dark={dark}>
@@ -535,14 +596,17 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                 </Field>
               </div>
 
-              <Field label="Identificación" dark={dark}>
-                <input
-                  type="text"
-                  placeholder="Ej: 10458231"
-                  value={formIdentificacion}
-                  onChange={(e) => setFormIdentificacion(e.target.value)}
+              <Field label="Categoría" dark={dark}>
+                <select
+                  value={formCategoria}
+                  onChange={(e) => setFormCategoria(e.target.value)}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
-                />
+                >
+                  {categorias.length === 0 && <option value="">No hay categorías disponibles</option>}
+                  {categorias.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                  ))}
+                </select>
               </Field>
 
               <Field label="Dirección" dark={dark}>
@@ -579,16 +643,28 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                 </Field>
               </div>
 
-              <Field label="Estado" dark={dark}>
-                <select
-                  value={formEstado}
-                  onChange={(e) => setFormEstado(e.target.value as any)}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
-                >
-                  <option value="ACTIVO">Activo</option>
-                  <option value="INACTIVO">Inactivo</option>
-                </select>
-              </Field>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <Field label={clienteEditar ? 'Nueva contraseña (opcional)' : 'Contraseña'} dark={dark}>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={clienteEditar ? 'Dejar vacío para no cambiarla' : 'Mínimo 6 caracteres'}
+                    value={formContrasena}
+                    onChange={(e) => setFormContrasena(e.target.value)}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </Field>
+                <Field label="Estado" dark={dark}>
+                  <select
+                    value={formEstado}
+                    onChange={(e) => setFormEstado(e.target.value as EstadoCliente)}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
+                  >
+                    <option value="Activo">Activo</option>
+                    <option value="Inactivo">Inactivo</option>
+                  </select>
+                </Field>
+              </div>
             </div>
 
             <div style={{ padding: '16px 24px', borderTop: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'flex-end', gap: 12, backgroundColor: dark ? '#252525' : '#FAFAFA' }}>
@@ -603,13 +679,15 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
               </button>
               <button
                 onClick={handleGuardarCliente}
+                disabled={guardando}
                 style={{
                   padding: '8px 20px', borderRadius: 8, border: 'none',
                   background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`,
-                  color: '#121212', fontWeight: 700, fontSize: 13, cursor: 'pointer'
+                  color: '#121212', fontWeight: 700, fontSize: 13,
+                  cursor: guardando ? 'wait' : 'pointer', opacity: guardando ? 0.7 : 1
                 }}
               >
-                Guardar
+                {guardando ? 'Guardando...' : 'Guardar'}
               </button>
             </div>
           </div>
@@ -619,13 +697,10 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       {/* MODAL ELIMINAR */}
       {modalDelete && (
         <ConfirmDelete
-          message="Cliente eliminado correctamente"
+          message={`Esta acción eliminará a ${modalDelete.nombre} de forma permanente. Si ya tiene remisiones, no se podrá eliminar: en ese caso cámbiele el estado a Inactivo.`}
           dark={dark}
           onCancel={() => setModalDelete(null)}
-          onConfirm={() => {
-            setClientes(clientes.filter(c => c.id !== modalDelete.id));
-            setModalDelete(null);
-          }}
+          onConfirm={handleEliminar}
         />
       )}
     </div>
