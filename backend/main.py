@@ -24,6 +24,11 @@ from app.presentation.api.rol_router import router as rol_router
 from app.presentation.api.empleado_router import router as empleado_router
 from app.presentation.api.insumo_router import router as insumo_router
 
+# ---- Routers de Emerson ----
+from app.presentation.api.cliente_router import router as cliente_router
+from app.presentation.api.tipo_insumo_router import router as tipo_insumo_router
+from app.presentation.api.compra_router import router as compra_router
+
 app = FastAPI(title="Eslabón API", version="1.0.0")
 
 app.add_middleware(
@@ -77,4 +82,6 @@ app.include_router(tipo_maquina_router)  # PB-39
 app.include_router(rol_router)
 app.include_router(empleado_router)
 app.include_router(insumo_router)
-
+app.include_router(cliente_router)
+app.include_router(tipo_insumo_router)
+app.include_router(compra_router)

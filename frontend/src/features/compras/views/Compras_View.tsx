@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
-import { Plus, Search, Pencil, Trash2, Eye, X, AlertTriangle, Check, PackagePlus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Search, Pencil, Trash2, Eye, X, AlertTriangle, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { compraService, type Compra as CompraApi } from '../services/compraService';
+import { insumoService } from '../services/insumoService';
+import { proveedorService, type Proveedor } from '../services/proveedorService';
 
 // ==========================================
 // CONSTANTES DE DISEÑO - SISTEMA STITCHER
@@ -15,7 +18,7 @@ const SUCCESS_BG = "#DCF7E6";
 const SUCCESS_TXT = "#155724";
 
 interface DetalleItem {
-  idDetalle: string;
+  idDetalle: string;   // solo para mostrar en la tabla (la base de datos identifica la línea por compra + insumo)
   idInsumo: string;
   nombreInsumo: string;
   cantidad: number;
@@ -28,6 +31,7 @@ interface Compra {
   idProveedor: string;
   nombreProveedor: string;
   descripcion: string;
+  total: number;       // lo calcula la base de datos
   detalles: DetalleItem[];
 }
 
@@ -40,53 +44,76 @@ interface Props {
   dark?: boolean;
 }
 
-// Lista inicial de insumos
-const INSUMOS_INICIALES: Insumo[] = [
-  { idInsumo: 'INS-001', nombre: 'Hilo' },
-  { idInsumo: 'INS-002', nombre: 'Botones presión' },
-  { idInsumo: 'INS-003', nombre: 'Marquillas' },
-  { idInsumo: 'INS-004', nombre: 'Tela Algodón' },
-  { idInsumo: 'INS-005', nombre: 'Cierres metálicos' },
-  { idInsumo: 'INS-006', nombre: 'Elástico 2cm' },
-  { idInsumo: 'INS-007', nombre: 'Hilo Poliéster' },
-  { idInsumo: 'INS-008', nombre: 'Tela Fleece' },
-  { idInsumo: 'INS-009', nombre: 'Ojales metálicos' },
-  { idInsumo: 'INS-010', nombre: 'Sesgo elastizado' }
-];
+/** Convierte la compra que llega de la API al formato que usa esta pantalla. */
+const aCompraVista = (c: CompraApi): Compra => ({
+  id: c.id,
+  fecha: c.fecha,
+  idProveedor: c.id_proveedor ?? '',
+  nombreProveedor: c.nombre_proveedor ?? 'Proveedor',
+  descripcion: c.descripcion ?? '',
+  total: c.total,
+  detalles: c.detalles.map((d, i) => ({
+    idDetalle: `${c.id}-${String(i + 1).padStart(2, '0')}`,
+    idInsumo: d.id_insumo,
+    nombreInsumo: d.nombre_insumo ?? 'Insumo',
+    cantidad: d.cantidad,
+    valorUnitario: d.valor_unitario,
+  })),
+});
+
+/** Saca el mensaje de error que manda el backend (detail) para mostrarlo en el toast. */
+const mensajeError = (error: unknown, porDefecto: string): string => {
+  const detalle = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (typeof detalle === 'string') return detalle;
+  if (Array.isArray(detalle) && detalle.length > 0) {
+    return detalle.map((d: { loc?: unknown[]; msg?: string }) =>
+      `${String(d.loc?.[d.loc.length - 1] ?? '')}: ${d.msg ?? ''}`).join(' | ');
+  }
+  return porDefecto;
+};
+
+const hoy = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 export const ComprasView: React.FC<Props> = ({ dark = false }) => {
   const [busqueda, setBusqueda] = useState('');
-  
-  // Estado para gestionar los insumos (permite agregar nuevos dinámicamente)
-  const [insumos, setInsumos] = useState<Insumo[]>(INSUMOS_INICIALES);
-  const [isCrearInsumoOpen, setIsCrearInsumoOpen] = useState(false);
-  const [nuevoInsumoNombre, setNuevoInsumoNombre] = useState('');
 
-  const [compras, setCompras] = useState<Compra[]>([
-    {
-      id: 'COM-001',
-      fecha: '2026-05-22',
-      idProveedor: 'PROV-001',
-      nombreProveedor: 'TextilsCOL',
-      descripcion: 'Se hizo una compra de hilos y marquillas',
-      detalles: [
-        { idDetalle: 'DC-001', idInsumo: 'INS-001', nombreInsumo: 'Hilo', cantidad: 50, valorUnitario: 4000 },
-        { idDetalle: 'DC-002', idInsumo: 'INS-003', nombreInsumo: 'Marquillas', cantidad: 12, valorUnitario: 8000 }
-      ]
-    },
-    {
-      id: 'COM-002',
-      fecha: '2026-05-20',
-      idProveedor: 'PROV-002',
-      nombreProveedor: 'Botones y Herrajes SAS',
-      descripcion: 'Se hizo una compra de botones',
-      detalles: [
-        { idDetalle: 'DC-003', idInsumo: 'INS-002', nombreInsumo: 'Botones presión', cantidad: 90, valorUnitario: 4000 }
-      ]
-    }
-  ]);
+  // Datos que vienen de la API
+  const [compras, setCompras] = useState<Compra[]>([]);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
 
-  const [expandedId, setExpandedId] = useState<string | null>('COM-001');
+  useEffect(() => {
+    const cargar = async () => {
+      try {
+        const [listaCompras, listaInsumos, listaProveedores] = await Promise.all([
+          compraService.listar(),
+          insumoService.listar(),
+          proveedorService.listar('Activo'),
+        ]);
+        setCompras(listaCompras.map(aCompraVista));
+        setInsumos(listaInsumos.map(i => ({ idInsumo: i.id, nombre: i.nombre })));
+        setProveedores(listaProveedores);
+      } catch (error) {
+        toast.error(mensajeError(error, 'No se pudieron cargar las compras. ¿Está encendido el backend?'));
+      } finally {
+        setCargando(false);
+      }
+    };
+    cargar();
+  }, []);
+
+  /** Reemplaza en la lista la compra que devolvió la API después de un cambio. */
+  const actualizarEnLista = (c: CompraApi) => {
+    const vista = aCompraVista(c);
+    setCompras(prev => prev.map(x => x.id === vista.id ? vista : x));
+  };
+
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Control de edición en línea de detalle existente (en el acordeón)
   const [editingDetalleId, setEditingDetalleId] = useState<string | null>(null);
@@ -120,11 +147,10 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
   const subtle = dark ? "#9A9A9A" : "#6B6B6B";
   const borderNormal = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
 
-  const nextIdNum = compras.length + 1;
-  const autoNuevoId = `COM-${String(nextIdNum).padStart(3, '0')}`;
+  const autoNuevoId = 'Se genera al guardar';
 
   const handleOpenCreate = () => {
-    setFormFecha(new Date().toISOString().split('T')[0]);
+    setFormFecha(hoy());
     setFormProveedor('');
     setFormDescripcion('');
     setFormDetalles([{ idInsumo: '', cantidad: 1, valorUnitario: 0 }]);
@@ -138,7 +164,7 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
     setFormDetalles([...formDetalles, { idInsumo: '', cantidad: 1, valorUnitario: 0 }]);
   };
 
-  const actualizarFilaDetalle = (index: number, campo: 'idInsumo' | 'cantidad' | 'valorUnitario', valor: any) => {
+  const actualizarFilaDetalle = (index: number, campo: 'idInsumo' | 'cantidad' | 'valorUnitario', valor: string | number) => {
     const nuevosDetalles = [...formDetalles];
     nuevosDetalles[index] = { ...nuevosDetalles[index], [campo]: valor };
     setFormDetalles(nuevosDetalles);
@@ -149,55 +175,47 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
     setFormDetalles(nuevosDetalles);
   };
 
-  const handleGuardarNuevoInsumo = (e: React.FormEvent) => {
+  const handleSaveCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nuevoInsumoNombre.trim()) return;
-    
-    const nuevoId = `INS-${String(insumos.length + 1).padStart(3, '0')}`;
-    setInsumos([...insumos, { idInsumo: nuevoId, nombre: nuevoInsumoNombre }]);
-    setNuevoInsumoNombre('');
-    setIsCrearInsumoOpen(false);
-    toast.success(`Insumo "${nuevoInsumoNombre}" creado correctamente`);
-  };
+    if (!formProveedor) {
+      toast.error('Seleccione un proveedor.');
+      return;
+    }
+    const filas = formDetalles.filter(d => d.idInsumo !== '');
+    if (filas.length === 0) {
+      toast.error('Agregue al menos un insumo a la compra.');
+      return;
+    }
+    const ids = filas.map(d => d.idInsumo);
+    if (new Set(ids).size !== ids.length) {
+      toast.error('Cada insumo debe aparecer una sola vez. Junte las cantidades en una sola fila.');
+      return;
+    }
+    if (filas.some(d => !(d.cantidad > 0) || !(d.valorUnitario > 0))) {
+      toast.error('La cantidad y el valor unitario deben ser mayores que cero.');
+      return;
+    }
 
-  const handleSaveCreate = (e: React.FormEvent) => {
-    e.preventDefault();
-    const proveedoresMap: Record<string, string> = {
-      'PROV-001': 'TextilsCOL',
-      'PROV-002': 'Botones y Herrajes SAS',
-      'PROV-003': 'Telas e Insumos del Centro',
-      'PROV-004': 'Hilos Medellín'
-    };
-
-    // Procesar detalles descartando vacíos
-    const detallesProcesados: DetalleItem[] = formDetalles
-      .filter(d => d.idInsumo !== '')
-      .map((d, index) => {
-        const insumoObj = insumos.find(i => i.idInsumo === d.idInsumo);
-        return {
-          idDetalle: `DC-${String(Date.now()).slice(-4)}-${index}`,
-          idInsumo: d.idInsumo,
-          nombreInsumo: insumoObj ? insumoObj.nombre : 'Insumo',
-          cantidad: d.cantidad || 0,
-          valorUnitario: d.valorUnitario || 0
-        };
+    setGuardando(true);
+    try {
+      const nueva = await compraService.crear({
+        fecha: formFecha || undefined,
+        id_proveedor: formProveedor,
+        descripcion: formDescripcion.trim() || null,
+        detalles: filas.map(d => ({ id_insumo: d.idInsumo, cantidad: d.cantidad, valor_unitario: d.valorUnitario })),
       });
-
-    const nuevaCompra: Compra = {
-      id: autoNuevoId,
-      fecha: formFecha || new Date().toISOString().split('T')[0],
-      idProveedor: formProveedor || 'PROV-001',
-      nombreProveedor: proveedoresMap[formProveedor] || 'Proveedor General',
-      descripcion: formDescripcion || 'Compra general de insumos',
-      detalles: detallesProcesados
-    };
-
-    setCompras([nuevaCompra, ...compras]);
-    setExpandedId(autoNuevoId);
-    setIsCreateOpen(false);
-    toast.success('Compra creada correctamente', {
-      style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' }
-    });
+      const vista = aCompraVista(nueva);
+      setCompras([vista, ...compras]);
+      setExpandedId(vista.id);
+      setIsCreateOpen(false);
+      toast.success(`Compra ${vista.id} creada correctamente. El stock de los insumos se actualizó.`, {
+        style: { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT }
+      });
+    } catch (error) {
+      toast.error(mensajeError(error, 'No se pudo crear la compra.'));
+    } finally {
+      setGuardando(false);
+    }
   };
 
   // ==========================================
@@ -210,32 +228,38 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
     setFormDescripcion(compra.descripcion);
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editCompra) return;
-    const proveedoresMap: Record<string, string> = {
-      'PROV-001': 'TextilsCOL',
-      'PROV-002': 'Botones y Herrajes SAS',
-      'PROV-003': 'Telas e Insumos del Centro',
-      'PROV-004': 'Hilos Medellín'
-    };
-
-    setCompras(compras.map(c => c.id === editCompra.id ? {
-      ...c,
-      fecha: formFecha,
-      idProveedor: formProveedor,
-      nombreProveedor: proveedoresMap[formProveedor] || 'Proveedor General',
-      descripcion: formDescripcion
-    } : c));
-    setEditCompra(null);
-    toast.success('Compra actualizada correctamente');
+    if (!formProveedor) {
+      toast.error('Seleccione un proveedor.');
+      return;
+    }
+    try {
+      const actualizada = await compraService.actualizar(editCompra.id, {
+        fecha: formFecha,
+        id_proveedor: formProveedor,
+        descripcion: formDescripcion.trim() || null,
+      });
+      actualizarEnLista(actualizada);
+      setEditCompra(null);
+      toast.success('Compra actualizada correctamente');
+    } catch (error) {
+      toast.error(mensajeError(error, 'No se pudo actualizar la compra.'));
+    }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteItem) return;
-    setCompras(compras.filter(c => c.id !== deleteItem.id));
-    setDeleteItem(null);
-    toast.success('Compra eliminada correctamente');
+    try {
+      await compraService.eliminar(deleteItem.id);
+      setCompras(compras.filter(c => c.id !== deleteItem.id));
+      toast.success('Compra eliminada correctamente. El stock de los insumos se descontó.');
+    } catch (error) {
+      toast.error(mensajeError(error, 'No se pudo eliminar la compra.'));
+    } finally {
+      setDeleteItem(null);
+    }
   };
 
   const toggleExpand = (id: string) => {
@@ -253,40 +277,40 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
     setEditValorUnitario(det.valorUnitario);
   };
 
-  const handleSaveDetalle = (compraId: string, idDetalle: string) => {
-    const insumoObj = insumos.find(i => i.idInsumo === editInsumoId);
-    const nombreInsumo = insumoObj ? insumoObj.nombre : 'Insumo';
-
-    setCompras(compras.map(c => {
-      if (c.id !== compraId) return c;
-      const nuevosDetalles = c.detalles.map(d => {
-        if (d.idDetalle !== idDetalle) return d;
-        return {
-          ...d,
-          idInsumo: editInsumoId,
-          nombreInsumo: nombreInsumo,
-          cantidad: Number(editCantidad) || 0,
-          valorUnitario: Number(editValorUnitario) || 0
-        };
+  const handleSaveDetalle = async (compraId: string, idDetalle: string) => {
+    const compra = compras.find(c => c.id === compraId);
+    const det = compra?.detalles.find(d => d.idDetalle === idDetalle);
+    if (!det) return;
+    if (!(editCantidad > 0) || !(editValorUnitario > 0)) {
+      toast.error('La cantidad y el valor unitario deben ser mayores que cero.');
+      return;
+    }
+    try {
+      const actualizada = await compraService.actualizarDetalle(compraId, det.idInsumo, {
+        id_insumo: editInsumoId,
+        cantidad: Number(editCantidad),
+        valor_unitario: Number(editValorUnitario),
       });
-      return { ...c, detalles: nuevosDetalles };
-    }));
-
-    setEditingDetalleId(null);
-    toast.success('Detalle actualizado');
+      actualizarEnLista(actualizada);
+      setEditingDetalleId(null);
+      toast.success('Detalle actualizado');
+    } catch (error) {
+      toast.error(mensajeError(error, 'No se pudo actualizar el detalle.'));
+    }
   };
 
-  const handleConfirmDeleteDetalle = () => {
+  const handleConfirmDeleteDetalle = async () => {
     if (!deleteDetalleItemState) return;
     const { compraId, detalle } = deleteDetalleItemState;
-
-    setCompras(compras.map(c => {
-      if (c.id !== compraId) return c;
-      return { ...c, detalles: c.detalles.filter(d => d.idDetalle !== detalle.idDetalle) };
-    }));
-
-    setDeleteDetalleItemState(null);
-    toast.success('Ítem eliminado del detalle correctamente');
+    try {
+      const actualizada = await compraService.eliminarDetalle(compraId, detalle.idInsumo);
+      actualizarEnLista(actualizada);
+      toast.success('Ítem eliminado del detalle correctamente');
+    } catch (error) {
+      toast.error(mensajeError(error, 'No se pudo eliminar el ítem.'));
+    } finally {
+      setDeleteDetalleItemState(null);
+    }
   };
 
   const comprasFiltradas = compras.filter(c =>
@@ -358,14 +382,20 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
             <tr style={{ background: dark ? '#252525' : '#FAFAFA', borderBottom: `2px solid ${GOLD}` }}>
               <th style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 700, color: GOLD, padding: '12px 16px', whiteSpace: 'nowrap' }}>ID COMPRA</th>
               <th style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 700, color: GOLD, padding: '12px 16px', whiteSpace: 'nowrap' }}>FECHA</th>
-              <th style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 700, color: GOLD, padding: '12px 16px', whiteSpace: 'nowrap' }}>ID PROVEEDOR</th>
+              <th style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 700, color: GOLD, padding: '12px 16px', whiteSpace: 'nowrap' }}>PROVEEDOR</th>
               <th style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 700, color: GOLD, padding: '12px 16px', whiteSpace: 'nowrap' }}>DESCRIPCIÓN</th>
               <th style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 700, color: GOLD, padding: '12px 16px', whiteSpace: 'nowrap' }}>TOTAL COMPRA</th>
               <th style={{ textTransform: 'uppercase', fontSize: 10, fontWeight: 700, color: GOLD, padding: '12px 16px', textAlign: 'right', whiteSpace: 'nowrap' }}>ACCIONES</th>
             </tr>
           </thead>
           <tbody>
-            {comprasFiltradas.length === 0 ? (
+            {cargando ? (
+              <tr>
+                <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13 }}>
+                  Cargando compras...
+                </td>
+              </tr>
+            ) : comprasFiltradas.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13 }}>
                   No se encontraron compras registradas.
@@ -373,7 +403,7 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
               </tr>
             ) : (
               currentItems.map((compra) => {
-                const totalCompra = compra.detalles.reduce((sum, item) => sum + (item.cantidad * item.valorUnitario), 0);
+                const totalCompra = compra.total;
                 const isExpanded = expandedId === compra.id;
 
                 return (
@@ -404,6 +434,7 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
                         }} title={compra.nombreProveedor}>
                           {compra.idProveedor}
                         </span>
+                        <span style={{ fontSize: 12, color: fg, marginLeft: 6 }}>{compra.nombreProveedor}</span>
                       </td>
 
                       <td style={{ padding: '12px 16px', verticalAlign: 'middle', fontSize: 12, color: subtle, maxWidth: 300 }}>
@@ -688,7 +719,7 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>FECHA</label>
-                  <input type="date" value={formFecha} onChange={(e) => setFormFecha(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 14, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }} />
+                  <input type="date" max={hoy()} value={formFecha} onChange={(e) => setFormFecha(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 14, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               </div>
 
@@ -696,10 +727,9 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
                 <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>PROVEEDOR</label>
                 <select value={formProveedor} onChange={(e) => setFormProveedor(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 14, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}>
                   <option value="">— Seleccionar proveedor —</option>
-                  <option value="PROV-001">PROV-001 — TextilsCOL</option>
-                  <option value="PROV-002">PROV-002 — Botones y Herrajes SAS</option>
-                  <option value="PROV-003">PROV-003 — Telas e Insumos del Centro</option>
-                  <option value="PROV-004">PROV-004 — Hilos Medellín</option>
+                  {proveedores.map(p => (
+                    <option key={p.id} value={p.id}>{p.id} — {p.nombre}</option>
+                  ))}
                 </select>
               </div>
 
@@ -714,13 +744,6 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
                   <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle }}>Insumos de la compra</label>
                   
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button 
-                      type="button" 
-                      onClick={() => setIsCrearInsumoOpen(true)}
-                      style={{ background: 'transparent', border: `1px dashed ${GOLD}`, color: GOLD, fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'Montserrat, sans-serif' }}
-                    >
-                      <PackagePlus size={12} /> Crear insumo
-                    </button>
                     <button 
                       type="button" 
                       onClick={agregarFilaDetalle}
@@ -786,36 +809,7 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
 
               <div style={{ padding: '16px 24px', margin: '-20px -24px -20px', marginTop: 12, borderTop: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'flex-end', gap: 12, backgroundColor: dark ? '#252525' : '#FAFAFA' }}>
                 <button type="button" onClick={() => setIsCreateOpen(false)} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: dark ? '#2A2A2A' : '#E8E8E8', color: fg, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
-                <button type="submit" style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Guardar Compra</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL MINI: CREAR NUEVO INSUMO RÁPIDO */}
-      {isCrearInsumoOpen && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: 16 }}>
-          <div style={{ width: '100%', maxWidth: 320, borderRadius: 12, backgroundColor: cardBg, border: `1px solid ${GOLD}40`, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
-            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${GOLD}25`, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <PackagePlus size={16} color={GOLD} />
-              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: fg }}>Registrar Insumo</h3>
-            </div>
-            
-            <form onSubmit={handleGuardarNuevoInsumo} style={{ padding: '20px' }}>
-              <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>Nombre del Insumo</label>
-              <input 
-                type="text" 
-                placeholder="Ej. Cinta reflectiva" 
-                autoFocus
-                value={nuevoInsumoNombre} 
-                onChange={(e) => setNuevoInsumoNombre(e.target.value)} 
-                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box', marginBottom: 16, fontFamily: 'Montserrat, sans-serif' }} 
-              />
-              
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button" onClick={() => setIsCrearInsumoOpen(false)} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: dark ? '#2A2A2A' : '#E8E8E8', color: fg, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>Cancelar</button>
-                <button type="submit" disabled={!nuevoInsumoNombre.trim()} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212', fontWeight: 700, fontSize: 12, cursor: !nuevoInsumoNombre.trim() ? 'not-allowed' : 'pointer', opacity: !nuevoInsumoNombre.trim() ? 0.6 : 1 }}>Guardar</button>
+                <button type="submit" disabled={guardando} style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212', fontWeight: 700, fontSize: 13, cursor: guardando ? 'wait' : 'pointer', opacity: guardando ? 0.7 : 1 }}>{guardando ? 'Guardando...' : 'Guardar Compra'}</button>
               </div>
             </form>
           </div>
@@ -841,17 +835,20 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
                 </div>
                 <div>
                   <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>FECHA</label>
-                  <input type="date" value={formFecha} onChange={(e) => setFormFecha(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 14, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }} />
+                  <input type="date" max={hoy()} value={formFecha} onChange={(e) => setFormFecha(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 14, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               </div>
 
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>PROVEEDOR</label>
                 <select value={formProveedor} onChange={(e) => setFormProveedor(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: 8, fontSize: 14, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}>
-                  <option value="PROV-001">PROV-001 — TextilsCOL</option>
-                  <option value="PROV-002">PROV-002 — Botones y Herrajes SAS</option>
-                  <option value="PROV-003">PROV-003 — Telas e Insumos del Centro</option>
-                  <option value="PROV-004">PROV-004 — Hilos Medellín</option>
+                  <option value="">— Seleccionar proveedor —</option>
+                  {proveedores.map(p => (
+                    <option key={p.id} value={p.id}>{p.id} — {p.nombre}</option>
+                  ))}
+                  {editCompra.idProveedor && !proveedores.some(p => p.id === editCompra.idProveedor) && (
+                    <option value={editCompra.idProveedor}>{editCompra.idProveedor} — {editCompra.nombreProveedor} (inactivo)</option>
+                  )}
                 </select>
               </div>
 
@@ -879,7 +876,7 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
                 <AlertTriangle size={28} color={DANGER} />
               </div>
               <h3 style={{ fontSize: 18, fontWeight: 800, color: fg, margin: '0 0 8px' }}>¿Eliminar compra?</h3>
-              <p style={{ fontSize: 13, color: subtle, margin: '0 0 16px' }}>Esta acción no se puede deshacer.</p>
+              <p style={{ fontSize: 13, color: subtle, margin: '0 0 16px' }}>Esta acción no se puede deshacer. Se descontará del stock lo que se había comprado.</p>
 
               <div style={{ background: DANGER_BG, border: `1px solid ${DANGER}4D`, borderRadius: 10, padding: '10px 14px', fontSize: 12, color: DANGER_TXT, fontWeight: 600, marginBottom: 20, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <AlertTriangle size={14} color={DANGER} style={{ flexShrink: 0 }} />
