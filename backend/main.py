@@ -18,6 +18,7 @@ from app.presentation.api.seguimiento_router import router as seguimiento_router
 # ---- Routers de Jordy ----
 from app.presentation.api.proveedor_router import router as proveedor_router
 from app.presentation.api.tipo_maquina_router import router as tipo_maquina_router
+from app.presentation.api.tipo_pieza_router import router as tipo_pieza_router
 
 app = FastAPI(title="Eslabón API", version="1.0.0")
 
@@ -68,4 +69,7 @@ app.include_router(registro_diario_router)
 app.include_router(seguimiento_router)
 app.include_router(proveedor_router)  # PB-36
 app.include_router(tipo_maquina_router)  # PB-39
+app.include_router(tipo_pieza_router)  # PB-40
+
 # app.include_router(...)  <- routers de los demás módulos
+
