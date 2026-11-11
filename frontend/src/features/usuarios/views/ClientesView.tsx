@@ -5,7 +5,6 @@ import {
 import { toast } from 'sonner';
 import {
   clienteService,
-  type CategoriaCliente,
   type Cliente,
   type EstadoCliente,
 } from '../services/clienteService';
@@ -189,20 +188,14 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   const searchRef = useRef<HTMLDivElement>(null);
 
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [categorias, setCategorias] = useState<CategoriaCliente[]>([]);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
-  // Cargar clientes y categorías desde la API al abrir la pantalla
+  // Cargar clientes desde la API al abrir la pantalla
   useEffect(() => {
     const cargar = async () => {
       try {
-        const [listaClientes, listaCategorias] = await Promise.all([
-          clienteService.listar(),
-          clienteService.listarCategorias(),
-        ]);
-        setClientes(listaClientes);
-        setCategorias(listaCategorias);
+        setClientes(await clienteService.listar());
       } catch (error) {
         toast.error(mensajeError(error, 'No se pudieron cargar los clientes. ¿Está encendido el backend?'));
       } finally {
@@ -219,7 +212,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   // Estados del formulario
   const [formNombre, setFormNombre] = useState('');
   const [formNit, setFormNit] = useState('');
-  const [formCategoria, setFormCategoria] = useState('');
   const [formContrasena, setFormContrasena] = useState('');
   const [formDireccion, setFormDireccion] = useState('');
   const [formCorreo, setFormCorreo] = useState('');
@@ -242,7 +234,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       setClienteEditar(cli);
       setFormNombre(cli.nombre);
       setFormNit(cli.nit);
-      setFormCategoria(cli.id_categoria);
       setFormDireccion(cli.direccion ?? '');
       setFormCorreo(cli.correo);
       setFormTelefono(cli.telefono ?? '');
@@ -251,7 +242,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       setClienteEditar(null);
       setFormNombre('');
       setFormNit('');
-      setFormCategoria(categorias[0]?.id ?? '');
       setFormDireccion('');
       setFormCorreo('');
       setFormTelefono('');
@@ -262,7 +252,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   };
 
   const handleGuardarCliente = async () => {
-    if (!formNombre.trim() || !formNit.trim() || !formDireccion.trim() || !formCorreo.trim() || !formTelefono.trim() || !formCategoria) {
+    if (!formNombre.trim() || !formNit.trim() || !formDireccion.trim() || !formCorreo.trim() || !formTelefono.trim()) {
       toast.error('Todos los campos son obligatorios para guardar el cliente.');
       return;
     }
@@ -280,7 +270,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       direccion: formDireccion.trim(),
       correo: formCorreo.trim(),
       telefono: formTelefono.trim(),
-      id_categoria: formCategoria,
       estado: formEstado,
     };
 
@@ -336,8 +325,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
     return (
       c.nit.toLowerCase().includes(query) ||
       c.nombre.toLowerCase().includes(query) ||
-      c.correo.toLowerCase().includes(query) ||
-      (c.nombre_categoria ?? '').toLowerCase().includes(query)
+      c.correo.toLowerCase().includes(query)
     );
   });
 
@@ -436,7 +424,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
         </div>
       </div>
 
-      <TableShell headers={['NIT', 'NOMBRE', 'CATEGORÍA', 'DIRECCIÓN', 'CORREO', 'TELÉFONO', 'ESTADO', 'ACCIONES']} dark={dark}>
+      <TableShell headers={['NIT', 'NOMBRE', 'DIRECCIÓN', 'CORREO', 'TELÉFONO', 'ESTADO', 'ACCIONES']} dark={dark}>
         {cargando ? (
           <tr>
             <td colSpan={8} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
@@ -459,9 +447,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                 </td>
                 <td style={{ padding: '12px 14px', fontWeight: 700, color: fg, fontSize: 13 }}>
                   {cli.nombre}
-                </td>
-                <td style={{ padding: '12px 14px', fontSize: 12, color: subtle }}>
-                  {cli.nombre_categoria ?? cli.id_categoria}
                 </td>
                 <td style={{ padding: '12px 14px', fontSize: 12, color: subtle }}>
                   {cli.direccion ?? '—'}
@@ -595,19 +580,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                   />
                 </Field>
               </div>
-
-              <Field label="Categoría" dark={dark}>
-                <select
-                  value={formCategoria}
-                  onChange={(e) => setFormCategoria(e.target.value)}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
-                >
-                  {categorias.length === 0 && <option value="">No hay categorías disponibles</option>}
-                  {categorias.map((cat) => (
-                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
-                  ))}
-                </select>
-              </Field>
 
               <Field label="Dirección" dark={dark}>
                 <input

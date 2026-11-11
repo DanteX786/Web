@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-from app.domain.entities.cliente import CategoriaCliente, Cliente
+from app.domain.entities.cliente import Cliente
 
 
 class IClienteRepository(ABC):
@@ -9,12 +9,6 @@ class IClienteRepository(ABC):
 
     @abstractmethod
     def obtener(self, nit: str) -> Cliente | None: ...
-
-    @abstractmethod
-    def listar_categorias(self) -> list[CategoriaCliente]: ...
-
-    @abstractmethod
-    def existe_categoria_activa(self, id_categoria: str) -> bool: ...
 
     @abstractmethod
     def existe_correo(self, correo: str, excluir_nit: str | None = None) -> bool: ...

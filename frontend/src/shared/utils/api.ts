@@ -17,10 +17,15 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-/** Extrae el mensaje de error que manda FastAPI ({ detail: "..." }). */
-export const mensajeError = (e: unknown): string =>
-  axios.isAxiosError(e)
-    ? typeof e.response?.data?.detail === "string"
-      ? e.response.data.detail
-      : "No se pudo conectar con el servidor"
-    : "Error inesperado";
+/** Extrae el mensaje de error que manda FastAPI ({ detail: "..." }).
+ *  Los errores de validación (422) traen una lista: se muestran los mensajes de cada campo. */
+export const mensajeError = (e: unknown): string => {
+  if (!axios.isAxiosError(e)) return "Error inesperado";
+  const detail = e.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length > 0)
+    return detail
+      .map((d: { loc?: unknown[]; msg?: string }) => `${String(d.loc?.[d.loc.length - 1] ?? "dato")}: ${d.msg ?? "inválido"}`)
+      .join(" · ");
+  return e.response ? `Error ${e.response.status} del servidor` : "No se pudo conectar con el servidor";
+};

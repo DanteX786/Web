@@ -2,7 +2,7 @@ import bcrypt
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.domain.entities.cliente import CategoriaCliente, Cliente
+from app.domain.entities.cliente import Cliente
 from app.domain.interfaces.cliente_repository import IClienteRepository
 
 # Todo cliente se guarda con el rol "Cliente" (tabla roles). Se busca por nombre
@@ -10,10 +10,8 @@ from app.domain.interfaces.cliente_repository import IClienteRepository
 ROL_CLIENTE = "Cliente"
 
 SELECT_CLIENTES = """
-    SELECT c.nit, c.nombre, c.direccion, c.correo, c.telefono, c.estado,
-           c.id_categoria, cat.nombre AS nombre_categoria
+    SELECT c.nit, c.nombre, c.direccion, c.correo, c.telefono, c.estado
       FROM tb_clientes c
-      LEFT JOIN tb_categoria_clientes cat ON cat.id_categoria = c.id_categoria
 """
 
 # Campo que llega desde la API -> columna real en la tabla.
@@ -24,7 +22,6 @@ CAMPOS_EDITABLES = {
     "correo": "correo",
     "telefono": "telefono",
     "estado": "estado",
-    "id_categoria": "id_categoria",
     "contrasena": "contrasena",
 }
 
@@ -61,20 +58,6 @@ class ClienteRepository(IClienteRepository):
             text(SELECT_CLIENTES + " WHERE c.nit = :nit"), {"nit": nit}
         ).mappings().first()
         return Cliente(**fila) if fila else None
-
-    def listar_categorias(self) -> list[CategoriaCliente]:
-        filas = self.db.execute(text("""
-            SELECT id_categoria AS id, nombre FROM tb_categoria_clientes
-             WHERE estado = 'Activo' ORDER BY nombre
-        """)).mappings()
-        return [CategoriaCliente(**f) for f in filas]
-
-    def existe_categoria_activa(self, id_categoria: str) -> bool:
-        return bool(self.db.execute(
-            text("""SELECT EXISTS (SELECT 1 FROM tb_categoria_clientes
-                                    WHERE id_categoria = :id AND estado = 'Activo')"""),
-            {"id": id_categoria},
-        ).scalar())
 
     def existe_correo(self, correo: str, excluir_nit: str | None = None) -> bool:
         sql = "SELECT EXISTS (SELECT 1 FROM tb_clientes WHERE LOWER(correo) = LOWER(:correo)"
