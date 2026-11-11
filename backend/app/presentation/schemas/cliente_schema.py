@@ -12,7 +12,7 @@ def _limpiar(valor):
     return texto or None
 
 
-TEXTOS = ("nit", "nombre", "direccion", "correo", "telefono", "id_categoria")
+TEXTOS = ("nit", "nombre", "direccion", "correo", "telefono")
 PATRON_CORREO = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # Así se guarda en la base de datos (columna estado, default 'Activo')
 Estado = Literal["Activo", "Inactivo"]
@@ -38,7 +38,6 @@ class ClienteCrear(BaseModel):
     direccion: str | None = Field(default=None, max_length=150)
     correo: str = Field(max_length=100)
     telefono: str | None = Field(default=None, max_length=20)
-    id_categoria: str = Field(max_length=10, description="Ver GET /api/clientes/categorias")
     estado: Estado = "Activo"
     contrasena: str = Field(min_length=6, max_length=72, description="Se guarda encriptada")
 
@@ -58,13 +57,12 @@ class ClienteActualizar(BaseModel):
     direccion: str | None = Field(default=None, max_length=150)
     correo: str | None = Field(default=None, max_length=100)
     telefono: str | None = Field(default=None, max_length=20)
-    id_categoria: str | None = Field(default=None, max_length=10)
     estado: Estado | None = None
     contrasena: str | None = Field(default=None, min_length=6, max_length=72)
 
     _limpiar_textos = field_validator(*TEXTOS[1:], mode="before")(lambda cls, v: _limpiar(v))
 
-    @field_validator("nombre", "correo", "id_categoria", "estado")
+    @field_validator("nombre", "correo", "estado")
     @classmethod
     def no_vacio(cls, valor, info):
         if valor is None:
@@ -77,13 +75,6 @@ class ClienteActualizar(BaseModel):
         return _validar_formato("telefono", valor)
 
 
-class CategoriaClienteRespuesta(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    nombre: str
-
-
 class ClienteRespuesta(BaseModel):
     """La contraseña nunca se devuelve."""
     model_config = ConfigDict(from_attributes=True)
@@ -94,5 +85,3 @@ class ClienteRespuesta(BaseModel):
     correo: str
     telefono: str | None
     estado: str
-    id_categoria: str
-    nombre_categoria: str | None
