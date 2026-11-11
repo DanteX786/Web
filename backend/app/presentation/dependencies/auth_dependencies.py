@@ -14,3 +14,12 @@ def get_id_empleado_actual(x_empleado_id: str | None = Header(default=None)) -> 
             detail="Falta el encabezado X-Empleado-Id (temporal hasta tener el login).",
         )
     return x_empleado_id
+
+
+def get_id_empleado_opcional(x_empleado_id: str | None = Header(default=None)) -> str | None:
+    """Igual que get_id_empleado_actual, pero no obliga a enviarlo.
+
+    Se usa donde también puede operar un cliente (ej. crear remisión desde la página):
+    si no llega empleado, la BD deja al cliente como responsable en el seguimiento.
+    """
+    return x_empleado_id or None

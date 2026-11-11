@@ -1,5 +1,6 @@
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
@@ -29,6 +30,13 @@ from app.presentation.api.insumo_router import router as insumo_router
 from app.presentation.api.cliente_router import router as cliente_router
 from app.presentation.api.tipo_insumo_router import router as tipo_insumo_router
 from app.presentation.api.compra_router import router as compra_router
+
+# ---- Routers de Daniel ----
+from app.presentation.api.remision_router import router as remision_router
+from app.presentation.api.insumo_enviado_router import router as insumo_enviado_router
+from app.presentation.api.entrega_router import router as entrega_router
+from app.presentation.api.dashboard_router import router as dashboard_router
+from app.infrastructure.storage.local_storage import CARPETA_UPLOADS, URL_UPLOADS
 
 app = FastAPI(title="Eslabón API", version="1.0.0")
 
@@ -88,4 +96,12 @@ app.include_router(insumo_router)
 app.include_router(cliente_router)
 app.include_router(tipo_insumo_router)
 app.include_router(compra_router)
+app.include_router(remision_router)
+app.include_router(insumo_enviado_router)
+app.include_router(entrega_router)
+app.include_router(dashboard_router)
 
+# ---------- Archivos subidos (fichas técnicas, remisiones firmadas, comprobantes) ----------
+# Se sirven en http://localhost:8000/uploads/...
+CARPETA_UPLOADS.mkdir(parents=True, exist_ok=True)
+app.mount(URL_UPLOADS, StaticFiles(directory=CARPETA_UPLOADS), name="uploads")

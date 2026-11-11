@@ -79,7 +79,7 @@ export default function App() {
       <Toaster position="top-right" richColors />
 
       {/* MÓDULO PRINCIPAL */}
-      {currentView === 'dashboard' && <DashboardPage dark={dark} />}
+      {currentView === 'dashboard' && <DashboardPage dark={dark} onNavegar={setCurrentView} />}
 
       {/* MÓDULO PRODUCCIÓN */}
       {currentView === 'produccion' && <ProduccionView dark={dark} />}

@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, status
 from app.application.cliente_service import ClienteService
 from app.presentation.dependencies.usuarios_dependencies import get_cliente_service
 from app.presentation.schemas.cliente_schema import (
-    CategoriaClienteRespuesta,
     ClienteActualizar,
     ClienteCrear,
     ClienteRespuesta,
@@ -19,13 +18,6 @@ router = APIRouter(prefix="/api/clientes", tags=["Clientes"])
 def listar(estado: Literal["Activo", "Inactivo"] | None = None,
            service: ClienteService = Depends(get_cliente_service)):
     return service.listar(estado)
-
-
-# Va ANTES de "/{nit}" para que "categorias" no se tome como un NIT
-@router.get("/categorias", response_model=list[CategoriaClienteRespuesta],
-            summary="Listar categorías de cliente activas (para el formulario)")
-def listar_categorias(service: ClienteService = Depends(get_cliente_service)):
-    return service.listar_categorias()
 
 
 @router.get("/{nit}", response_model=ClienteRespuesta, summary="Detalle de un cliente")

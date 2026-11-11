@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
-import { 
-  Package, Pencil, Trash2, X, 
-  Search, AlertTriangle 
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Package, Pencil, Trash2, X,
+  Search, AlertTriangle, Plus, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { mensajeError } from '../../../shared/utils/api';
+import { insumoEnviadoService, type InsumoEnviado } from '../services/insumoEnviadoService';
+import { remisionService, type Remision } from '../../ventas/services/remisionService';
 
 // PALETA DE DISEÑO ESLABÓN
 const GOLD       = "#C9A227";
@@ -11,13 +14,11 @@ const GOLD_LIGHT = "#E6B84A";
 const DANGER     = "#DC3545";
 const DANGER_BG  = "#FDECEA";
 const DANGER_TXT = "#721c24";
+const SUCCESS    = "#28A745";
 
-export interface InsumoEnviado {
-  Id_insumo_enviado: string;
-  id_remision: string;
-  Nombre: string;
-  Cantidad: number;
-}
+// Mientras la remisión esté en uno de estos estados se pueden registrar o corregir insumos
+const ESTADOS_EDITABLES = ['Pendiente', 'Aprobada', 'En producción'];
+const UNIDADES = ['Unidad', 'Metros', 'Conos', 'Rollos', 'Pares'];
 
 export const IdBadge: React.FC<{ id: string }> = ({ id }) => (
   <span style={{
@@ -34,22 +35,24 @@ export const ActionCircleBtn: React.FC<{
   onClick: () => void;
   children: React.ReactNode;
   title?: string;
-}> = ({ variant = 'gold', onClick, children, title }) => {
-  const borderColor = variant === 'danger' ? DANGER : GOLD;
-  const iconColor = variant === 'danger' ? DANGER : GOLD;
+  disabled?: boolean;
+}> = ({ variant = 'gold', onClick, children, title, disabled = false }) => {
+  const borderColor = disabled ? '#9A9A9A' : variant === 'danger' ? DANGER : GOLD;
+  const iconColor = borderColor;
 
   return (
     <button
       onClick={onClick}
       title={title}
+      disabled={disabled}
       style={{
         width: 32, height: 32, borderRadius: '50%',
         backgroundColor: 'transparent', border: `1.5px solid ${borderColor}`,
-        color: iconColor, cursor: 'pointer', display: 'inline-flex',
-        alignItems: 'center', justifyContent: 'center',
+        color: iconColor, cursor: disabled ? 'not-allowed' : 'pointer', display: 'inline-flex',
+        alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.5 : 1,
         transition: 'transform 0.15s, background-color 0.15s'
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${borderColor}15`; }}
+      onMouseEnter={(e) => { if (!disabled) (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${borderColor}15`; }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'; }}
     >
       {children}
@@ -152,55 +155,111 @@ interface InsumosEnviadosViewProps {
 
 export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark = false }) => {
   const [busqueda, setBusqueda] = useState('');
-  
-  // Varios insumos enviados asociados a una misma remisión (REM-101) y otras remisiones
-  const [insumos, setInsumos] = useState<InsumoEnviado[]>([
-    { Id_insumo_enviado: 'INS-ENV-001', id_remision: 'REM-101', Nombre: 'Botones Dorados Metálicos', Cantidad: 150 },
-    { Id_insumo_enviado: 'INS-ENV-002', id_remision: 'REM-101', Nombre: 'Hilo Poliéster Negro 40/2', Cantidad: 12 },
-    { Id_insumo_enviado: 'INS-ENV-003', id_remision: 'REM-101', Nombre: 'Cierres de Cremallera 20cm', Cantidad: 45 },
-    { Id_insumo_enviado: 'INS-ENV-004', id_remision: 'REM-101', Nombre: 'Elástico Reforzado de 2cm', Cantidad: 200 },
-    { Id_insumo_enviado: 'INS-ENV-005', id_remision: 'REM-101', Nombre: 'Sesgo Negro de Algodón', Cantidad: 90 },
-    { Id_insumo_enviado: 'INS-ENV-006', id_remision: 'REM-101', Nombre: 'Etiquetas de Talla S/M/L', Cantidad: 300 },
-    { Id_insumo_enviado: 'INS-ENV-007', id_remision: 'REM-102', Nombre: 'Tela Lino Estampada', Cantidad: 50 }
-  ]);
 
-  const [modalEdit, setModalEdit] = useState<InsumoEnviado | null>(null);
+  const [insumos, setInsumos] = useState<InsumoEnviado[]>([]);
+  const [remisiones, setRemisiones] = useState<Remision[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(false);
+
+  // modalEdit = null: cerrado | 'nuevo': crear | InsumoEnviado: editar ese
+  const [modalEdit, setModalEdit] = useState<InsumoEnviado | 'nuevo' | null>(null);
   const [modalDelete, setModalDelete] = useState<InsumoEnviado | null>(null);
 
+  const [formRemision, setFormRemision] = useState('');
   const [formNombre, setFormNombre] = useState('');
   const [formCantidad, setFormCantidad] = useState<number | ''>('');
+  const [formUnidad, setFormUnidad] = useState('Unidad');
+
+  useEffect(() => {
+    const cargar = async () => {
+      try {
+        const [lista, rems] = await Promise.all([insumoEnviadoService.listar(), remisionService.listar()]);
+        setInsumos(lista);
+        setRemisiones(rems);
+      } catch (error) {
+        toast.error(`No se pudieron cargar los insumos enviados: ${mensajeError(error)}`);
+      } finally {
+        setCargando(false);
+      }
+    };
+    cargar();
+  }, []);
+
+  const remisionesAbiertas = remisiones.filter(r => ESTADOS_EDITABLES.includes(r.estado));
+  const esEditable = (item: InsumoEnviado) => ESTADOS_EDITABLES.includes(item.estado_remision ?? '');
+
+  const handleOpenNuevo = () => {
+    setModalEdit('nuevo');
+    setFormRemision(remisionesAbiertas[0]?.id_remision ?? '');
+    setFormNombre('');
+    setFormCantidad('');
+    setFormUnidad('Unidad');
+  };
 
   const handleOpenEdit = (item: InsumoEnviado) => {
     setModalEdit(item);
-    setFormNombre(item.Nombre);
-    setFormCantidad(item.Cantidad);
+    setFormRemision(item.id_remision);
+    setFormNombre(item.nombre);
+    setFormCantidad(item.cantidad);
+    setFormUnidad(item.unidad);
   };
 
-  const handleSaveEdit = () => {
-    if (!formNombre.trim() || formCantidad === '' || Number(formCantidad) <= 0) {
+  const handleSaveEdit = async () => {
+    if (!formNombre.trim() || formCantidad === '' || Number(formCantidad) <= 0 || (modalEdit === 'nuevo' && !formRemision)) {
       toast.error('Por favor completa todos los campos correctamente');
       return;
     }
+    if (modalEdit && modalEdit !== 'nuevo' && Number(formCantidad) < modalEdit.cantidad_usada) {
+      toast.error(`Ya se usaron ${modalEdit.cantidad_usada} ${modalEdit.unidad} en producción: la cantidad no puede ser menor.`);
+      return;
+    }
 
-    if (modalEdit) {
-      setInsumos(insumos.map(i => i.Id_insumo_enviado === modalEdit.Id_insumo_enviado ? {
-        ...i,
-        Nombre: formNombre,
-        Cantidad: Number(formCantidad)
-      } : i));
-      toast.success('Insumo enviado actualizado');
+    setGuardando(true);
+    try {
+      const datos = { nombre: formNombre.trim(), cantidad: Number(formCantidad), unidad: formUnidad };
+      if (modalEdit === 'nuevo') {
+        const nuevo = await insumoEnviadoService.crear({ ...datos, id_remision: formRemision });
+        setInsumos([nuevo, ...insumos]);
+        toast.success(`Insumo ${nuevo.id_insumo_enviado} registrado en la remisión ${nuevo.id_remision}`);
+      } else if (modalEdit) {
+        const actualizado = await insumoEnviadoService.actualizar(modalEdit.id_insumo_enviado, datos);
+        setInsumos(insumos.map(i => i.id_insumo_enviado === actualizado.id_insumo_enviado ? actualizado : i));
+        toast.success('Insumo enviado actualizado');
+      }
       setModalEdit(null);
+    } catch (error) {
+      toast.error(mensajeError(error));
+    } finally {
+      setGuardando(false);
     }
   };
 
-  const insumosFiltrados = insumos.filter(i =>
-    i.Nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    i.id_remision.toLowerCase().includes(busqueda.toLowerCase()) ||
-    i.Id_insumo_enviado.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  const confirmarEliminar = async () => {
+    if (!modalDelete) return;
+    try {
+      await insumoEnviadoService.eliminar(modalDelete.id_insumo_enviado);
+      setInsumos(insumos.filter(i => i.id_insumo_enviado !== modalDelete.id_insumo_enviado));
+      toast.success('Insumo eliminado correctamente');
+    } catch (error) {
+      toast.error(mensajeError(error));
+    } finally {
+      setModalDelete(null);
+    }
+  };
+
+  const insumosFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    return insumos.filter(i =>
+      i.nombre.toLowerCase().includes(q) ||
+      i.id_remision.toLowerCase().includes(q) ||
+      i.id_insumo_enviado.toLowerCase().includes(q) ||
+      (i.cliente ?? '').toLowerCase().includes(q)
+    );
+  }, [insumos, busqueda]);
 
   // Lógica para seccionar los datos por página
   const [currentPage, setCurrentPage] = useState(1);
+  useEffect(() => { setCurrentPage(1); }, [busqueda]);
   const itemsPerPage = 5;
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -213,17 +272,18 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
   const bg = dark ? "#121212" : "#F8F9FA";
   const inputBg = dark ? "#2A2A2A" : "#F3F3F5";
   const borderNormal = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const inputEstilo: React.CSSProperties = { width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' };
 
   return (
     <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif' }}>
       {/* HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
         <div>
           <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: GOLD, fontFamily: 'Montserrat, sans-serif' }}>
             Insumos Enviados por Cliente
           </h2>
           <p style={{ fontSize: 13, color: subtle, margin: 0, fontFamily: 'Montserrat, sans-serif' }}>
-            Gestión y control de múltiples materias primas enviadas bajo una misma remisión
+            Materias primas que manda el cliente con cada remisión. Lo disponible baja al asignarlas en producción.
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -231,7 +291,7 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
             <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
             <input
               type="text"
-              placeholder="Buscar insumo o remisión..."
+              placeholder="Buscar insumo, remisión o cliente..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               style={{
@@ -241,36 +301,52 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
               }}
             />
           </div>
+          <button onClick={handleOpenNuevo} disabled={remisionesAbiertas.length === 0} title={remisionesAbiertas.length === 0 ? 'No hay remisiones abiertas' : ''} style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212', fontWeight: 700, fontSize: 14, borderRadius: 10, padding: '8px 16px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: remisionesAbiertas.length === 0 ? 0.5 : 1 }}>
+            <Plus size={14} /> Registrar Insumo
+          </button>
         </div>
       </div>
 
       {/* TABLA */}
-      <TableShell headers={['ID INSUMO', 'ID REMISIÓN', 'NOMBRE DEL INSUMO', 'CANTIDAD', 'ACCIONES']} dark={dark}>
-        {insumosFiltrados.length === 0 ? (
+      <TableShell headers={['ID INSUMO', 'ID REMISIÓN', 'CLIENTE', 'NOMBRE DEL INSUMO', 'ENVIADO', 'DISPONIBLE', 'ESTADO REMISIÓN', 'ACCIONES']} dark={dark}>
+        {cargando ? (
           <tr>
-            <td colSpan={5} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
+            <td colSpan={8} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
+              <Loader2 size={16} style={{ verticalAlign: 'middle', marginRight: 8 }} />Cargando insumos...
+            </td>
+          </tr>
+        ) : insumosFiltrados.length === 0 ? (
+          <tr>
+            <td colSpan={8} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
               No se encontraron insumos enviados registrados.
             </td>
           </tr>
         ) : (
-          currentItems.map((item) => (
-            <tr key={item.Id_insumo_enviado} style={{ borderBottom: `1px solid ${borderNormal}` }}>
-              <td style={{ padding: '12px 14px' }}><IdBadge id={item.Id_insumo_enviado} /></td>
+          currentItems.map((item) => {
+            const editable = esEditable(item);
+            return (
+            <tr key={item.id_insumo_enviado} style={{ borderBottom: `1px solid ${borderNormal}` }}>
+              <td style={{ padding: '12px 14px' }}><IdBadge id={item.id_insumo_enviado} /></td>
               <td style={{ padding: '12px 14px' }}><IdBadge id={item.id_remision} /></td>
-              <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: fg }}>{item.Nombre}</td>
-              <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{item.Cantidad}</td>
+              <td style={{ padding: '12px 14px', fontSize: 12, color: subtle }}>{item.cliente ?? '—'}</td>
+              <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: fg }}>{item.nombre}</td>
+              <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{item.cantidad} <span style={{ fontFamily: 'Montserrat, sans-serif', fontWeight: 500, color: subtle, fontSize: 11 }}>{item.unidad}</span></td>
+              <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 13, fontWeight: 700, color: item.cantidad_disponible === 0 ? DANGER : SUCCESS }}>{item.cantidad_disponible}</td>
+              <td style={{ padding: '12px 14px', fontSize: 11, fontWeight: 700, color: subtle }}>{item.estado_remision ?? '—'}</td>
               <td style={{ padding: '12px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <ActionCircleBtn variant="gold" onClick={() => handleOpenEdit(item)} title="Editar">
+                  <ActionCircleBtn variant="gold" onClick={() => handleOpenEdit(item)} disabled={!editable}
+                    title={editable ? 'Editar' : 'La remisión ya está cerrada'}>
                     <Pencil size={14} />
                   </ActionCircleBtn>
-                  <ActionCircleBtn variant="danger" onClick={() => setModalDelete(item)} title="Eliminar">
+                  <ActionCircleBtn variant="danger" onClick={() => setModalDelete(item)} disabled={!editable || item.cantidad_usada > 0}
+                    title={!editable ? 'La remisión ya está cerrada' : item.cantidad_usada > 0 ? 'Ya se usó en producción' : 'Eliminar'}>
                     <Trash2 size={14} />
                   </ActionCircleBtn>
                 </div>
               </td>
             </tr>
-          ))
+          )})
         )}
       </TableShell>
 
@@ -279,9 +355,9 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
         <span style={{ fontSize: 12, color: subtle, fontFamily: 'Montserrat, sans-serif' }}>
           Mostrando de {insumosFiltrados.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, insumosFiltrados.length)} de {insumosFiltrados.length} registros
         </span>
-        
+
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button 
+          <button
             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
             style={{
@@ -294,12 +370,12 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
           >
             Anterior
           </button>
-          
+
           <span style={{ fontSize: 13, fontWeight: 700, color: fg, fontFamily: 'Montserrat, sans-serif', padding: '0 8px' }}>
             Página {currentPage} de {totalPages || 1}
           </span>
 
-          <button 
+          <button
             onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages || totalPages === 0}
             style={{
@@ -315,40 +391,47 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
         </div>
       </div>
 
-      {/* MODAL EDITAR */}
+      {/* MODAL CREAR / EDITAR */}
       {modalEdit && (
         <Modal
-          title="Editar Insumo Enviado"
+          title={modalEdit === 'nuevo' ? 'Registrar Insumo Enviado' : `Editar Insumo ${modalEdit.id_insumo_enviado}`}
           icon={<Package size={16} color={GOLD} />}
           onClose={() => setModalEdit(null)}
-          onSave={handleSaveEdit}
+          onSave={guardando ? undefined : handleSaveEdit}
           dark={dark}
           maxWidth="500px"
         >
-          <Field label="ID Remisión (Asociada)" dark={dark}>
-            <input
-              type="text"
-              disabled
-              value={modalEdit.id_remision}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: dark ? '#333' : '#EAEAEA', color: subtle, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box', cursor: 'not-allowed' }}
-            />
+          <Field label="Remisión asociada" dark={dark}>
+            {modalEdit === 'nuevo' ? (
+              <select value={formRemision} onChange={(e) => setFormRemision(e.target.value)} style={inputEstilo}>
+                {remisionesAbiertas.map(r => (
+                  <option key={r.id_remision} value={r.id_remision}>{r.id_remision} · {r.cliente} ({r.estado})</option>
+                ))}
+              </select>
+            ) : (
+              <input type="text" disabled value={`${modalEdit.id_remision} · ${modalEdit.cliente ?? ''}`}
+                style={{ ...inputEstilo, backgroundColor: dark ? '#333' : '#EAEAEA', color: subtle, cursor: 'not-allowed' }} />
+            )}
           </Field>
           <Field label="Nombre del Insumo" dark={dark}>
-            <input
-              type="text"
-              value={formNombre}
-              onChange={(e) => setFormNombre(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
-            />
+            <input type="text" value={formNombre} maxLength={100} onChange={(e) => setFormNombre(e.target.value)} placeholder="Ej. Botones blancos 4 huecos" style={inputEstilo} />
           </Field>
-          <Field label="Cantidad" dark={dark}>
-            <input
-              type="number"
-              value={formCantidad}
-              onChange={(e) => setFormCantidad(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
-            />
-          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="Cantidad enviada" dark={dark}>
+              <input type="number" min={1} value={formCantidad}
+                onChange={(e) => setFormCantidad(e.target.value === '' ? '' : Number(e.target.value))} style={inputEstilo} />
+            </Field>
+            <Field label="Unidad" dark={dark}>
+              <select value={formUnidad} onChange={(e) => setFormUnidad(e.target.value)} style={inputEstilo}>
+                {(UNIDADES.includes(formUnidad) ? UNIDADES : [formUnidad, ...UNIDADES]).map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </Field>
+          </div>
+          {modalEdit !== 'nuevo' && modalEdit.cantidad_usada > 0 && (
+            <div style={{ fontSize: 12, color: subtle }}>
+              Ya se usaron <b>{modalEdit.cantidad_usada} {modalEdit.unidad}</b> en producción; la cantidad no puede quedar por debajo de eso.
+            </div>
+          )}
         </Modal>
       )}
 
@@ -363,15 +446,11 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
               </div>
               <h3 style={{ fontSize: 18, fontWeight: 800, color: fg, margin: '0 0 12px' }}>¿Eliminar insumo?</h3>
               <div style={{ background: DANGER_BG, border: `1px solid ${DANGER}4D`, borderRadius: 10, padding: '10px 14px', fontSize: 12, color: DANGER_TXT, fontWeight: 600, marginBottom: 20 }}>
-                Esta acción eliminará el registro del insumo enviado permanentemente.
+                Se eliminará "{modalDelete.nombre}" de la remisión {modalDelete.id_remision}.
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <button onClick={() => setModalDelete(null)} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', background: dark ? '#2A2A2A' : '#EAEAEA', color: fg, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
-                <button onClick={() => {
-                  setInsumos(insumos.filter(i => i.Id_insumo_enviado !== modalDelete.Id_insumo_enviado));
-                  setModalDelete(null);
-                  toast.success('Insumo eliminado correctamente');
-                }} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: DANGER, color: '#FFFFFF', fontWeight: 700, cursor: 'pointer' }}>Sí, eliminar</button>
+                <button onClick={confirmarEliminar} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: DANGER, color: '#FFFFFF', fontWeight: 700, cursor: 'pointer' }}>Sí, eliminar</button>
               </div>
             </div>
           </div>

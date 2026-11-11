@@ -2,11 +2,6 @@ import { api } from "../../../shared/utils/api";
 
 export type EstadoCliente = "Activo" | "Inactivo";
 
-export interface CategoriaCliente {
-  id: string;
-  nombre: string;
-}
-
 export interface Cliente {
   nit: string; // identificación del cliente y su llave en la base de datos
   nombre: string;
@@ -14,8 +9,6 @@ export interface Cliente {
   correo: string;
   telefono: string | null;
   estado: EstadoCliente;
-  id_categoria: string;
-  nombre_categoria: string | null;
 }
 
 /** El rol "Cliente" lo asigna el backend automáticamente. */
@@ -25,7 +18,6 @@ export interface ClienteCrearDatos {
   direccion?: string | null;
   correo: string;
   telefono?: string | null;
-  id_categoria: string;
   estado?: EstadoCliente;
   contrasena: string; // obligatoria al crear, se guarda encriptada
 }
@@ -36,9 +28,6 @@ export type ClienteActualizarDatos = Partial<Omit<ClienteCrearDatos, "nit">>;
 export const clienteService = {
   listar: (estado?: EstadoCliente) =>
     api.get<Cliente[]>("/clientes", { params: { estado } }).then((r) => r.data),
-
-  listarCategorias: () =>
-    api.get<CategoriaCliente[]>("/clientes/categorias").then((r) => r.data),
 
   obtener: (nit: string) =>
     api.get<Cliente>(`/clientes/${nit}`).then((r) => r.data),
