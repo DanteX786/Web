@@ -6,11 +6,12 @@ import {
   Factory, Scissors, Wrench, Users, FileText,
   SlidersHorizontal, Key, Truck, ShoppingBag, ClipboardList,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  Sun, Moon, Bell, Search, LogOut, User, Send, UserCheck
+  Sun, Moon, Bell, Search, LogOut, User, Send, UserCheck, History
 } from "lucide-react";
 
 import logo_blanco from '../../../public/images/logo blanco.png';
 import logo_negro from '../../../public/images/logo negro.png';
+import { Footer } from './Footer';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -21,6 +22,8 @@ interface MainLayoutProps {
   onLogout?: () => void;
   userName?: string;
   userRole?: string;
+  /** Decide qué opciones del menú se muestran según los permisos del usuario. */
+  puedeVer?: (vista: string) => boolean;
 }
 
 export default function MainLayout({
@@ -31,7 +34,8 @@ export default function MainLayout({
   setDark,
   onLogout,
   userName = "Juan Valle",
-  userRole = "Administrador"
+  userRole = "Administrador",
+  puedeVer = () => true
 }: MainLayoutProps) {
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
@@ -96,6 +100,7 @@ export default function MainLayout({
   };
 
   const renderNavBtn = (id: string, label: string, Icon: any, isSub = false) => {
+    if (!puedeVer(id)) return null; // sin permiso: no aparece en el menú
     const isActive = currentView === id;
     return (
       <button
@@ -143,7 +148,9 @@ export default function MainLayout({
     );
   };
 
-  const renderAccordionGroup = (groupKey: string, groupLabel: string, ParentIcon: any, items: { id: string, label: string, icon: any }[]) => {
+  const renderAccordionGroup = (groupKey: string, groupLabel: string, ParentIcon: any, todos: { id: string, label: string, icon: any }[]) => {
+    const items = todos.filter(i => puedeVer(i.id)); // solo las opciones permitidas
+    if (items.length === 0) return null;              // grupo sin opciones: se oculta
     const isOpen = openGroups[groupKey];
     const isChildActive = items.some(i => i.id === currentView);
 
@@ -274,6 +281,7 @@ export default function MainLayout({
           {/* PROCESO DE VENTAS */}
           {renderAccordionGroup("ventas", "Ventas", ShoppingCart, [
             { id: "remisiones", label: "Remisiones", icon: FileText },
+            { id: "seguimientoRemision", label: "Seguimiento de Estados", icon: History },
             { id: "remisionEntrega", label: "Remisiones de Entrega", icon: Truck }
           ])}
 
@@ -461,7 +469,7 @@ export default function MainLayout({
                     </div>
                   </div>
 
-                  <div style={{ padding: 8 }}>
+                  {puedeVer('miPerfil') && <div style={{ padding: 8 }}>
                     <button
                       onClick={() => {
                         setCurrentView('miPerfil');
@@ -478,7 +486,7 @@ export default function MainLayout({
                     >
                       <User size={15} color={GOLD} /> Mi Perfil
                     </button>
-                  </div>
+                  </div>}
 
                   <div style={{ borderTop: `1px solid ${borderCol}`, padding: 8 }}>
                     <button
@@ -505,6 +513,9 @@ export default function MainLayout({
         <main className="custom-scrollbar" style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
           {children}
         </main>
+
+        {/* Pie de página del aplicativo */}
+        <Footer variant="app" dark={dark} />
 
       </div>
 
