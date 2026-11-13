@@ -68,6 +68,9 @@ export interface AsignacionForm {
   cantidad_insumo?: number | null;
 }
 
+// El responsable de cada cambio (crear / finalizar) sale del token de la sesión:
+// api.ts lo envía en cada petición y el backend lo usa para el seguimiento de la remisión.
+
 // ---------- Producción ----------
 export const produccionService = {
   listar: (estado?: EstadoProduccion) =>
@@ -83,7 +86,8 @@ export const produccionService = {
     api.get<LineaRemision[]>(`/producciones/${id}/lineas-remision`).then((r) => r.data),
 
   crear: (id_remision: string, fecha_entrega?: string | null) =>
-    api.post<Produccion>("/producciones", { id_remision, fecha_entrega }).then((r) => r.data),
+    api.post<Produccion>("/producciones", { id_remision, fecha_entrega: fecha_entrega || null })
+      .then((r) => r.data),
 
   finalizar: (id: string) =>
     api.patch<Produccion>(`/producciones/${id}/finalizar`).then((r) => r.data),
@@ -101,5 +105,6 @@ export const produccionService = {
   actualizarAsignacion: (id: string, datos: AsignacionForm) =>
     api.put<Asignacion>(`/asignaciones/${id}`, datos).then((r) => r.data),
 
-  eliminarAsignacion: (id: string) => api.delete(`/asignaciones/${id}`),
+  eliminarAsignacion: (id: string) =>
+    api.delete(`/asignaciones/${id}`).then(() => undefined),
 };

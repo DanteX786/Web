@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Toaster } from 'sonner';
 import MainLayout from './shared/components/MainLayout';
 import { AuthView } from './features/auth/components/AuthView';
 import LandingPage from './shared/components/LandingPage';
+import { EVENTO_SESION_CERRADA } from './shared/utils/api';
+import { EVENTO_USUARIO_ACTUALIZADO, cerrarSesionLocal, obtenerUsuario, vigilarSesion, vistaInicial, type Usuario } from './features/auth/services/authService';
+import { puedeVer } from './features/auth/utils/permisos';
 
 // MÓDULO PRODUCCIÓN
 import { ProduccionView } from './features/produccion/views/ProduccionView';
@@ -19,6 +22,7 @@ import OrdenesPedido from './features/ventas/views/producciones';
 import { ClientesView } from './features/usuarios/views/ClientesView';
 import { RegistroDiarioView } from './features/produccion/views/RegistroDiarioView';
 import { RemisionesView } from './features/ventas/views/RemisionesView';
+import { SeguimientoRemisionView } from './features/produccion/views/SeguimientoRemisionView';
 import { RemisionEntregaView } from './features/ventas/views/RemisionEntregaView';
 
 // MÓDULO CONFIGURACIÓN Y PARÁMETROS
@@ -33,9 +37,43 @@ import { DashboardPage } from './features/medicion/views/Dashboard';
 import MiPerfil from './features/usuarios/views/MiPerfil';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
-  const [currentView, setCurrentView] = useState<string>('landing');
+  // La sesión se recupera del navegador: al recargar la página no se pierde.
+  const [usuario, setUsuario] = useState<Usuario | null>(() => obtenerUsuario());
+  const isAuthenticated = usuario !== null;
+  const [currentView, setCurrentView] = useState<string>(() => {
+    const u = obtenerUsuario();
+    return u ? vistaInicial(u) : 'landing';
+  });
   const [dark, setDark] = useState<boolean>(false);
+  const [mensajeLogin, setMensajeLogin] = useState<string>('');
+
+  // Si la sesión termina (token vencido o contraseña cambiada en cualquier dispositivo),
+  // se sale del aplicativo de inmediato y se muestra el motivo en el inicio de sesión.
+  useEffect(() => {
+    const alCerrarse = (e: Event) => {
+      setUsuario(null);
+      setMensajeLogin((e as CustomEvent<string>).detail || '');
+      setCurrentView('login');
+    };
+    window.addEventListener(EVENTO_SESION_CERRADA, alCerrarse);
+    return () => window.removeEventListener(EVENTO_SESION_CERRADA, alCerrarse);
+  }, []);
+
+  // Mientras haya sesión, se verifica cada 15 s y al volver a la pestaña (PBI-21)
+  useEffect(() => (isAuthenticated ? vigilarSesion() : undefined), [isAuthenticated]);
+
+  // Si el administrador cambia los permisos del rol, se actualizan el usuario y el menú
+  useEffect(() => {
+    const alActualizar = (e: Event) => setUsuario((e as CustomEvent<Usuario>).detail);
+    window.addEventListener(EVENTO_USUARIO_ACTUALIZADO, alActualizar);
+    return () => window.removeEventListener(EVENTO_USUARIO_ACTUALIZADO, alActualizar);
+  }, []);
+
+  // Nadie puede quedarse en una vista para la que no tiene permiso
+  const vistaPermitida = !usuario || ['landing', 'login'].includes(currentView) || puedeVer(usuario, currentView);
+  useEffect(() => {
+    if (usuario && !vistaPermitida) setCurrentView(vistaInicial(usuario));
+  }, [usuario, vistaPermitida]);
 
   // 1. SI LA VISTA ES 'landing', MUESTRA LA LANDING PAGE
   if (currentView === 'landing') {
@@ -52,11 +90,14 @@ export default function App() {
     return (
       <>
         <Toaster position="top-right" richColors />
-        <AuthView 
-          onLoginSuccess={() => {
-            setIsAuthenticated(true);
-            setCurrentView('dashboard'); // Redirige al Dashboard tras iniciar sesión
-          }} 
+        <AuthView
+          key={mensajeLogin}
+          mensajeInicial={mensajeLogin}
+          onLoginSuccess={(u) => {
+            setUsuario(u);
+            setMensajeLogin('');
+            setCurrentView(vistaInicial(u));
+          }}
         />
       </>
     );
@@ -70,14 +111,18 @@ export default function App() {
       dark={dark}
       setDark={setDark}
       onLogout={() => {
-        setIsAuthenticated(false);
+        cerrarSesionLocal();
+        setUsuario(null);
+        setMensajeLogin('');
         setCurrentView('landing');
       }}
-      userName="Juan Camilo"
-      userRole="Administrador"
+      userName={usuario?.nombre ?? ''}
+      userRole={usuario?.rol ?? usuario?.tipo ?? ''}
+      puedeVer={(vista) => puedeVer(usuario, vista)}
     >
       <Toaster position="top-right" richColors />
 
+      {vistaPermitida && (<>
       {/* MÓDULO PRINCIPAL */}
       {currentView === 'dashboard' && <DashboardPage dark={dark} onNavegar={setCurrentView} />}
 
@@ -96,6 +141,7 @@ export default function App() {
       {currentView === 'clientes' && <ClientesView dark={dark} />}
       {currentView === 'registroDiario' && <RegistroDiarioView dark={dark} />}
       {currentView === 'remisiones' && <RemisionesView dark={dark} />}
+      {currentView === 'seguimientoRemision' && <SeguimientoRemisionView dark={dark} />}
       {currentView === 'remisionEntrega' && <RemisionEntregaView dark={dark} />}
 
       {/* MÓDULO CONFIGURACIÓN Y PARÁMETROS */}
@@ -107,11 +153,9 @@ export default function App() {
 
       {/* MI PERFIL */}
       {currentView === 'miPerfil' && (
-        <MiPerfil 
-          dark={dark} 
-          currentUser={{ nombre: "Juan Camilo", rol: "Administrador" }} 
-        />
+        <MiPerfil dark={dark} />
       )}
+      </>)}
     </MainLayout>
   );
 }

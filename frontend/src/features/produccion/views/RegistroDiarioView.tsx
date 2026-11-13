@@ -1,379 +1,240 @@
-import React, { useState } from 'react';
-import { 
-  ClipboardList, Pencil, Trash2, X, 
-  Search, AlertTriangle 
-} from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ClipboardList, Pencil, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
-const GOLD       = "#C9A227";
-const GOLD_LIGHT = "#E6B84A";
-const DANGER     = "#DC3545";
-const DANGER_BG  = "#FDECEA";
-const DANGER_TXT = "#721c24";
-
-export interface RegistroDiarioAdmin {
-  Id_registro_diario: string;
-  empleado: string;
-  pieza: string;
-  maquina: string;
-  Cantidad: number;
-  Fecha: string;
-}
-
-export const IdBadge: React.FC<{ id: string }> = ({ id }) => (
-  <span style={{
-    background: GOLD + "1F", color: GOLD,
-    fontFamily: "monospace", fontWeight: 700, fontSize: 11,
-    padding: "3px 8px", borderRadius: 6, display: "inline-flex"
-  }}>
-    {id}
-  </span>
-);
-
-export const ActionCircleBtn: React.FC<{
-  variant?: 'gold' | 'danger';
-  onClick: () => void;
-  children: React.ReactNode;
-  title?: string;
-}> = ({ variant = 'gold', onClick, children, title }) => {
-  const borderColor = variant === 'danger' ? DANGER : GOLD;
-  const iconColor = variant === 'danger' ? DANGER : GOLD;
-
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      style={{
-        width: 32, height: 32, borderRadius: '50%',
-        backgroundColor: 'transparent', border: `1.5px solid ${borderColor}`,
-        color: iconColor, cursor: 'pointer', display: 'inline-flex',
-        alignItems: 'center', justifyContent: 'center',
-        transition: 'transform 0.15s, background-color 0.15s'
-      }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = `${borderColor}15`; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent'; }}
-    >
-      {children}
-    </button>
-  );
-};
-
-export const TableShell: React.FC<{ headers: string[]; children: React.ReactNode; dark?: boolean }> = ({ headers, children, dark }) => (
-  <div style={{
-    borderRadius: 12, overflow: 'hidden',
-    border: `1px solid ${dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
-    background: dark ? '#1E1E1E' : '#FFFFFF'
-  }}>
-    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontFamily: 'Montserrat, sans-serif' }}>
-      <thead>
-        <tr style={{ background: dark ? '#252525' : '#FAFAFA', borderBottom: `2px solid ${GOLD}` }}>
-          {headers.map((h, i) => (
-            <th key={i} style={{
-              textTransform: 'uppercase', fontSize: 10, fontWeight: 700,
-              color: GOLD, letterSpacing: '0.05em', padding: '12px 14px'
-            }}>
-              {h}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>{children}</tbody>
-    </table>
-  </div>
-);
-
-export const Modal: React.FC<{
-  title: string;
-  icon?: React.ReactNode;
-  onClose: () => void;
-  onSave?: () => void;
-  dark?: boolean;
-  maxWidth?: string;
-  children: React.ReactNode;
-}> = ({ title, icon, onClose, onSave, dark, maxWidth = "500px", children }) => {
-  const cardBg = dark ? '#1E1E1E' : '#FFFFFF';
-  const fg = dark ? '#F8F9FA' : '#121212';
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24
-    }}>
-      <div style={{
-        width: '100%', maxWidth, borderRadius: 16, backgroundColor: cardBg,
-        border: `1px solid #C9A22740`, boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
-        maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden'
-      }}>
-        <div style={{ height: 3, background: `linear-gradient(to right, #C9A227, #E6B84A, transparent)` }} />
-        <div style={{
-          padding: '16px 24px', borderBottom: `1px solid #C9A22725`,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            {icon}
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: fg, fontFamily: 'Montserrat, sans-serif' }}>{title}</h3>
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6B6B' }}>
-            <X size={18} />
-          </button>
-        </div>
-        <div style={{ padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {children}
-        </div>
-        {onSave && (
-          <div style={{
-            padding: '16px 24px', borderTop: `1px solid #C9A22725`,
-            display: 'flex', justifyContent: 'flex-end', gap: 12,
-            backgroundColor: dark ? '#252525' : '#FAFAFA'
-          }}>
-            <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', background: dark ? '#2A2A2A' : '#EAEAEA', color: fg, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-              Cancelar
-            </button>
-            <button onClick={onSave} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: `linear-gradient(135deg, #C9A227, #E6B84A)`, color: '#121212', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
-              Guardar Cambios
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-export const Field: React.FC<{ label: string; dark?: boolean; children: React.ReactNode }> = ({ label, dark, children }) => (
-  <div style={{ width: '100%' }}>
-    <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: dark ? '#9A9A9A' : '#6B6B6B', display: 'block', marginBottom: 6 }}>
-      {label}
-    </label>
-    {children}
-  </div>
-);
+import { registroDiarioService, type RegistroDiario } from '../services/registroDiarioService';
+import { produccionService, type Produccion } from '../services/produccionService';
+import { empleadoService, type Empleado } from '../../usuarios/services/empleadoService';
+import { mensajeError } from '../../../shared/utils/api';
+import {
+  GOLD, INFO, SUCCESS, WARNING, FONT,
+  tema, estiloInput, fechaHora,
+  IdBadge, ActionCircleBtn, TableShell, FilaMensaje, Modal, Field, ModuleHeader, Kpi, Paginacion, ConfirmDialog,
+} from '../components/ui';
 
 interface RegistroDiarioViewProps {
   dark?: boolean;
 }
 
+const POR_PAGINA = 8;
+
+/**
+ * Historial de reportes diarios para el administrador (HU_57): quién hizo qué, cuánto y cuándo.
+ * Permite corregir la cantidad o eliminar un reporte mientras la producción esté En proceso.
+ */
 export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = false }) => {
+  const t = tema(dark);
+
+  const [registros, setRegistros] = useState<RegistroDiario[]>([]);
+  const [empleados, setEmpleados] = useState<Empleado[]>([]);
+  const [producciones, setProducciones] = useState<Produccion[]>([]);
+  const [cargando, setCargando] = useState(true);
+
+  // Filtros (empleado, producción y fechas van al backend; la búsqueda es local)
   const [busqueda, setBusqueda] = useState('');
-  
-  const [registros, setRegistros] = useState<RegistroDiarioAdmin[]>([
-    { Id_registro_diario: 'REG-001', empleado: 'Juan Pérez', pieza: 'Manga Larga', maquina: 'Plana Industrial', Cantidad: 45, Fecha: '2026-09-26' },
-    { Id_registro_diario: 'REG-002', empleado: 'María Rodríguez', pieza: 'Cuello Polo', maquina: 'Fileteadora', Cantidad: 60, Fecha: '2026-09-27' }
-  ]);
+  const [fEmpleado, setFEmpleado] = useState('');
+  const [fProduccion, setFProduccion] = useState('');
+  const [fDesde, setFDesde] = useState('');
+  const [fHasta, setFHasta] = useState('');
+  const [pagina, setPagina] = useState(1);
 
-  const [modalEdit, setModalEdit] = useState<RegistroDiarioAdmin | null>(null);
-  const [modalDelete, setModalDelete] = useState<RegistroDiarioAdmin | null>(null);
-
-  // Estados del formulario de edición
+  const [editar, setEditar] = useState<RegistroDiario | null>(null);
   const [formCantidad, setFormCantidad] = useState<number | ''>('');
-  const [formFecha, setFormFecha] = useState('');
+  const [eliminar, setEliminar] = useState<RegistroDiario | null>(null);
+  const [procesando, setProcesando] = useState(false);
 
-  const handleOpenEdit = (item: RegistroDiarioAdmin) => {
-    setModalEdit(item);
-    setFormCantidad(item.Cantidad);
-    setFormFecha(item.Fecha);
+  useEffect(() => {
+    Promise.all([empleadoService.listar(), produccionService.listar()])
+      .then(([emps, prods]) => { setEmpleados(emps); setProducciones(prods); })
+      .catch((e) => toast.error(mensajeError(e)));
+  }, []);
+
+  const cargar = useCallback(async () => {
+    setCargando(true);
+    try {
+      setRegistros(await registroDiarioService.listar({
+        id_empleado: fEmpleado || undefined,
+        id_produccion: fProduccion || undefined,
+        desde: fDesde || undefined,
+        hasta: fHasta || undefined,
+      }));
+    } catch (e) {
+      toast.error(mensajeError(e));
+    } finally {
+      setCargando(false);
+    }
+  }, [fEmpleado, fProduccion, fDesde, fHasta]);
+
+  useEffect(() => { cargar(); }, [cargar]);
+
+  const estadoProduccion = (id: string) => producciones.find((p) => p.id_produccion === id)?.estado;
+  const editable = (r: RegistroDiario) => estadoProduccion(r.id_produccion) !== 'Finalizada';
+
+  // ---------- Editar cantidad ----------
+  const abrirEditar = (r: RegistroDiario) => {
+    setEditar(r);
+    setFormCantidad(r.cantidad);
   };
 
-  const handleSaveEdit = () => {
-    if (formCantidad === '' || Number(formCantidad) <= 0) {
-      toast.error('Ingresa una cantidad válida mayor a 0');
-      return;
-    }
-
-    if (modalEdit) {
-      setRegistros(registros.map(r => r.Id_registro_diario === modalEdit.Id_registro_diario ? {
-        ...r,
-        Cantidad: Number(formCantidad),
-        Fecha: formFecha
-      } : r));
-      toast.success('Registro diario actualizado correctamente');
-      setModalEdit(null);
+  const guardarEdicion = async () => {
+    if (!editar) return;
+    const n = Number(formCantidad);
+    if (!Number.isInteger(n) || n <= 0) { toast.error('Ingresa una cantidad entera mayor a 0.'); return; }
+    if (n === editar.cantidad) { setEditar(null); return; }
+    setProcesando(true);
+    try {
+      await registroDiarioService.actualizar(editar.id_registro_diario, n);
+      toast.success('Registro diario actualizado.');
+      setEditar(null);
+      await cargar();
+    } catch (e) {
+      toast.error(mensajeError(e));
+    } finally {
+      setProcesando(false);
     }
   };
 
-  const registrosFiltrados = registros.filter(r =>
-    r.Id_registro_diario.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.empleado.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.pieza.toLowerCase().includes(busqueda.toLowerCase()) ||
-    r.Fecha.includes(busqueda)
-  );
+  // ---------- Eliminar ----------
+  const confirmarEliminar = async () => {
+    if (!eliminar) return;
+    setProcesando(true);
+    try {
+      await registroDiarioService.eliminar(eliminar.id_registro_diario);
+      toast.success('Registro diario eliminado.');
+      setEliminar(null);
+      await cargar();
+    } catch (e) {
+      toast.error(mensajeError(e));
+    } finally {
+      setProcesando(false);
+    }
+  };
 
-  // Lógica para seccionar los datos por página
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = registrosFiltrados.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(registrosFiltrados.length / itemsPerPage);
+  // ---------- Búsqueda, KPI y paginación ----------
+  const filtrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return registros;
+    return registros.filter((r) =>
+      [r.id_registro_diario, r.empleado, r.pieza, r.maquina, r.prenda, r.talla, r.id_remision, r.id_produccion]
+        .some((v) => v.toLowerCase().includes(q)));
+  }, [registros, busqueda]);
 
-  const fg = dark ? "#F8F9FA" : "#121212";
-  const subtle = dark ? "#9A9A9A" : "#6B6B6B";
-  const cardBg = dark ? "#1E1E1E" : "#FFFFFF";
-  const inputBg = dark ? "#2A2A2A" : "#F3F3F5";
-  const borderNormal = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  useEffect(() => { setPagina(1); }, [busqueda, fEmpleado, fProduccion, fDesde, fHasta]);
+
+  const totalUnidades = filtrados.reduce((s, r) => s + r.cantidad, 0);
+  const operarios = new Set(filtrados.map((r) => r.id_empleado)).size;
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+
+  const limpiarFiltros = () => { setFEmpleado(''); setFProduccion(''); setFDesde(''); setFHasta(''); setBusqueda(''); };
+  const hayFiltros = Boolean(fEmpleado || fProduccion || fDesde || fHasta || busqueda);
 
   return (
-    <div style={{ backgroundColor: dark ? "#121212" : "#F8F9FA", color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div>
-          <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: GOLD, fontFamily: 'Montserrat, sans-serif' }}>
-            Registro Diario de Producción — Administrador
-          </h2>
-          <p style={{ fontSize: 13, color: subtle, margin: 0, fontFamily: 'Montserrat, sans-serif' }}>
-            Control global, búsqueda, edición y auditoría de los registros de producción
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
-            <input
-              type="text"
-              placeholder="Buscar por empleado, pieza o fecha..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              style={{
-                padding: '8px 12px 8px 36px', borderRadius: 8,
-                border: `1px solid ${borderNormal}`, background: dark ? '#252525' : '#F8F8F8',
-                color: fg, fontSize: 13, outline: 'none', fontFamily: 'Montserrat, sans-serif'
-              }}
-            />
-          </div>
-        </div>
+    <div style={{ backgroundColor: t.bg, color: t.fg, minHeight: '100vh', padding: 24, fontFamily: FONT }}>
+      <ModuleHeader
+        title="Registro Diario"
+        subtitle="Historial de lo que reporta cada operario en su jornada"
+        search={busqueda}
+        onSearch={setBusqueda}
+        dark={dark}
+        extra={<ActionCircleBtn variant="blue" onClick={cargar} title="Actualizar"><RefreshCw size={14} /></ActionCircleBtn>}
+      />
+
+      {/* Filtros */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 20, alignItems: 'end' }}>
+        <Field label="Empleado" dark={dark}>
+          <select value={fEmpleado} onChange={(e) => setFEmpleado(e.target.value)} style={estiloInput(dark)}>
+            <option value="">Todos</option>
+            {empleados.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+          </select>
+        </Field>
+        <Field label="Producción" dark={dark}>
+          <select value={fProduccion} onChange={(e) => setFProduccion(e.target.value)} style={estiloInput(dark)}>
+            <option value="">Todas</option>
+            {producciones.map((p) => <option key={p.id_produccion} value={p.id_produccion}>{p.id_produccion} · {p.id_remision} ({p.estado})</option>)}
+          </select>
+        </Field>
+        <Field label="Desde" dark={dark}>
+          <input type="date" value={fDesde} max={fHasta || undefined} onChange={(e) => setFDesde(e.target.value)} style={estiloInput(dark)} />
+        </Field>
+        <Field label="Hasta" dark={dark}>
+          <input type="date" value={fHasta} min={fDesde || undefined} onChange={(e) => setFHasta(e.target.value)} style={estiloInput(dark)} />
+        </Field>
+        <button onClick={limpiarFiltros} disabled={!hayFiltros} style={{
+          padding: '9px 14px', borderRadius: 8, border: `1px solid ${GOLD}`, background: 'transparent', color: GOLD, fontWeight: 700,
+          fontSize: 12, cursor: hayFiltros ? 'pointer' : 'not-allowed', opacity: hayFiltros ? 1 : 0.5, fontFamily: FONT,
+        }}>
+          Limpiar filtros
+        </button>
       </div>
 
-      <TableShell headers={['ID REGISTRO', 'EMPLEADO', 'PIEZA', 'MÁQUINA', 'CANTIDAD', 'FECHA', 'ACCIONES']} dark={dark}>
-        {registrosFiltrados.length === 0 ? (
-          <tr>
-            <td colSpan={7} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
-              0 resultados encontrados.
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
+        <Kpi label="Reportes" valor={filtrados.length} color={INFO} dark={dark} />
+        <Kpi label="Unidades confeccionadas" valor={totalUnidades} color={SUCCESS} dark={dark} />
+        <Kpi label="Operarios que reportaron" valor={operarios} color={WARNING} dark={dark} />
+      </div>
+
+      <TableShell headers={['ID registro', 'Fecha y hora', 'Empleado', 'Remisión', 'Prenda / talla', 'Pieza', 'Máquina', 'Cantidad', 'Acciones']} dark={dark}>
+        {cargando || visibles.length === 0 ? (
+          <FilaMensaje colSpan={9} dark={dark} cargando={cargando}
+            texto={hayFiltros ? 'No hay reportes con esos filtros.' : 'Todavía no hay reportes diarios.'} />
+        ) : visibles.map((r) => (
+          <tr key={r.id_registro_diario} style={{ borderBottom: `1px solid ${t.border}` }}>
+            <td style={{ padding: '12px 14px' }}><IdBadge id={r.id_registro_diario} /></td>
+            <td style={{ padding: '12px 14px', fontSize: 12, fontFamily: 'monospace', color: t.subtle, whiteSpace: 'nowrap' }}>{fechaHora(r.fecha)}</td>
+            <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600 }}>{r.empleado}</td>
+            <td style={{ padding: '12px 14px' }}><IdBadge id={r.id_remision} /></td>
+            <td style={{ padding: '12px 14px', fontSize: 12 }}>{r.prenda} · {r.talla}</td>
+            <td style={{ padding: '12px 14px', fontSize: 12 }}>{r.pieza}</td>
+            <td style={{ padding: '12px 14px', fontSize: 12, color: t.subtle }}>{r.maquina}</td>
+            <td style={{ padding: '12px 14px', fontSize: 14, fontWeight: 800 }}>{r.cantidad}</td>
+            <td style={{ padding: '12px 14px' }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <ActionCircleBtn variant="gold" disabled={!editable(r)} onClick={() => abrirEditar(r)}
+                  title={editable(r) ? 'Corregir cantidad' : 'La producción está finalizada'}>
+                  <Pencil size={14} />
+                </ActionCircleBtn>
+                <ActionCircleBtn variant="danger" disabled={!editable(r)} onClick={() => setEliminar(r)}
+                  title={editable(r) ? 'Eliminar' : 'La producción está finalizada'}>
+                  <Trash2 size={14} />
+                </ActionCircleBtn>
+              </div>
             </td>
           </tr>
-        ) : (
-          currentItems.map((item) => (
-            <tr key={item.Id_registro_diario} style={{ borderBottom: `1px solid ${borderNormal}` }}>
-              <td style={{ padding: '12px 14px' }}><IdBadge id={item.Id_registro_diario} /></td>
-              <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600, color: fg }}>{item.empleado}</td>
-              <td style={{ padding: '12px 14px', fontSize: 13, color: fg }}>{item.pieza}</td>
-              <td style={{ padding: '12px 14px', fontSize: 12, color: subtle }}>{item.maquina}</td>
-              <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 13, fontWeight: 700 }}>{item.Cantidad}</td>
-              <td style={{ padding: '12px 14px', fontFamily: 'monospace', fontSize: 12, color: subtle }}>{item.Fecha}</td>
-              <td style={{ padding: '12px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <ActionCircleBtn variant="gold" onClick={() => handleOpenEdit(item)} title="Editar">
-                    <Pencil size={14} />
-                  </ActionCircleBtn>
-                  <ActionCircleBtn variant="danger" onClick={() => setModalDelete(item)} title="Eliminar">
-                    <Trash2 size={14} />
-                  </ActionCircleBtn>
-                </div>
-              </td>
-            </tr>
-          ))
-        )}
+        ))}
       </TableShell>
 
-      {/* CONTROLES DE PAGINACIÓN */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, padding: '0 8px' }}>
-        <span style={{ fontSize: 12, color: subtle, fontFamily: 'Montserrat, sans-serif' }}>
-          Mostrando de {registrosFiltrados.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, registrosFiltrados.length)} de {registrosFiltrados.length} registros
-        </span>
-        
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <button 
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            style={{
-              padding: '6px 12px', borderRadius: 6, border: `1px solid ${borderNormal}`,
-              background: currentPage === 1 ? (dark ? '#1a1a1a' : '#f5f5f5') : 'transparent',
-              color: currentPage === 1 ? subtle : fg,
-              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-              fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600
-            }}
-          >
-            Anterior
-          </button>
-          
-          <span style={{ fontSize: 13, fontWeight: 700, color: fg, fontFamily: 'Montserrat, sans-serif', padding: '0 8px' }}>
-            Página {currentPage} de {totalPages || 1}
-          </span>
+      <Paginacion pagina={pagina} total={totalPaginas} registros={filtrados.length} porPagina={POR_PAGINA} onCambiar={setPagina} dark={dark} />
 
-          <button 
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages || totalPages === 0}
-            style={{
-              padding: '6px 12px', borderRadius: 6, border: `1px solid ${borderNormal}`,
-              background: (currentPage === totalPages || totalPages === 0) ? (dark ? '#1a1a1a' : '#f5f5f5') : 'transparent',
-              color: (currentPage === totalPages || totalPages === 0) ? subtle : fg,
-              cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
-              fontFamily: 'Montserrat, sans-serif', fontSize: 13, fontWeight: 600
-            }}
-          >
-            Siguiente
-          </button>
-        </div>
-      </div>
-
-      {/* MODAL EDITAR */}
-      {modalEdit && (
-        <Modal
-          title="Editar Registro Diario"
-          icon={<ClipboardList size={16} color={GOLD} />}
-          onClose={() => setModalEdit(null)}
-          onSave={handleSaveEdit}
-          dark={dark}
-          maxWidth="450px"
-        >
-          <Field label="Empleado / Tarea" dark={dark}>
-            <input
-              type="text"
-              disabled
-              value={`${modalEdit.empleado} - ${modalEdit.pieza}`}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: dark ? '#333' : '#EAEAEA', color: subtle, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box', cursor: 'not-allowed' }}
-            />
+      {editar && (
+        <Modal title={`Corregir registro ${editar.id_registro_diario}`} icon={<ClipboardList size={16} color={GOLD} />}
+          onClose={() => setEditar(null)} onSave={guardarEdicion} saving={procesando} dark={dark} maxWidth="480px">
+          <div style={{ fontSize: 13, color: t.subtle, lineHeight: 1.6 }}>
+            <b style={{ color: t.fg }}>{editar.empleado}</b> — {editar.pieza} ({editar.prenda} {editar.talla}) en {editar.maquina}<br />
+            Reportado el {fechaHora(editar.fecha)}
+          </div>
+          <Field label="Cantidad confeccionada" dark={dark}>
+            <input type="number" min={1} value={formCantidad} autoFocus
+              onChange={(e) => setFormCantidad(e.target.value === '' ? '' : Math.floor(Number(e.target.value)))}
+              style={estiloInput(dark)} />
           </Field>
-          <Field label="Cantidad Producida" dark={dark}>
-            <input
-              type="number"
-              value={formCantidad}
-              onChange={(e) => setFormCantidad(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
-            />
-          </Field>
-          <Field label="Fecha" dark={dark}>
-            <input
-              type="date"
-              value={formFecha}
-              onChange={(e) => setFormFecha(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
-            />
-          </Field>
+          <div style={{ fontSize: 11, color: t.subtle }}>La fecha y la hora no se modifican. El total reportado no puede superar lo asignado.</div>
         </Modal>
       )}
 
-      {/* MODAL ELIMINAR */}
-      {modalDelete && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 16 }}>
-          <div style={{ width: '100%', maxWidth: 400, borderRadius: 16, backgroundColor: cardBg, boxShadow: '0 20px 60px rgba(0,0,0,0.3)', overflow: 'hidden', textAlign: 'center', paddingBottom: 24 }}>
-            <div style={{ height: 4, background: DANGER }} />
-            <div style={{ padding: '24px 24px 0' }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%', background: DANGER_BG, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                <AlertTriangle size={28} color={DANGER} />
-              </div>
-              <h3 style={{ fontSize: 18, fontWeight: 800, color: fg, margin: '0 0 12px' }}>¿Eliminar registro diario?</h3>
-              <div style={{ background: DANGER_BG, border: `1px solid ${DANGER}4D`, borderRadius: 10, padding: '10px 14px', fontSize: 12, color: DANGER_TXT, fontWeight: 600, marginBottom: 20 }}>
-                Esta acción retirará el registro de producción de la base de datos de forma irreversible.
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <button onClick={() => setModalDelete(null)} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', background: dark ? '#2A2A2A' : '#EAEAEA', color: fg, fontWeight: 600, cursor: 'pointer' }}>Cancelar</button>
-                <button onClick={() => {
-                  setRegistros(registros.filter(r => r.Id_registro_diario !== modalDelete.Id_registro_diario));
-                  setModalDelete(null);
-                  toast.success('Registro diario eliminado correctamente');
-                }} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: DANGER, color: '#FFFFFF', fontWeight: 700, cursor: 'pointer' }}>Sí, eliminar</button>
-              </div>
-            </div>
-          </div>
-        </div>
+      {eliminar && (
+        <ConfirmDialog
+          titulo="¿Eliminar registro diario?"
+          mensaje={`Se borrará el reporte de ${eliminar.empleado}: ${eliminar.cantidad} und de ${eliminar.pieza} (${fechaHora(eliminar.fecha)}). El avance de la producción bajará.`}
+          confirmarLabel="Sí, eliminar"
+          procesando={procesando}
+          onCancel={() => setEliminar(null)}
+          onConfirm={confirmarEliminar}
+          dark={dark}
+        />
       )}
     </div>
   );
 };
 
+export default RegistroDiarioView;

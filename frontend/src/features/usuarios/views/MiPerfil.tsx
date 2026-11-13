@@ -1,537 +1,373 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  User, Mail, Phone, MapPin, Hash, Shield,
-  Lock, Eye, EyeOff, Pencil, Save, X,
-  CheckCircle, AlertTriangle, Camera, Key,
-  Calendar, Clock
+  User, Mail, Phone, MapPin, Hash, Shield, Lock, Eye, EyeOff,
+  Pencil, Save, X, CheckCircle, Key, Info, Building2,
 } from "lucide-react";
-import { toast, Toaster } from "sonner";
+import { toast } from "sonner";
+
+import { authService, obtenerUsuario, type TipoTelefono, type Usuario } from "../../auth/services/authService";
+import {
+  REGLAS_CONTRASENA, soloDigitos, validarConfirmacion, validarContrasenaNueva,
+  validarCorreo, validarDireccion, validarNombre, validarTelefono,
+} from "../../auth/utils/validaciones";
+import { mensajeError } from "../../../shared/utils/api";
 
 // ==========================================
-// CONSTANTES GLOBALES
+// CONSTANTES
 // ==========================================
-const GOLD        = "#C9A227";
-const GOLD_LIGHT  = "#E6B84A";
-const DANGER      = "#DC3545";
-const DANGER_BG   = "#FDECEA";
-// const DANGER_TXT  = "#721c24"; // Declarado por si se requiere después
-const SUCCESS     = "#28A745";
-const SUCCESS_BG  = "#DCF7E6";
-// const SUCCESS_TXT = "#155724";
-const INFO        = "#4A90E2";
-// const INFO_BG     = "#E3F2FD";
-// const INFO_TXT    = "#0c3060";
+const GOLD = "#C9A227";
+const GOLD_LIGHT = "#E6B84A";
+const DANGER = "#DC3545";
+const SUCCESS = "#28A745";
+const SUCCESS_BG = "#DCF7E6";
+const INFO = "#4A90E2";
+const FONT = "Montserrat, sans-serif";
 
-// ==========================================
-// INTERFACES
-// ==========================================
-interface PerfilUsuario {
+type CampoPerfil = "nombre" | "correo" | "telefono" | "direccion";
+
+interface FormPerfil {
   nombre: string;
-  nit: string;
   correo: string;
+  tipo_telefono: TipoTelefono;
   telefono: string;
   direccion: string;
-  rol: string;
-  estado: "activo" | "inactivo";
-  fechaRegistro: string;
-  ultimoAcceso: string;
 }
 
-const perfilInicial: PerfilUsuario = {
-  nombre: "Administrador Principal",
-  nit: "10293847-1",
-  correo: "admin@eslabon.com",
-  telefono: "3001234567",
-  direccion: "Cra 45 #12-34, Medellín, Antioquia",
-  rol: "Administrador",
-  estado: "activo",
-  fechaRegistro: "2026-01-15",
-  ultimoAcceso: "2026-09-24",
-};
+const formDesde = (u: Usuario | null): FormPerfil => ({
+  nombre: u?.nombre ?? "",
+  correo: u?.correo ?? "",
+  tipo_telefono: u?.tipo_telefono ?? "Empresarial",
+  telefono: u?.telefono ?? "",
+  direccion: u?.direccion ?? "",
+});
 
-// ==========================================
-// COMPONENTE PRINCIPAL
-// ==========================================
-export default function MiPerfil({
-  dark,
-  currentUser,
-}: {
-  dark: boolean;
-  currentUser: { nombre: string; rol: string };
-}) {
-  // --- TEMA DINÁMICO ---
-  const fg           = dark ? "#F8F9FA" : "#121212";
-  const subtle       = dark ? "#9A9A9A" : "#6B6B6B";
-  const cardBg       = dark ? "#1E1E1E" : "#FFFFFF";
-  const bg           = dark ? "#121212" : "#F8F9FA";
-  const inputBg      = dark ? "#2A2A2A" : "#F3F3F5";
-  const surfaceBg    = dark ? "#252525" : "#F8F8F8";
+interface Tema { fg: string; subtle: string; cardBg: string; borderCol: string }
+
+/** Tarjeta con título. Va fuera de MiPerfil para que los inputs no pierdan el foco al escribir. */
+const Tarjeta = ({ t, titulo, icono, children, accion }: { t: Tema; titulo: string; icono: React.ReactNode; children: React.ReactNode; accion?: React.ReactNode }) => (
+  <div style={{ background: t.cardBg, borderRadius: 16, border: `1px solid ${GOLD}25`, padding: 24 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${t.borderCol}` }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ width: 4, height: 20, borderRadius: 999, background: GOLD }} />
+        {icono}
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: t.fg, margin: 0 }}>{titulo}</h3>
+      </div>
+      {accion}
+    </div>
+    {children}
+  </div>
+);
+
+/**
+ * Mi perfil.
+ * - Cliente: consulta y EDITA sus datos y cambia su contraseña.
+ * - Empleado: solo CONSULTA (sus datos y su contraseña los administra el taller).
+ * - Administrador: no tiene Mi perfil (gestiona las cuentas desde Usuarios).
+ */
+export default function MiPerfil({ dark }: { dark: boolean }) {
+  // --- Tema ---
+  const fg = dark ? "#F8F9FA" : "#121212";
+  const subtle = dark ? "#9A9A9A" : "#6B6B6B";
+  const cardBg = dark ? "#1E1E1E" : "#FFFFFF";
+  const bg = dark ? "#121212" : "#F8F9FA";
+  const inputBg = dark ? "#2A2A2A" : "#F3F3F5";
+  const surfaceBg = dark ? "#252525" : "#F8F8F8";
   const borderNormal = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
-  const borderCol    = dark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
+  const borderCol = dark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.07)";
+  const tema: Tema = { fg, subtle, cardBg, borderCol };
 
-  // --- ESTADOS ---
+  // --- Datos reales del usuario con sesión ---
+  const [usuario, setUsuario] = useState<Usuario | null>(() => obtenerUsuario());
+  const esCliente = usuario?.tipo === "Cliente";
+
+  useEffect(() => {
+    authService.me()
+      .then((u) => { setUsuario(u); localStorage.setItem("usuario", JSON.stringify(u)); })
+      .catch(() => undefined); // si la sesión cerró, el interceptor ya manda al login
+  }, []);
+
+  // --- Edición (solo cliente) ---
   const [editando, setEditando] = useState(false);
-  const [perfil, setPerfil] = useState<PerfilUsuario>(perfilInicial);
-  const [formPerfil, setFormPerfil] = useState<PerfilUsuario>(perfilInicial);
+  const [form, setForm] = useState<FormPerfil>(() => formDesde(obtenerUsuario()));
+  const [errores, setErrores] = useState<Partial<Record<CampoPerfil, string | null>>>({});
+  const [guardando, setGuardando] = useState(false);
 
-  const [showActual, setShowActual] = useState(false);
-  const [showNueva, setShowNueva] = useState(false);
-  const [showConfirm, setShowConfirmPass] = useState(false);
-  const [passForm, setPassForm] = useState({
-    actual: "",
-    nueva: "",
-    confirmar: "",
+  // --- Contraseña (solo cliente) ---
+  const [pass, setPass] = useState({ actual: "", nueva: "", confirmar: "" });
+  const [ver, setVer] = useState({ actual: false, nueva: false, confirmar: false });
+  const [cambiando, setCambiando] = useState(false);
+
+  const validar = (campo: CampoPerfil, f: FormPerfil = form): string | null => {
+    switch (campo) {
+      case "nombre": return validarNombre(f.nombre, usuario?.tipo_documento ?? "NIT");
+      case "correo": return validarCorreo(f.correo);
+      case "telefono": return validarTelefono(f.tipo_telefono, f.telefono);
+      case "direccion": return validarDireccion(f.direccion);
+    }
+  };
+
+  const empezarEdicion = () => {
+    setForm(formDesde(usuario));
+    setErrores({});
+    setEditando(true);
+  };
+
+  const guardarPerfil = async () => {
+    const campos: CampoPerfil[] = ["nombre", "correo", "telefono", "direccion"];
+    const errs = Object.fromEntries(campos.map((c) => [c, validar(c)])) as Partial<Record<CampoPerfil, string | null>>;
+    setErrores(errs);
+    if (Object.values(errs).some(Boolean)) { toast.error("Revisa los campos marcados en rojo."); return; }
+    setGuardando(true);
+    try {
+      const u = await authService.actualizarPerfil({
+        nombre: form.nombre.trim(),
+        correo: form.correo.trim().toLowerCase(),
+        tipo_telefono: form.tipo_telefono,
+        telefono: form.telefono,
+        direccion: form.direccion.trim() || null,
+      });
+      setUsuario(u);
+      setEditando(false);
+      toast.success("Perfil actualizado correctamente");
+    } catch (e) {
+      toast.error(mensajeError(e));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const cambiarContrasena = async () => {
+    if (!pass.actual) { toast.error("Ingresa tu contraseña actual"); return; }
+    const problema = validarContrasenaNueva(pass.nueva) ?? validarConfirmacion(pass.nueva, pass.confirmar);
+    if (problema) { toast.error(problema); return; }
+    if (pass.nueva === pass.actual) { toast.error("La nueva contraseña debe ser diferente a la actual"); return; }
+    setCambiando(true);
+    try {
+      // Si sale bien, se cierra la sesión en todos los dispositivos y App.tsx muestra el login
+      await authService.cambiarContrasena(pass.actual, pass.nueva, pass.confirmar);
+      toast.success("Contraseña actualizada. Inicia sesión con la nueva contraseña.");
+    } catch (e) {
+      toast.error(mensajeError(e));
+      setCambiando(false);
+    }
+  };
+
+  // ==========================================
+  // PIEZAS DE INTERFAZ
+  // ==========================================
+  const inputStyle = (error?: string | null, disabled = false): React.CSSProperties => ({
+    width: "100%", padding: "10px 12px 10px 36px", background: disabled ? surfaceBg : inputBg,
+    border: `1px solid ${error ? DANGER : borderNormal}`, borderRadius: 8, fontSize: 13, color: disabled ? subtle : fg,
+    outline: "none", boxSizing: "border-box", fontFamily: FONT,
   });
 
-  // --- MÉTODOS ---
-  function cancelarEdicion() {
-    setFormPerfil(perfil);
-    setEditando(false);
-  }
-
-  function guardarPerfil() {
-    if (!formPerfil.nombre.trim() || !formPerfil.correo.trim()) {
-      toast.error("Nombre y correo son obligatorios");
-      return;
-    }
-    setPerfil(formPerfil);
-    setEditando(false);
-    toast.success("Perfil actualizado correctamente");
-  }
-
-  function cambiarContrasena() {
-    if (!passForm.actual) {
-      toast.error("Ingresa tu contraseña actual");
-      return;
-    }
-    if (passForm.nueva.length < 6) {
-      toast.error("La nueva contraseña debe tener al menos 6 caracteres");
-      return;
-    }
-    if (passForm.nueva !== passForm.confirmar) {
-      toast.error("Las contraseñas no coinciden");
-      return;
-    }
-    setPassForm({ actual: "", nueva: "", confirmar: "" });
-    toast.success("Contraseña actualizada correctamente");
-  }
-
-  // --- DATA ---
-  const quickData = [
-    { icon: <Hash size={14} />, label: "NIT", value: perfil.nit },
-    { icon: <Calendar size={14} />, label: "Registro", value: perfil.fechaRegistro },
-    { icon: <Clock size={14} />, label: "Último acceso", value: perfil.ultimoAcceso },
-  ];
-
-  const requisitos = [
-    { texto: "Mínimo 6 caracteres", ok: passForm.nueva.length >= 6 },
-    { texto: "Al menos una letra mayúscula", ok: /[A-Z]/.test(passForm.nueva) },
-    { texto: "Al menos un número", ok: /[0-9]/.test(passForm.nueva) },
-  ];
-
-  const actividades = [
-    { accion: "Inicio de sesión", modulo: "Auth", hora: "Hoy, 08:32 am", icon: <CheckCircle size={13} />, color: SUCCESS },
-    { accion: "Registro de compra COM-004", modulo: "Compras", hora: "Hoy, 09:15 am", icon: <CheckCircle size={13} />, color: SUCCESS },
-    { accion: "Edición de insumo INS-002", modulo: "Insumos", hora: "Hoy, 10:04 am", icon: <Pencil size={13} />, color: INFO },
-    { accion: "Eliminación de detalle", modulo: "Producción", hora: "Ayer, 03:45 pm", icon: <AlertTriangle size={13} />, color: DANGER },
-    { accion: "Actualización de perfil", modulo: "Mi Perfil", hora: "Ayer, 05:12 pm", icon: <User size={13} />, color: GOLD },
-  ];
-
-  // --- RENDERIZADORES REUTILIZABLES ---
-  const renderReadField = (label: string, icon: React.ReactNode, valor: string) => (
-    <div style={{ background: surfaceBg, borderRadius: 8, padding: "10px 14px" }}>
-      <div style={{
-        fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-        letterSpacing: "0.05em", color: subtle, marginBottom: 4
-      }}>
-        {label}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {icon}
-        <span style={{ fontSize: 13, fontWeight: 600, color: fg }}>{valor}</span>
-      </div>
-    </div>
+  const Etiqueta = ({ texto }: { texto: string }) => (
+    <label style={{ display: "block", fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: subtle, marginBottom: 6 }}>
+      {texto}
+    </label>
   );
 
-  const renderEditField = (label: string, campo: keyof PerfilUsuario, type: string = "text") => (
+  const Dato = ({ icono, etiqueta, valor }: { icono: React.ReactNode; etiqueta: string; valor: string | null | undefined }) => (
     <div>
-      <label style={{
-        display: "block", fontSize: 11, fontWeight: 700,
-        textTransform: "uppercase", letterSpacing: "0.05em",
-        color: subtle, marginBottom: 6
-      }}>
-        {label}
-      </label>
-      <input
-        type={type}
-        value={formPerfil[campo]}
-        onChange={(e) => setFormPerfil({ ...formPerfil, [campo]: e.target.value })}
-        style={{
-          width: "100%", padding: "10px 12px", background: inputBg,
-          border: `1px solid ${borderNormal}`, borderRadius: 8,
-          fontSize: 14, color: fg, fontFamily: "Montserrat, sans-serif",
-          outline: "none", boxSizing: "border-box", transition: "border 0.2s ease"
-        }}
-        onFocus={(e) => (e.currentTarget.style.border = `1px solid ${GOLD}`)}
-        onBlur={(e) => (e.currentTarget.style.border = `1px solid ${borderNormal}`)}
-      />
+      <Etiqueta texto={etiqueta} />
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: surfaceBg, borderRadius: 8, border: `1px solid ${borderCol}`, minHeight: 20 }}>
+        <span style={{ color: GOLD, display: "flex" }}>{icono}</span>
+        <span style={{ fontSize: 13, color: valor ? fg : subtle, fontWeight: 600 }}>{valor || "—"}</span>
+      </div>
     </div>
   );
 
-  const renderPassField = (
-    label: string,
-    value: string,
-    onChange: (val: string) => void,
-    show: boolean,
-    toggleShow: () => void
-  ) => (
-    <div style={{ marginBottom: 12 }}>
-      <label style={{
-        display: "block", fontSize: 11, fontWeight: 700,
-        textTransform: "uppercase", letterSpacing: "0.05em",
-        color: subtle, marginBottom: 6
-      }}>
-        {label}
-      </label>
-      <div style={{ position: "relative" }}>
-        <div style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: subtle }}>
-          <Lock size={15} />
-        </div>
+  const Error = ({ msg }: { msg?: string | null }) =>
+    msg ? <div style={{ color: DANGER, fontSize: 11, fontWeight: 600, marginTop: 4 }}>{msg}</div> : null;
+
+  // Se usa como función {campoPass(...)} y no como <Componente/>, así el input conserva el foco
+  const campoPass = (campo: "actual" | "nueva" | "confirmar", etiqueta: string) => (
+    <div key={campo} style={{ marginBottom: 12 }}>
+      <Etiqueta texto={etiqueta} />
+      <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+        <Lock size={14} color={subtle} style={{ position: "absolute", left: 12 }} />
         <input
-          type={show ? "text" : "password"}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          style={{
-            width: "100%", padding: "10px 40px 10px 38px", background: inputBg,
-            border: `1px solid ${borderNormal}`, borderRadius: 8,
-            fontSize: 14, color: fg, fontFamily: "Montserrat, sans-serif",
-            outline: "none", boxSizing: "border-box", transition: "border 0.2s ease"
-          }}
-          onFocus={(e) => (e.currentTarget.style.border = `1px solid ${GOLD}`)}
-          onBlur={(e) => (e.currentTarget.style.border = `1px solid ${borderNormal}`)}
+          type={ver[campo] ? "text" : "password"} value={pass[campo]} maxLength={64} placeholder="••••••••"
+          autoComplete={campo === "actual" ? "current-password" : "new-password"}
+          onChange={(e) => setPass({ ...pass, [campo]: e.target.value })}
+          onPaste={campo === "confirmar" ? (e) => e.preventDefault() : undefined}
+          style={{ ...inputStyle(), paddingRight: 38 }}
         />
-        <button
-          onClick={toggleShow}
-          style={{
-            position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)",
-            background: "transparent", border: "none", color: subtle, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center", padding: 0
-          }}
-        >
-          {show ? <EyeOff size={15} /> : <Eye size={15} />}
+        <button type="button" onClick={() => setVer({ ...ver, [campo]: !ver[campo] })} title={ver[campo] ? "Ocultar" : "Ver contraseña"}
+          style={{ position: "absolute", right: 10, background: "none", border: "none", cursor: "pointer", display: "flex" }}>
+          {ver[campo] ? <EyeOff size={15} color={subtle} /> : <Eye size={15} color={subtle} />}
         </button>
       </div>
     </div>
   );
 
+  const botonOro: React.CSSProperties = {
+    padding: "8px 16px", border: "none", borderRadius: 8, background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`,
+    color: "#121212", fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: FONT,
+  };
+  const botonSuave: React.CSSProperties = {
+    padding: "8px 16px", border: `1px solid ${borderNormal}`, borderRadius: 8, background: inputBg,
+    color: fg, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, fontFamily: FONT,
+  };
+
+  if (!usuario) return null;
+
+  const etiquetaDocumento = esCliente ? (usuario.tipo_documento ?? "Documento") : "Identificación";
+
+  // ==========================================
+  // RENDER
+  // ==========================================
   return (
-    <div style={{
-      padding: 24, background: bg, minHeight: "100vh",
-      fontFamily: "Montserrat, sans-serif", boxSizing: "border-box"
-    }}>
-      <Toaster position="top-right" toastOptions={{
-        style: {
-          fontFamily: "Montserrat, sans-serif",
-          fontSize: 13, fontWeight: 600,
-          borderRadius: 12,
-          boxShadow: "0 4px 24px rgba(0,0,0,0.12)",
-        },
-        duration: 3200,
-      }} richColors />
+    <div style={{ backgroundColor: bg, minHeight: "100vh", padding: 24, fontFamily: FONT, color: fg }}>
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ fontSize: 24, fontWeight: 800, margin: "0 0 4px" }}>Mi Perfil</h2>
+        <p style={{ fontSize: 13, color: subtle, margin: 0 }}>
+          {esCliente ? "Consulta y actualiza los datos de tu cuenta." : "Consulta los datos de tu cuenta en el taller."}
+        </p>
+      </div>
 
-      {/* GRID PRINCIPAL */}
-      <div style={{
-        display: "grid", gap: 24,
-        gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-        alignItems: "start"
-      }}>
-        
-        {/* ========================================== */}
-        {/* COLUMNA IZQUIERDA: AVATAR Y DATOS RÁPIDOS    */}
-        {/* ========================================== */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          
-          <div style={{
-            background: cardBg, borderRadius: 16, border: `1px solid ${GOLD}25`,
-            padding: "28px 24px", textAlign: "center", position: "relative",
-            overflow: "hidden"
-          }}>
-            {/* Línea decorativa superior */}
-            <div style={{
-              position: "absolute", top: 0, left: 0, right: 0, height: 3,
-              background: `linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT}, transparent)`
-            }} />
-
-            {/* Avatar */}
-            <div style={{
-              width: 96, height: 96, borderRadius: "50%",
-              background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              margin: "0 auto 16px", position: "relative",
-              boxShadow: `0 0 0 4px ${cardBg}, 0 0 0 6px ${GOLD}40`,
-            }}>
-              <span style={{
-                fontSize: 36, fontWeight: 800, color: "#121212",
-                fontFamily: "Montserrat, sans-serif",
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 24, alignItems: "start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+          {/* ----- Encabezado ----- */}
+          <div style={{ background: cardBg, borderRadius: 16, border: `1px solid ${GOLD}25`, overflow: "hidden" }}>
+            <div style={{ height: 70, background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})` }} />
+            <div style={{ padding: "0 24px 24px", marginTop: -34 }}>
+              <div style={{
+                width: 68, height: 68, borderRadius: "50%", background: cardBg, border: `3px solid ${cardBg}`,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 26, fontWeight: 800, color: GOLD,
               }}>
-                {currentUser.nombre.charAt(0).toUpperCase()}
-              </span>
+                {usuario.nombre.charAt(0).toUpperCase()}
+              </div>
+              <div style={{ fontSize: 18, fontWeight: 800, marginTop: 12 }}>{usuario.nombre}</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, textTransform: "uppercase", color: GOLD, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                  <Shield size={12} /> {usuario.rol ?? usuario.tipo}
+                </span>
+                <span style={{ background: SUCCESS_BG, color: SUCCESS, fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999 }}>● Activo</span>
+              </div>
+            </div>
+          </div>
 
-              {/* Botón cámara */}
-              <button style={{
-                position: "absolute", bottom: 0, right: 0,
-                width: 28, height: 28, borderRadius: "50%",
-                background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`,
-                border: `2px solid ${cardBg}`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                cursor: "pointer", padding: 0
-              }}>
-                <Camera size={13} style={{ color: "#121212" }} />
+          {/* ----- Contraseña: solo cliente ----- */}
+          {esCliente ? (
+            <Tarjeta t={tema} titulo="Seguridad" icono={<Key size={15} color={GOLD} />}>
+              {campoPass("actual", "Contraseña actual")}
+              {campoPass("nueva", "Nueva contraseña")}
+              <div style={{ background: surfaceBg, borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                {REGLAS_CONTRASENA.map((r) => {
+                  const ok = r.cumple(pass.nueva);
+                  return (
+                    <div key={r.texto} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: ok ? SUCCESS : subtle }}>
+                      <CheckCircle size={12} style={{ color: ok ? SUCCESS : subtle, opacity: ok ? 1 : 0.4 }} /> {r.texto}
+                    </div>
+                  );
+                })}
+              </div>
+              {campoPass("confirmar", "Confirmar nueva contraseña")}
+              <div style={{ fontSize: 11, color: subtle, marginBottom: 12 }}>
+                Por seguridad, al cambiarla se cerrará tu sesión en todos los dispositivos.
+              </div>
+              <button onClick={cambiarContrasena} disabled={cambiando} style={{ ...botonOro, width: "100%", justifyContent: "center", padding: 12, opacity: cambiando ? 0.6 : 1 }}>
+                <Key size={14} /> {cambiando ? "Actualizando..." : "Actualizar contraseña"}
+              </button>
+            </Tarjeta>
+          ) : (
+            <div style={{ background: `${INFO}12`, border: `1px solid ${INFO}40`, borderRadius: 12, padding: 16, display: "flex", gap: 10 }}>
+              <Info size={18} color={INFO} style={{ flexShrink: 0 }} />
+              <div style={{ fontSize: 13, color: fg, lineHeight: 1.5 }}>
+                Tus datos y tu contraseña los administra el taller porque son información de la empresa.
+                Si algo está mal o necesitas una nueva contraseña, comunícate con el administrador.
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ----- Datos de la cuenta ----- */}
+        <Tarjeta
+          t={tema}
+          titulo="Datos de la cuenta"
+          icono={<User size={15} color={GOLD} />}
+          accion={esCliente && (editando ? (
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setEditando(false)} disabled={guardando} style={botonSuave}><X size={14} /> Cancelar</button>
+              <button onClick={guardarPerfil} disabled={guardando} style={{ ...botonOro, opacity: guardando ? 0.6 : 1 }}>
+                <Save size={14} /> {guardando ? "Guardando..." : "Guardar"}
               </button>
             </div>
-
-            {/* Nombre y rol */}
-            <h2 style={{ fontSize: 18, fontWeight: 800, color: fg, margin: "0 0 4px" }}>
-              {currentUser.nombre}
-            </h2>
-
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: 4,
-              background: GOLD + "1F", color: GOLD,
-              fontSize: 11, fontWeight: 700, textTransform: "uppercase",
-              letterSpacing: "0.05em", padding: "3px 10px", borderRadius: 999,
-            }}>
-              <Shield size={10} /> {currentUser.rol}
-            </span>
-
-            {/* Badge estado activo */}
-            <div style={{ marginTop: 8 }}>
-              <span style={{
-                display: "inline-flex", alignItems: "center", gap: 5,
-                background: SUCCESS_BG, color: SUCCESS,
-                fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999,
-              }}>
-                <span style={{ width: 7, height: 7, borderRadius: "50%", background: SUCCESS, display: "inline-block" }} />
-                En línea · Activo
-              </span>
-            </div>
-
-            {/* Separador */}
-            <div style={{ margin: "20px 0", height: 1, background: borderCol }} />
-
-            {/* Datos rápidos */}
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              {quickData.map((item, i) => (
-                <div key={i} style={{
-                  display: "flex", alignItems: "center", gap: 10,
-                  padding: "10px 0", borderBottom: i !== quickData.length - 1 ? `1px solid ${borderCol}` : "none"
-                }}>
-                  <div style={{
-                    width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-                    background: GOLD + "15", display: "flex", alignItems: "center", justifyContent: "center", color: GOLD,
-                  }}>
-                    {item.icon}
-                  </div>
-                  <div style={{ textAlign: "left" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: subtle }}>
-                      {item.label}
-                    </div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: fg, marginTop: 1, fontFamily: "monospace" }}>
-                      {item.value}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* ========================================== */}
-        {/* COLUMNA DERECHA: INFO, CONTRASEÑA, ACTIVIDAD */}
-        {/* ========================================== */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          
-          {/* ----- TARJETA INFORMACIÓN PERSONAL ----- */}
-          <div style={{
-            background: cardBg, borderRadius: 16, border: `1px solid ${GOLD}25`, padding: 24,
-          }}>
-            <div style={{
-              display: "flex", justifyContent: "space-between", alignItems: "center",
-              marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${borderCol}`
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <div style={{ width: 4, height: 20, borderRadius: 999, background: GOLD }} />
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: fg, margin: 0 }}>
-                  Información Personal
-                </h3>
+          ) : (
+            <button onClick={empezarEdicion} style={botonOro}><Pencil size={14} /> Editar</button>
+          ))}
+        >
+          {!editando ? (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <Dato icono={<Hash size={14} />} etiqueta={etiquetaDocumento} valor={usuario.documento} />
+              <Dato icono={<Shield size={14} />} etiqueta="Rol" valor={usuario.rol} />
+              <div style={{ gridColumn: "span 2" }}>
+                <Dato icono={esCliente && usuario.tipo_documento === "NIT" ? <Building2 size={14} /> : <User size={14} />}
+                  etiqueta={esCliente && usuario.tipo_documento === "NIT" ? "Razón social" : "Nombre completo"} valor={usuario.nombre} />
               </div>
-
-              {!editando ? (
-                <button onClick={() => setEditando(true)} style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  background: GOLD + "15", color: GOLD, border: "none", borderRadius: 8,
-                  padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer",
-                }}>
-                  <Pencil size={13} /> Editar
-                </button>
-              ) : (
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={cancelarEdicion} style={{
-                    background: "rgba(0,0,0,0.06)", color: subtle, border: "none", borderRadius: 8,
-                    padding: "6px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 4,
-                  }}>
-                    <X size={13} /> Cancelar
-                  </button>
-                  <button onClick={guardarPerfil} style={{
-                    background: `linear-gradient(135deg, #C9A227, ${GOLD}, ${GOLD_LIGHT})`,
-                    color: "#121212", border: "none", borderRadius: 8, padding: "6px 14px",
-                    fontSize: 12, fontWeight: 700, cursor: "pointer",
-                    display: "flex", alignItems: "center", gap: 4,
-                  }}>
-                    <Save size={13} /> Guardar
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div style={{
-              display: "grid", gap: 16,
-              gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))"
-            }}>
-              {!editando ? (
-                <>
-                  {renderReadField("Nombre Completo", <User size={13} color={subtle} />, perfil.nombre)}
-                  {renderReadField("NIT", <Hash size={13} color={subtle} />, perfil.nit)}
-                  {renderReadField("Correo Electrónico", <Mail size={13} color={subtle} />, perfil.correo)}
-                  {renderReadField("Teléfono", <Phone size={13} color={subtle} />, perfil.telefono)}
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    {renderReadField("Dirección", <MapPin size={13} color={subtle} />, perfil.direccion)}
-                  </div>
-                </>
-              ) : (
-                <>
-                  {renderEditField("Nombre Completo", "nombre")}
-                  {renderEditField("NIT", "nit")}
-                  {renderEditField("Correo Electrónico", "correo", "email")}
-                  {renderEditField("Teléfono", "telefono", "tel")}
-                  <div style={{ gridColumn: "1 / -1" }}>
-                    {renderEditField("Dirección", "direccion")}
-                  </div>
-                </>
-              )}
-              
-              {/* ROL Y ESTADO SIEMPRE SOLO LECTURA */}
-              <div style={{ background: surfaceBg, borderRadius: 8, padding: "10px 14px" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: subtle, marginBottom: 4 }}>
-                  Rol de Sistema
-                </div>
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 4, background: GOLD + "1F", color: GOLD,
-                  fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999, textTransform: "uppercase", letterSpacing: "0.05em"
-                }}>
-                  <Shield size={10} /> {perfil.rol}
-                </span>
+              <div style={{ gridColumn: "span 2" }}>
+                <Dato icono={<Mail size={14} />} etiqueta="Correo electrónico" valor={usuario.correo} />
               </div>
-              <div style={{ background: surfaceBg, borderRadius: 8, padding: "10px 14px" }}>
-                <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: subtle, marginBottom: 4 }}>
-                  Estado de Cuenta
+              <Dato icono={<Phone size={14} />} etiqueta={esCliente ? `Teléfono ${(usuario.tipo_telefono ?? "").toLowerCase()}` : "Teléfono"} valor={usuario.telefono} />
+              <Dato icono={<MapPin size={14} />} etiqueta="Dirección" valor={usuario.direccion} />
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <Dato icono={<Hash size={14} />} etiqueta={`${etiquetaDocumento} (no se puede cambiar)`} valor={usuario.documento} />
+              <div />
+              <div style={{ gridColumn: "span 2" }}>
+                <Etiqueta texto={usuario.tipo_documento === "NIT" ? "Razón social *" : "Nombre completo *"} />
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <User size={14} color={subtle} style={{ position: "absolute", left: 12 }} />
+                  <input value={form.nombre} maxLength={100} onChange={(e) => setForm({ ...form, nombre: e.target.value })}
+                    onBlur={() => setErrores((x) => ({ ...x, nombre: validar("nombre") }))} style={inputStyle(errores.nombre)} />
                 </div>
-                <span style={{
-                  display: "inline-flex", alignItems: "center", gap: 4, background: SUCCESS_BG, color: SUCCESS,
-                  fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 999
-                }}>
-                  ● Activo
-                </span>
+                <Error msg={errores.nombre} />
+              </div>
+              <div style={{ gridColumn: "span 2" }}>
+                <Etiqueta texto="Correo electrónico *" />
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <Mail size={14} color={subtle} style={{ position: "absolute", left: 12 }} />
+                  <input type="email" value={form.correo} maxLength={100} onChange={(e) => setForm({ ...form, correo: e.target.value })}
+                    onBlur={() => setErrores((x) => ({ ...x, correo: validar("correo") }))} style={inputStyle(errores.correo)} />
+                </div>
+                <Error msg={errores.correo} />
+                <div style={{ fontSize: 11, color: subtle, marginTop: 4 }}>Con este correo inicias sesión y recibes el código de recuperación.</div>
+              </div>
+              <div>
+                <Etiqueta texto="Tipo de teléfono *" />
+                <select value={form.tipo_telefono}
+                  onChange={(e) => { const f = { ...form, tipo_telefono: e.target.value as TipoTelefono }; setForm(f); setErrores((x) => ({ ...x, telefono: form.telefono ? validar("telefono", f) : null })); }}
+                  style={{ ...inputStyle(), paddingLeft: 12 }}>
+                  <option value="Empresarial">Empresarial</option>
+                  <option value="Personal">Personal</option>
+                </select>
+              </div>
+              <div>
+                <Etiqueta texto={`Teléfono ${form.tipo_telefono.toLowerCase()} *`} />
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <Phone size={14} color={subtle} style={{ position: "absolute", left: 12 }} />
+                  <input type="tel" inputMode="numeric" maxLength={10} value={form.telefono}
+                    placeholder={form.tipo_telefono === "Personal" ? "3001234567" : "6044440000"}
+                    onChange={(e) => setForm({ ...form, telefono: soloDigitos(e.target.value) })}
+                    onBlur={() => setErrores((x) => ({ ...x, telefono: validar("telefono") }))} style={inputStyle(errores.telefono)} />
+                </div>
+                <Error msg={errores.telefono} />
+              </div>
+              <div style={{ gridColumn: "span 2" }}>
+                <Etiqueta texto="Dirección (opcional)" />
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <MapPin size={14} color={subtle} style={{ position: "absolute", left: 12 }} />
+                  <input value={form.direccion} maxLength={150} onChange={(e) => setForm({ ...form, direccion: e.target.value })}
+                    onBlur={() => setErrores((x) => ({ ...x, direccion: validar("direccion") }))} style={inputStyle(errores.direccion)} />
+                </div>
+                <Error msg={errores.direccion} />
               </div>
             </div>
-          </div>
-
-          {/* ----- TARJETA CAMBIAR CONTRASEÑA ----- */}
-          <div style={{
-            background: cardBg, borderRadius: 16, border: `1px solid ${GOLD}25`, padding: 24,
-          }}>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              marginBottom: 20, paddingBottom: 16, borderBottom: `1px solid ${borderCol}`
-            }}>
-              <div style={{ width: 4, height: 20, borderRadius: 999, background: GOLD }} />
-              <Key size={15} color={GOLD} />
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: fg, margin: 0 }}>
-                Seguridad
-              </h3>
-            </div>
-
-            {renderPassField("Contraseña Actual", passForm.actual, (val) => setPassForm({ ...passForm, actual: val }), showActual, () => setShowActual(!showActual))}
-            {renderPassField("Nueva Contraseña", passForm.nueva, (val) => setPassForm({ ...passForm, nueva: val }), showNueva, () => setShowNueva(!showNueva))}
-            
-            {/* Panel de requisitos */}
-            <div style={{ background: surfaceBg, borderRadius: 8, padding: "10px 14px", marginTop: 8, marginBottom: 12, display: "flex", flexDirection: "column", gap: 6 }}>
-              {requisitos.map((req, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600 }}>
-                  {req.ok ? (
-                    <CheckCircle size={12} style={{ color: SUCCESS }} />
-                  ) : (
-                    <div style={{ width: 12, height: 12, borderRadius: "50%", border: `2px solid ${borderNormal}`, boxSizing: "border-box" }} />
-                  )}
-                  <span style={{ color: req.ok ? SUCCESS : subtle }}>{req.texto}</span>
-                </div>
-              ))}
-            </div>
-
-            {renderPassField("Confirmar Nueva Contraseña", passForm.confirmar, (val) => setPassForm({ ...passForm, confirmar: val }), showConfirm, () => setShowConfirmPass(!showConfirm))}
-
-            <button onClick={cambiarContrasena} style={{
-              width: "100%", marginTop: 16, padding: "12px", border: "none", borderRadius: 8,
-              background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: "#121212",
-              fontSize: 13, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center",
-              justifyContent: "center", gap: 8, fontFamily: "Montserrat, sans-serif"
-            }}>
-              <Key size={14} /> Actualizar Contraseña
-            </button>
-          </div>
-
-          {/* ----- TARJETA ACTIVIDAD RECIENTE ----- */}
-          <div style={{
-            background: cardBg, borderRadius: 16, border: `1px solid ${GOLD}25`, padding: 24,
-          }}>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 8,
-              marginBottom: 12, paddingBottom: 16, borderBottom: `1px solid ${borderCol}`
-            }}>
-              <div style={{ width: 4, height: 20, borderRadius: 999, background: GOLD }} />
-              <Clock size={15} color={INFO} />
-              <h3 style={{ fontSize: 15, fontWeight: 700, color: fg, margin: 0 }}>
-                Actividad Reciente
-              </h3>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column" }}>
-              {actividades.map((item, i) => (
-                <div key={i} style={{
-                  display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
-                  borderBottom: i !== actividades.length - 1 ? `1px solid ${borderCol}` : "none"
-                }}>
-                  <div style={{
-                    width: 32, height: 32, borderRadius: "50%", flexShrink: 0,
-                    background: item.color + "15", display: "flex", alignItems: "center",
-                    justifyContent: "center", color: item.color
-                  }}>
-                    {item.icon}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: fg }}>{item.accion}</div>
-                    <div style={{ fontSize: 11, color: subtle, marginTop: 2 }}>{item.modulo}</div>
-                  </div>
-                  <span style={{ fontSize: 11, color: subtle, whiteSpace: "nowrap" }}>
-                    {item.hora}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-        </div>
+          )}
+        </Tarjeta>
       </div>
     </div>
   );

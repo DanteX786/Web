@@ -8,37 +8,15 @@ import {
   CardContent,
   CardMedia,
   Typography,
-  TextField,
   Box,
-  Switch,
   IconButton,
-  Select,
-  MenuItem,
-  Alert,
-  Snackbar,
   Tooltip,
   GlobalStyles
 } from '@mui/material';
+import { FileText, Factory, ClipboardCheck, Truck, Target, Eye, Award, Clock3, Users, MapPin } from 'lucide-react';
+import { Footer } from './Footer';
 
 // --- ICONOS SVG PERSONALIZADOS ---
-const DeleteOutlineIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z" />
-  </svg>
-);
-
-const AddIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-  </svg>
-);
-
-const CloudUploadIcon = ({ isDark }: { isDark?: boolean }) => (
-  <svg width="36" height="36" viewBox="0 0 24 24" fill={isDark ? "#E5A823" : "#D4A017"}>
-    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z" />
-  </svg>
-);
-
 const MoonIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
@@ -63,33 +41,8 @@ interface LandingPageProps {
   onNavigateToLogin?: () => void;
 }
 
-interface PieceRow {
-  id: number;
-  pieza: string;
-  talla: string;
-  cantidad: number | string;
-}
-
 export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
   const [darkMode, setDarkMode] = useState<boolean>(false);
-  const [insumosEnviados, setInsumosEnviados] = useState<boolean>(false);
-  const [fichaTecnicaFile, setFichaTecnicaFile] = useState<File | null>(null);
-
-  const [nit, setNit] = useState<string>('');
-  const [costoPrenda, setCostoPrenda] = useState<string>('');
-  const [fechaCreacion, setFechaCreacion] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [fechaEntrega, setFechaEntrega] = useState<string>('');
-
-  const [pieces, setPieces] = useState<PieceRow[]>([
-    { id: 1, pieza: 'Mangas', talla: 'S', cantidad: 10 }
-  ]);
-
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'error' | 'success' }>({
-    open: false,
-    message: '',
-    severity: 'error'
-  });
-
   const themeColors = {
     bgPage: darkMode ? '#121212' : '#F8F9FA',
     bgCard: darkMode ? '#1E1E1E' : '#FFFFFF',
@@ -116,78 +69,6 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
     setDarkMode(!darkMode);
   };
 
-  const handleAddPiece = () => {
-    setPieces([
-      ...pieces,
-      { id: Date.now(), pieza: '', talla: 'M', cantidad: 1 }
-    ]);
-  };
-
-  const handleRemovePiece = (id: number) => {
-    if (pieces.length === 1) {
-      setSnackbar({
-        open: true,
-        message: 'Debe existir al menos una pieza en el detalle.',
-        severity: 'error'
-      });
-      return;
-    }
-    setPieces(pieces.filter((p) => p.id !== id));
-  };
-
-  const handlePieceChange = (id: number, field: keyof PieceRow, value: any) => {
-    setPieces(
-      pieces.map((p) => (p.id === id ? { ...p, [field]: value } : p))
-    );
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      setFichaTecnicaFile(event.target.files[0]);
-    }
-  };
-
-  const totalPrendas = pieces.reduce(
-    (acc, item) => acc + (Number(item.cantidad) || 0),
-    0
-  );
-
-  const handleSaveRemision = () => {
-    if (!nit.trim()) {
-      setSnackbar({ open: true, message: 'Por favor, ingrese el NIT del Cliente.', severity: 'error' });
-      return;
-    }
-    if (!costoPrenda || Number(costoPrenda) <= 0) {
-      setSnackbar({ open: true, message: 'Ingrese un costo por prenda válido.', severity: 'error' });
-      return;
-    }
-    if (!fechaEntrega) {
-      setSnackbar({ open: true, message: 'Seleccione la fecha de entrega esperada.', severity: 'error' });
-      return;
-    }
-    if (!fichaTecnicaFile) {
-      setSnackbar({ open: true, message: 'Es obligatorio adjuntar la Ficha Técnica.', severity: 'error' });
-      return;
-    }
-
-    for (const piece of pieces) {
-      if (!piece.pieza.trim()) {
-        setSnackbar({ open: true, message: 'Todas las filas de piezas deben tener un nombre.', severity: 'error' });
-        return;
-      }
-      if (Number(piece.cantidad) <= 0) {
-        setSnackbar({ open: true, message: 'La cantidad de cada pieza debe ser mayor a 0.', severity: 'error' });
-        return;
-      }
-    }
-
-    setSnackbar({
-      open: true,
-      message: '¡Remisión creada y guardada con éxito!',
-      severity: 'success'
-    });
-  };
-
   const uniformGallery = [
     {
       title: 'Uniformes Industriales y Operativos',
@@ -204,6 +85,37 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
       desc: 'Prendas antifluido con acabado ergonómico para garantizar el máximo confort y protección biomédica.',
       image: 'https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?auto=format&fit=crop&w=800&q=80'
     }
+  ];
+
+  const pasos = [
+    { Icono: FileText, titulo: 'Envías tu remisión', texto: 'Desde tu cuenta registras las prendas, tallas, cantidades, la ficha técnica y los insumos que nos envías.' },
+    { Icono: ClipboardCheck, titulo: 'La revisamos y aprobamos', texto: 'Validamos la información y te confirmamos la aprobación para iniciar la producción.' },
+    { Icono: Factory, titulo: 'Confeccionamos', texto: 'Asignamos cada pieza a nuestros operarios y registramos el avance diario de la producción.' },
+    { Icono: Truck, titulo: 'Entregamos', texto: 'Entregamos tus prendas con la remisión de entrega firmada por ambas partes.' },
+  ];
+
+  const pilares = [
+    { Icono: Target, titulo: 'Misión', texto: 'Confeccionar uniformes y dotaciones de alta calidad, cumpliendo los tiempos pactados y siguiendo con precisión las especificaciones de cada cliente.' },
+    { Icono: Eye, titulo: 'Visión', texto: 'Ser en 2030 un taller de confección reconocido en Antioquia por su cumplimiento, su calidad y el uso de tecnología en la gestión de sus procesos.' },
+    { Icono: Award, titulo: 'Valores', texto: 'Calidad en cada costura, puntualidad, compromiso con el cliente, trabajo en equipo y responsabilidad.' },
+  ];
+
+  const cifras = [
+    { Icono: Clock3, valor: '+2 años', texto: 'de experiencia' },
+    { Icono: Users, valor: 'Empresas', texto: 'y marcas aliadas' },
+    { Icono: MapPin, valor: 'Medellín', texto: 'Antioquia' },
+  ];
+
+  const navegar = (destino: string) => {
+    if (destino === 'login') { handleLoginRedirect(); return; }
+    if (destino === 'inicio') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    document.getElementById(destino)?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const enlacesMenu = [
+    { id: 'catalogo', texto: 'Servicios' },
+    { id: 'proceso', texto: 'Cómo trabajamos' },
+    { id: 'nosotros', texto: 'Sobre nosotros' },
   ];
 
   return (
@@ -253,7 +165,9 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
           <Toolbar disableGutters sx={{ justifyContent: 'space-between' }}>
             <Typography
               variant="h5"
+              onClick={() => navegar('inicio')}
               sx={{
+                cursor: 'pointer',
                 fontWeight: 800,
                 color: themeColors.textPrimary,
                 letterSpacing: '-0.5px',
@@ -262,6 +176,14 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
             >
               ESLABÓN
             </Typography>
+
+            <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 3 }}>
+              {enlacesMenu.map((e) => (
+                <Button key={e.id} onClick={() => navegar(e.id)} sx={{ color: themeColors.textSecondary, fontWeight: 600, textTransform: 'none', fontSize: '0.95rem', '&:hover': { color: themeColors.primary, backgroundColor: 'transparent' } }}>
+                  {e.texto}
+                </Button>
+              ))}
+            </Box>
 
             <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 } }}>
               <Tooltip title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}>
@@ -369,7 +291,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
               mx: 'auto'
             }}
           >
-            Gestiona la producción de tu taller, solicita cotizaciones y registra tus remisiones de prendas de forma ágil, organizada y segura.
+            Envía tus remisiones en línea, sigue el estado de tu pedido y recibe tus prendas a tiempo, con la calidad que tu empresa necesita.
           </Typography>
 
           {/* BOTONES CENTRADOS Y ADAPTABLES */}
@@ -433,7 +355,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
       </Box>
 
       {/* 3. GALERÍA / PORTAFOLIO DE UNIFORMES */}
-      <Container id="catalogo" maxWidth="lg" sx={{ py: { xs: 6, sm: 8 }, px: { xs: 2.5, sm: 3 } }}>
+      <Container id="catalogo" maxWidth="lg" sx={{ scrollMarginTop: '80px', py: { xs: 6, sm: 8 }, px: { xs: 2.5, sm: 3 } }}>
         <Box sx={{ mb: { xs: 4, sm: 5 }, textAlign: 'center' }}>
           <Typography
             variant="caption"
@@ -507,492 +429,83 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
         </Box>
       </Container>
 
-      {/* 4. FORMULARIO DE REMISIÓN / CREACIÓN DE PEDIDO */}
-      <Box sx={{ backgroundColor: themeColors.bgPage, py: { xs: 6, sm: 8 }, borderTop: `1px solid ${themeColors.border}`, width: '100%' }}>
+      {/* 4. CÓMO TRABAJAMOS */}
+      <Box id="proceso" sx={{ scrollMarginTop: '80px', backgroundColor: themeColors.bgCard, borderTop: `1px solid ${themeColors.border}`, borderBottom: `1px solid ${themeColors.border}`, py: { xs: 6, sm: 8 } }}>
         <Container maxWidth="lg" sx={{ px: { xs: 2.5, sm: 3 } }}>
-          <Box sx={{ mb: { xs: 3.5, sm: 4 } }}>
-            <Typography
-              variant="caption"
-              sx={{
-                fontWeight: 700,
-                color: themeColors.primary,
-                textTransform: 'uppercase',
-                letterSpacing: '1px'
-              }}
-            >
-              Módulo de Solicitud
+          <Box sx={{ textAlign: 'center', mb: { xs: 4, sm: 5 } }}>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: themeColors.primary, textTransform: 'uppercase', letterSpacing: '1px' }}>
+              Cómo trabajamos
             </Typography>
-            <Typography
-              variant="h4"
-              sx={{
-                fontWeight: 800,
-                color: themeColors.textPrimary,
-                mt: 0.5,
-                fontSize: { xs: '1.4rem', sm: '1.8rem', md: '2.1rem' }
-              }}
-            >
-              Crear Nueva Remisión de Producción
+            <Typography variant="h4" sx={{ fontWeight: 800, color: themeColors.textPrimary, mt: 0.5, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+              De tu remisión a la entrega
             </Typography>
           </Box>
-
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
-              gap: { xs: 3, sm: 3.5 }
-            }}
-          >
-            {/* COLUMNA IZQUIERDA: INFORMACIÓN GENERAL */}
-            <Box
-              sx={{
-                backgroundColor: themeColors.bgCard,
-                borderRadius: '16px',
-                p: { xs: 2.5, sm: 3.5 },
-                border: `1px solid ${themeColors.border}`,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 2.5
-              }}
-            >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography sx={{ fontSize: '1.2rem', color: themeColors.primary }}>📋</Typography>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: themeColors.textPrimary, fontSize: '1.1rem' }}>
-                  Información General
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, gap: 3 }}>
+            {pasos.map((paso, i) => (
+              <Box key={paso.titulo} sx={{ position: 'relative', p: 3, borderRadius: '16px', border: `1px solid ${themeColors.border}`, backgroundColor: themeColors.bgPage }}>
+                <Typography sx={{ position: 'absolute', top: 12, right: 16, fontSize: '2.2rem', fontWeight: 800, color: themeColors.primary, opacity: 0.18 }}>
+                  {String(i + 1).padStart(2, '0')}
                 </Typography>
-              </Box>
-
-              <Box
-                sx={{
-                  display: 'grid',
-                  gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
-                  gap: 2
-                }}
-              >
-                <Box>
-                  <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 600, color: themeColors.textSecondary, textTransform: 'uppercase', mb: 0.8, display: 'block' }}
-                  >
-                    NIT CLIENTE <span style={{ color: '#EF4444' }}>*</span>
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    placeholder="900123456"
-                    variant="outlined"
-                    size="small"
-                    value={nit}
-                    onChange={(e) => setNit(e.target.value)}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        backgroundColor: themeColors.bgInput,
-                        borderRadius: '8px',
-                        color: themeColors.textPrimary,
-                        '& fieldset': { borderColor: themeColors.border }
-                      }
-                    }}
-                  />
+                <Box sx={{ width: 48, height: 48, borderRadius: '12px', backgroundColor: themeColors.badgeBg, color: themeColors.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
+                  <paso.Icono size={22} />
                 </Box>
-
-                <Box>
-                  <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 600, color: themeColors.textSecondary, textTransform: 'uppercase', mb: 0.8, display: 'block' }}
-                  >
-                    COSTO POR PRENDA ($) <span style={{ color: '#EF4444' }}>*</span>
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    placeholder="Ej. 13400"
-                    variant="outlined"
-                    size="small"
-                    value={costoPrenda}
-                    onChange={(e) => setCostoPrenda(e.target.value)}
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        backgroundColor: themeColors.bgInput,
-                        borderRadius: '8px',
-                        color: themeColors.textPrimary,
-                        '& fieldset': { borderColor: themeColors.border }
-                      }
-                    }}
-                  />
-                </Box>
-
-                <Box>
-                  <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 600, color: themeColors.textSecondary, textTransform: 'uppercase', mb: 0.8, display: 'block' }}
-                  >
-                    FECHA DE CREACIÓN
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    type="date"
-                    value={fechaCreacion}
-                    onChange={(e) => setFechaCreacion(e.target.value)}
-                    variant="outlined"
-                    size="small"
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        backgroundColor: themeColors.bgInput,
-                        borderRadius: '8px',
-                        color: themeColors.textPrimary,
-                        '& fieldset': { borderColor: themeColors.border }
-                      }
-                    }}
-                  />
-                </Box>
-
-                <Box>
-                  <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 600, color: themeColors.textSecondary, textTransform: 'uppercase', mb: 0.8, display: 'block' }}
-                  >
-                    FECHA DE ENTREGA ESPERADA <span style={{ color: '#EF4444' }}>*</span>
-                  </Typography>
-                  <TextField
-                    fullWidth
-                    type="date"
-                    value={fechaEntrega}
-                    onChange={(e) => setFechaEntrega(e.target.value)}
-                    variant="outlined"
-                    size="small"
-                    sx={{
-                      '& .MuiOutlinedInput-root': {
-                        backgroundColor: themeColors.bgInput,
-                        borderRadius: '8px',
-                        color: themeColors.textPrimary,
-                        '& fieldset': { borderColor: themeColors.border }
-                      }
-                    }}
-                  />
-                </Box>
+                <Typography sx={{ fontWeight: 700, color: themeColors.textPrimary, mb: 1 }}>{paso.titulo}</Typography>
+                <Typography variant="body2" sx={{ color: themeColors.textSecondary, lineHeight: 1.6 }}>{paso.texto}</Typography>
               </Box>
-
-              {/* FICHA TÉCNICA UPLOAD */}
-              <Box>
-                <Typography
-                  variant="caption"
-                  sx={{ fontWeight: 600, color: themeColors.textSecondary, textTransform: 'uppercase', mb: 0.8, display: 'block' }}
-                >
-                  FICHA TÉCNICA <span style={{ color: '#EF4444' }}>*</span>
-                </Typography>
-                <Button
-                  component="label"
-                  fullWidth
-                  sx={{
-                    border: `2px dashed ${themeColors.uploadBorder}`,
-                    borderRadius: '12px',
-                    p: 2.5,
-                    textAlign: 'center',
-                    backgroundColor: themeColors.uploadBg,
-                    cursor: 'pointer',
-                    textTransform: 'none',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    transition: 'background-color 0.2s ease',
-                    '&:hover': {
-                      backgroundColor: themeColors.badgeBg
-                    }
-                  }}
-                >
-                  <input
-                    type="file"
-                    hidden
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={handleFileUpload}
-                  />
-                  <CloudUploadIcon isDark={darkMode} />
-                  <Typography sx={{ fontWeight: 600, color: themeColors.textPrimary, fontSize: '0.88rem', mt: 1, wordBreak: 'break-word' }}>
-                    {fichaTecnicaFile ? `Archivo: ${fichaTecnicaFile.name}` : 'Clic para subir Ficha Técnica (.PDF, .JPG)'}
-                  </Typography>
-                </Button>
-              </Box>
-
-              {/* HABILITAR INSUMOS ENVIADOS */}
-              <Box
-                sx={{
-                  mt: 'auto',
-                  pt: 2,
-                  borderTop: `1px solid ${themeColors.border}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 1
-                }}
-              >
-                <Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography sx={{ fontSize: '1.1rem', color: themeColors.primary }}>📦</Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 700, color: themeColors.textPrimary }}>
-                      Habilitar insumos enviados
-                    </Typography>
-                  </Box>
-                  <Typography variant="caption" sx={{ color: themeColors.textSecondary, fontWeight: 400 }}>
-                    ¿Enviarás insumos propios para esta producción?
-                  </Typography>
-                </Box>
-                <Switch
-                  checked={insumosEnviados}
-                  onChange={(e) => setInsumosEnviados(e.target.checked)}
-                  sx={{
-                    '& .MuiSwitch-switchBase.Mui-checked': {
-                      color: themeColors.primary
-                    },
-                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-                      backgroundColor: themeColors.primary
-                    }
-                  }}
-                />
-              </Box>
-            </Box>
-
-            {/* COLUMNA DERECHA: DETALLE DE PRENDAS */}
-            <Box
-              sx={{
-                backgroundColor: themeColors.bgCard,
-                borderRadius: '16px',
-                p: { xs: 2.5, sm: 3.5 },
-                border: `1px solid ${themeColors.border}`,
-                display: 'flex',
-                flexDirection: 'column'
-              }}
-            >
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  mb: 3,
-                  gap: 1
-                }}
-              >
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography sx={{ fontSize: '1.2rem', color: themeColors.primary }}>✂️</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: themeColors.textPrimary, fontSize: '1.1rem' }}>
-                    Detalle de Prendas
-                  </Typography>
-                </Box>
-
-                <Button
-                  variant="outlined"
-                  startIcon={<AddIcon />}
-                  onClick={handleAddPiece}
-                  sx={{
-                    borderColor: themeColors.primary,
-                    color: themeColors.primary,
-                    fontWeight: 700,
-                    borderRadius: '8px',
-                    textTransform: 'none',
-                    fontSize: { xs: '0.8rem', sm: '0.85rem' },
-                    px: { xs: 1.5, sm: 2 },
-                    whiteSpace: 'nowrap',
-                    '&:hover': {
-                      borderColor: themeColors.primaryHover,
-                      backgroundColor: themeColors.badgeBg
-                    }
-                  }}
-                >
-                  Añadir Pieza
-                </Button>
-              </Box>
-
-              {/* FILAS DE PIEZAS */}
-              <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {pieces.map((item) => (
-                  <Box
-                    key={item.id}
-                    sx={{
-                      backgroundColor: themeColors.bgInput,
-                      p: { xs: 1.8, sm: 2 },
-                      borderRadius: '12px',
-                      border: `1px solid ${themeColors.border}`,
-                      display: 'flex',
-                      flexDirection: { xs: 'column', sm: 'row' },
-                      alignItems: { xs: 'stretch', sm: 'center' },
-                      gap: 1.5
-                    }}
-                  >
-                    <Box sx={{ flex: { sm: 2 } }}>
-                      <Typography
-                        variant="caption"
-                        sx={{ fontWeight: 600, color: themeColors.textSecondary, textTransform: 'uppercase', mb: 0.5, display: 'block' }}
-                      >
-                        PIEZA
-                      </Typography>
-                      <TextField
-                        fullWidth
-                        size="small"
-                        placeholder="Ej. Mangas"
-                        value={item.pieza}
-                        onChange={(e) => handlePieceChange(item.id, 'pieza', e.target.value)}
-                        sx={{
-                          '& .MuiOutlinedInput-root': {
-                            backgroundColor: themeColors.bgCard,
-                            borderRadius: '8px',
-                            color: themeColors.textPrimary,
-                            '& fieldset': { borderColor: themeColors.border }
-                          }
-                        }}
-                      />
-                    </Box>
-
-                    <Box sx={{ display: 'flex', gap: 1.5, flex: { sm: 2 } }}>
-                      <Box sx={{ flex: 1 }}>
-                        <Typography
-                          variant="caption"
-                          sx={{ fontWeight: 600, color: themeColors.textSecondary, textTransform: 'uppercase', mb: 0.5, display: 'block' }}
-                        >
-                          TALLA
-                        </Typography>
-                        <Select
-                          fullWidth
-                          size="small"
-                          value={item.talla}
-                          onChange={(e) => handlePieceChange(item.id, 'talla', e.target.value)}
-                          sx={{
-                            backgroundColor: themeColors.bgCard,
-                            borderRadius: '8px',
-                            color: themeColors.textPrimary,
-                            '& .MuiOutlinedInput-notchedOutline': { borderColor: themeColors.border }
-                          }}
-                        >
-                          <MenuItem value="XS">XS</MenuItem>
-                          <MenuItem value="S">S</MenuItem>
-                          <MenuItem value="M">M</MenuItem>
-                          <MenuItem value="L">L</MenuItem>
-                          <MenuItem value="XL">XL</MenuItem>
-                        </Select>
-                      </Box>
-
-                      <Box sx={{ flex: 1 }}>
-                        <Typography
-                          variant="caption"
-                          sx={{ fontWeight: 600, color: themeColors.textSecondary, textTransform: 'uppercase', mb: 0.5, display: 'block' }}
-                        >
-                          CANTIDAD
-                        </Typography>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          size="small"
-                          value={item.cantidad}
-                          onChange={(e) => handlePieceChange(item.id, 'cantidad', e.target.value)}
-                          sx={{
-                            '& .MuiOutlinedInput-root': {
-                              backgroundColor: themeColors.bgCard,
-                              borderRadius: '8px',
-                              color: themeColors.textPrimary,
-                              '& fieldset': { borderColor: themeColors.border }
-                            }
-                          }}
-                        />
-                      </Box>
-                    </Box>
-
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: { xs: 0.5, sm: 2 } }}>
-                      <IconButton
-                        onClick={() => handleRemovePiece(item.id)}
-                        sx={{ color: '#9CA3AF', '&:hover': { color: '#EF4444' } }}
-                      >
-                        <DeleteOutlineIcon />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-
-              {/* TOTAL Y ACCIÓN FINAL DE REMISIÓN */}
-              <Box sx={{ mt: 3, pt: 3, borderTop: `1px dashed ${themeColors.border}` }}>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    mb: 3
-                  }}
-                >
-                  <Typography variant="body2" sx={{ fontWeight: 600, color: themeColors.textPrimary, fontSize: { xs: '0.9rem', sm: '1rem' } }}>
-                    Total de prendas a confeccionar:
-                  </Typography>
-                  <Box
-                    sx={{
-                      backgroundColor: themeColors.bgInput,
-                      border: `1px solid ${themeColors.border}`,
-                      borderRadius: '8px',
-                      px: { xs: 2, sm: 2.5 },
-                      py: 0.6,
-                      fontWeight: 800,
-                      fontSize: { xs: '1rem', sm: '1.1rem' },
-                      color: themeColors.textPrimary
-                    }}
-                  >
-                    {totalPrendas}
-                  </Box>
-                </Box>
-
-                <Button
-                  fullWidth
-                  variant="contained"
-                  disableElevation
-                  onClick={handleSaveRemision}
-                  sx={{
-                    backgroundColor: themeColors.primary,
-                    color: '#FFFFFF',
-                    fontWeight: 700,
-                    py: 1.4,
-                    borderRadius: '8px',
-                    fontSize: '1rem',
-                    textTransform: 'none',
-                    '&:hover': {
-                      backgroundColor: themeColors.primaryHover
-                    }
-                  }}
-                >
-                  Guardar Remisión
-                </Button>
-              </Box>
-            </Box>
+            ))}
           </Box>
         </Container>
       </Box>
 
-      {/* 5. PIE DE PÁGINA */}
-      <Box
-        component="footer"
-        sx={{
-          backgroundColor: themeColors.bgCard,
-          py: 3.5,
-          borderTop: `1px solid ${themeColors.border}`,
-          mt: 'auto',
-          textAlign: 'center',
-          width: '100%',
-          transition: 'background-color 0.3s ease'
-        }}
-      >
-        <Typography variant="body2" sx={{ color: themeColors.textSecondary, fontWeight: 400, fontSize: '0.85rem' }}>
-          © {new Date().getFullYear()} Eslabón. Todos los derechos reservados.
-        </Typography>
-      </Box>
+      {/* 5. SOBRE NOSOTROS */}
+      <Container id="nosotros" maxWidth="lg" sx={{ scrollMarginTop: '80px', py: { xs: 6, sm: 8 }, px: { xs: 2.5, sm: 3 } }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.1fr 0.9fr' }, gap: { xs: 4, md: 6 }, alignItems: 'center' }}>
+          <Box>
+            <Typography variant="caption" sx={{ fontWeight: 700, color: themeColors.primary, textTransform: 'uppercase', letterSpacing: '1px' }}>
+              Sobre nosotros
+            </Typography>
+            <Typography variant="h4" sx={{ fontWeight: 800, color: themeColors.textPrimary, mt: 0.5, mb: 2, fontSize: { xs: '1.5rem', sm: '2rem' } }}>
+              Taller y Confecciones CDS
+            </Typography>
+            <Typography sx={{ color: themeColors.textSecondary, lineHeight: 1.8, mb: 2 }}>
+              Somos una microempresa de Medellín dedicada a la confección de uniformes empresariales y vestimenta casual.
+              Trabajamos con empresas de sectores como el automotriz y la seguridad privada, que confían en nosotros
+              la confección de sus dotaciones a partir de sus telas cortadas y fichas técnicas.
+            </Typography>
+            <Typography sx={{ color: themeColors.textSecondary, lineHeight: 1.8, mb: 3 }}>
+              Nuestro diferencial es el <b style={{ color: themeColors.textPrimary }}>cumplimiento estricto de los tiempos de entrega</b> y
+              los altos estándares de calidad en cada acabado. Con <b style={{ color: themeColors.textPrimary }}>Eslabón</b>, nuestros clientes
+              envían sus remisiones en línea y siguen el estado de su pedido en todo momento.
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2 }}>
+              {cifras.map((c) => (
+                <Box key={c.texto} sx={{ p: 2, borderRadius: '12px', border: `1px solid ${themeColors.border}`, backgroundColor: themeColors.bgCard, textAlign: 'center' }}>
+                  <Box sx={{ color: themeColors.primary, display: 'flex', justifyContent: 'center', mb: 0.5 }}><c.Icono size={20} /></Box>
+                  <Typography sx={{ fontWeight: 800, color: themeColors.textPrimary, fontSize: { xs: '1rem', sm: '1.2rem' } }}>{c.valor}</Typography>
+                  <Typography variant="caption" sx={{ color: themeColors.textSecondary }}>{c.texto}</Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
 
-      {/* FEEDBACK NOTIFICACIÓN */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar({ ...snackbar, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={() => setSnackbar({ ...snackbar, open: false })}
-          severity={snackbar.severity}
-          variant="filled"
-          sx={{ width: '100%', borderRadius: '8px', fontWeight: 600 }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {pilares.map((p) => (
+              <Box key={p.titulo} sx={{ display: 'flex', gap: 2, p: 2.5, borderRadius: '16px', border: `1px solid ${themeColors.border}`, backgroundColor: themeColors.bgCard }}>
+                <Box sx={{ width: 44, height: 44, flexShrink: 0, borderRadius: '12px', backgroundColor: themeColors.badgeBg, color: themeColors.primary, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <p.Icono size={20} />
+                </Box>
+                <Box>
+                  <Typography sx={{ fontWeight: 700, color: themeColors.textPrimary, mb: 0.5 }}>{p.titulo}</Typography>
+                  <Typography variant="body2" sx={{ color: themeColors.textSecondary, lineHeight: 1.6 }}>{p.texto}</Typography>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      </Container>
+
+      {/* 6. PIE DE PÁGINA */}
+      <Footer variant="landing" dark={darkMode} onNavegar={navegar} />
     </Box>
   );
 }

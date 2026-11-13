@@ -2,7 +2,7 @@ import { api } from "../../../shared/utils/api";
 
 export interface RegistroDiario {
   id_registro_diario: string;
-  fecha: string;          // ISO con hora
+  fecha: string;          // ISO con hora (UTC); mostrar con toLocaleString
   id_empleado: string;
   empleado: string;
   pieza: string;
@@ -21,6 +21,7 @@ export interface FiltrosRegistro {
   hasta?: string;
 }
 
+// Quién reporta / corrige / elimina sale del token de la sesión (el empleado dueño o el administrador).
 export const registroDiarioService = {
   listar: (filtros?: FiltrosRegistro) =>
     api.get<RegistroDiario[]>("/registros-diarios", { params: filtros }).then((r) => r.data),
@@ -31,5 +32,10 @@ export const registroDiarioService = {
   registrar: (id_detalle_de_produccion: string, cantidad: number) =>
     api.post<RegistroDiario>("/registros-diarios", { id_detalle_de_produccion, cantidad }).then((r) => r.data),
 
-  eliminar: (id: string) => api.delete(`/registros-diarios/${id}`),
+  /** Corrige la cantidad de un reporte (el dueño o el administrador). */
+  actualizar: (id: string, cantidad: number) =>
+    api.patch<RegistroDiario>(`/registros-diarios/${id}`, { cantidad }).then((r) => r.data),
+
+  eliminar: (id: string) =>
+    api.delete(`/registros-diarios/${id}`).then(() => undefined),
 };

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  FileText, Plus, Trash2, UploadCloud, Save, ArrowLeft, ToggleLeft, ToggleRight, Box, Search, Eye, Pencil, ShieldAlert, User, X, AlertTriangle,
+  FileText, Plus, Trash2, UploadCloud, Save, ArrowLeft, ToggleLeft, ToggleRight, Box, Search, Eye, Pencil, X, AlertTriangle,
   CheckCircle2, XCircle, History, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import {
 } from '../services/remisionService';
 import { seguimientoService, type Seguimiento } from '../../produccion/services/seguimientoService';
 import { clienteService, type Cliente } from '../../usuarios/services/clienteService';
+import { obtenerUsuario } from '../../auth/services/authService';
 
 // ==========================================
 // PALETA DE COLORES Y ESTILOS BASE
@@ -42,7 +43,6 @@ const TALLAS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Única'];
 const UNIDADES = ['Unidad', 'Metros', 'Conos', 'Rollos', 'Pares'];
 
 // TEMPORAL mientras no hay login de clientes: el NIT del "cliente actual" se guarda aquí
-const CLAVE_NIT_SESION = 'nit_cliente';
 
 // ==========================================
 // INTERFACES (formulario)
@@ -135,8 +135,11 @@ export const Modal: React.FC<{
 // ==========================================
 // COMPONENTE PRINCIPAL: RemisionesView
 // ==========================================
-export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInicial = 'CLIENTE' }) => {
-  const [rolActivo, setRolActivo] = useState<'ADMIN' | 'CLIENTE'>(rolInicial);
+export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInicial }) => {
+  // El modo sale de la sesión: un cliente solo ve y crea SUS remisiones; el personal del taller las gestiona todas.
+  const usuarioSesion = obtenerUsuario();
+  const esCliente = usuarioSesion?.tipo === 'Cliente';
+  const [rolActivo] = useState<'ADMIN' | 'CLIENTE'>(rolInicial ?? (esCliente ? 'CLIENTE' : 'ADMIN'));
   const [vistaActual, setVistaActual] = useState<'listado' | 'formulario'>('listado');
   const [modalDetalle, setModalDetalle] = useState<Remision | null>(null);
   const [historial, setHistorial] = useState<Seguimiento[]>([]);
@@ -160,27 +163,19 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
-  const leerNitSesion = () => {
-    try { return localStorage.getItem(CLAVE_NIT_SESION) || ''; } catch { return ''; }
-  };
-  const [nitSesion, setNitSesion] = useState<string>(leerNitSesion);
-
-  const cambiarNitSesion = (nit: string) => {
-    setNitSesion(nit);
-    try { localStorage.setItem(CLAVE_NIT_SESION, nit); } catch { /* sin almacenamiento */ }
-  };
+  // NIT del cliente con sesión (ya no se elige a mano)
+  const nitSesion = esCliente ? usuarioSesion?.id ?? '' : '';
 
   useEffect(() => {
     const cargar = async () => {
       try {
+        // La lista de clientes solo la necesita el personal (para registrar remisiones a nombre de un cliente)
         const [lista, listaClientes] = await Promise.all([
           remisionService.listar(),
-          clienteService.listar('Activo'),
+          esCliente ? Promise.resolve([] as Cliente[]) : clienteService.listar('Activo'),
         ]);
         setRemisiones(lista);
         setClientes(listaClientes);
-        // Si no hay "cliente actual" guardado, se toma el primero (solo para pruebas)
-        if (!leerNitSesion() && listaClientes.length > 0) cambiarNitSesion(listaClientes[0].nit);
       } catch (error) {
         toast.error(`No se pudieron cargar las remisiones: ${mensajeError(error)}`);
       } finally {
@@ -396,22 +391,6 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
           </div>
 
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div style={{ background: inputBg, padding: '4px', borderRadius: 8, display: 'flex', border: `1px solid ${borderNormal}` }}>
-              <button onClick={() => setRolActivo('CLIENTE')} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: rolActivo === 'CLIENTE' ? cardBg : 'transparent', color: rolActivo === 'CLIENTE' ? GOLD : subtle, fontWeight: 700, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, boxShadow: rolActivo === 'CLIENTE' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none' }}>
-                <User size={14} /> Vista Cliente
-              </button>
-              <button onClick={() => setRolActivo('ADMIN')} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: rolActivo === 'ADMIN' ? cardBg : 'transparent', color: rolActivo === 'ADMIN' ? INFO : subtle, fontWeight: 700, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, boxShadow: rolActivo === 'ADMIN' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none' }}>
-                <ShieldAlert size={14} /> Vista Admin
-              </button>
-            </div>
-
-            {/* TEMPORAL hasta tener login de clientes: elegir qué cliente "está conectado" */}
-            {rolActivo === 'CLIENTE' && (
-              <select value={nitSesion} onChange={(e) => cambiarNitSesion(e.target.value)} title="Cliente actual (temporal hasta tener login)" style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${borderNormal}`, background: cardBg, color: fg, fontSize: 12, outline: 'none', maxWidth: 220 }}>
-                {clientes.length === 0 && <option value="">No hay clientes activos</option>}
-                {clientes.map(c => <option key={c.nit} value={c.nit}>{c.nombre} ({c.nit})</option>)}
-              </select>
-            )}
 
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
