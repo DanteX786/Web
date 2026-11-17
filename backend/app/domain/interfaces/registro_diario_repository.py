@@ -16,6 +16,9 @@ class IRegistroDiarioRepository(ABC):
     def crear(self, id_detalle_de_produccion: str, cantidad: int) -> str: ...
 
     @abstractmethod
+    def actualizar_cantidad(self, id_registro: str, cantidad: int) -> None: ...
+
+    @abstractmethod
     def eliminar(self, id_registro: str) -> None: ...
 
     @abstractmethod
