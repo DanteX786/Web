@@ -12,3 +12,4 @@ class Seguimiento:
     responsable: str
     tipo_responsable: str
     fecha_hora: datetime
+    cliente: str | None = None   # cliente dueño de la remisión

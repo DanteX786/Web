@@ -8,6 +8,10 @@ class RegistroDiarioCrear(BaseModel):
     cantidad: int = Field(gt=0, description="Unidades confeccionadas en la jornada")
 
 
+class RegistroDiarioCantidad(BaseModel):
+    cantidad: int = Field(gt=0, description="Nueva cantidad confeccionada")
+
+
 class RegistroDiarioRespuesta(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

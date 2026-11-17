@@ -6,7 +6,7 @@ from app.domain.interfaces.empleado_repository import IEmpleadoRepository
 
 # La columna de la contraseña tiene "ñ", por eso va entre comillas dobles.
 # Si en Neon se llama distinto (por ejemplo contrasena), solo se cambia aquí.
-COL_CONTRASENA = '"contraseña"'
+COL_CONTRASENA = 'contrasena'
 
 # Nunca se selecciona la contraseña. El rol se trae con un JOIN para mostrar su descripción.
 SELECT_EMPLEADOS = """

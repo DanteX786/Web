@@ -1,25 +1,127 @@
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session
+
+from core.config import settings
+from app.application.auth_service import AuthService, ConfigAuth
+from app.domain.entities.usuario import Usuario
+from app.domain.exceptions.errors import ForbiddenError, TokenInvalidoError
+from app.infrastructure.database.database import get_db
+from app.infrastructure.repositories.auth_repository import AuthRepository
+from app.infrastructure.security.hasher import BcryptHasher
+from app.infrastructure.security.token_service import JwtTokenService
+from app.infrastructure.services.email_service import SmtpEmailService
+from app.infrastructure.services.verificador_correo import DnsVerificadorCorreo
+
+# Muestra el botón "Authorize" en Swagger: se pega el access_token del login
+_bearer = HTTPBearer(auto_error=False)
+
+_hasher = BcryptHasher()
+_tokens = JwtTokenService(settings.JWT_SECRET, settings.JWT_ALGORITMO)
+_correo = SmtpEmailService(settings.SMTP_HOST, settings.SMTP_PUERTO, settings.SMTP_USUARIO,
+                           settings.SMTP_CONTRASENA, settings.SMTP_REMITENTE)
+_verificador = DnsVerificadorCorreo()
+_config = ConfigAuth(
+    minutos_sesion=settings.JWT_MINUTOS_SESION,
+    minutos_restablecer=settings.JWT_MINUTOS_RESTABLECER,
+    minutos_codigo=settings.CODIGO_MINUTOS_VIGENCIA,
+    segundos_reenvio=settings.CODIGO_SEGUNDOS_REENVIO,
+    max_intentos=settings.CODIGO_MAX_INTENTOS,
+)
 
 
-def get_id_empleado_actual(x_empleado_id: str | None = Header(default=None)) -> str:
-    """Devuelve el id del empleado que hace la petición.
+def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
+    return AuthService(AuthRepository(db), _hasher, _tokens, _correo, _verificador, _config)
 
-    TEMPORAL mientras se construye el login: se lee del encabezado HTTP
-    "X-Empleado-Id" (ej. EMP00001). Cuando el login con JWT esté listo, SOLO
-    se cambia el cuerpo de esta función para leer el token; los routers no cambian.
+
+def get_usuario_actual(credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer),
+                       service: AuthService = Depends(get_auth_service)) -> Usuario:
+    """Usuario con sesión (empleado o cliente), a partir del token JWT."""
+    if credenciales is None:
+        raise TokenInvalidoError("Debes iniciar sesión.")
+    return service.usuario_desde_token(credenciales.credentials)
+
+
+def get_usuario_opcional(credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer),
+                         service: AuthService = Depends(get_auth_service)) -> Usuario | None:
+    """Igual que get_usuario_actual, pero si no hay token devuelve None.
+    Si llega un token inválido o de una sesión cerrada, sí responde 401."""
+    if credenciales is None:
+        return None
+    return service.usuario_desde_token(credenciales.credentials)
+
+
+def get_id_empleado_actual(usuario: Usuario = Depends(get_usuario_actual)) -> str:
+    """Id del empleado con sesión (antes salía del encabezado X-Empleado-Id; ahora del token).
+    Lo usan producción, registro diario, remisiones y entregas."""
+    if usuario.tipo != "Empleado":
+        raise ForbiddenError("Esta acción es solo para empleados del taller.")
+    return usuario.id
+
+
+def get_id_empleado_opcional(usuario: Usuario | None = Depends(get_usuario_opcional)) -> str | None:
+    """Id del empleado si quien opera es un empleado; None si es un cliente.
+    Ej.: cuando un cliente crea su remisión, la BD lo deja a él como responsable del seguimiento."""
+    return usuario.id if usuario and usuario.tipo == "Empleado" else None
+
+
+def sesion_requerida(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
+    """Cualquier usuario con sesión (empleado o cliente)."""
+    return usuario
+
+
+def solo_empleados(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
+    """Solo empleados del taller (incluye al administrador). Los clientes reciben 403."""
+    if usuario.tipo != "Empleado":
+        raise ForbiddenError("Esta sección es solo para el personal del taller.")
+    return usuario
+
+
+def requiere_permiso(*permisos: str):
+    """Exige al menos uno de los permisos (tabla permisos / rol_x_permiso).
+    El Administrador pasa siempre. Uso: Depends(requiere_permiso("Gestionar roles y permisos"))"""
+    def _dependencia(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
+        if usuario.rol == "Administrador" or any(p in usuario.permisos for p in permisos):
+            return usuario
+        raise ForbiddenError("No tienes permiso para esta sección.")
+    return _dependencia
+
+
+METODOS_LECTURA = {"GET", "HEAD", "OPTIONS"}
+
+
+def permisos_de_ruta(lectura: tuple[str, ...], escritura: tuple[str, ...],
+                     por_metodo: dict[str, tuple[str, ...]] | None = None,
+                     solo_personal: bool = True):
+    """Nivel 3 de seguridad: cada grupo de endpoints exige su permiso (tabla rol_x_permiso).
+
+    - lectura:    permisos que dejan CONSULTAR (GET). Basta con tener uno.
+    - escritura:  permisos que dejan CREAR / EDITAR / ELIMINAR (POST, PUT, PATCH, DELETE).
+    - por_metodo: excepciones por método, ej. {"PATCH": (...)} para aprobar/rechazar.
+    - solo_personal: si es True, un cliente nunca entra aunque por error tenga el permiso.
+    El Administrador pasa siempre.
     """
-    if not x_empleado_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Falta el encabezado X-Empleado-Id (temporal hasta tener el login).",
-        )
-    return x_empleado_id
+    def _dependencia(request: Request, usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
+        if solo_personal and usuario.tipo != "Empleado":
+            raise ForbiddenError("Esta sección es solo para el personal del taller.")
+        if usuario.rol == "Administrador":
+            return usuario
+        metodo = request.method.upper()
+        if por_metodo and metodo in por_metodo:
+            requeridos = por_metodo[metodo]
+        else:
+            requeridos = lectura if metodo in METODOS_LECTURA else escritura
+        if any(p in usuario.permisos for p in requeridos):
+            return usuario
+        accion = "consultar" if metodo in METODOS_LECTURA else "modificar"
+        raise ForbiddenError(f"No tienes permiso para {accion} esta información.")
+    return _dependencia
 
 
-def get_id_empleado_opcional(x_empleado_id: str | None = Header(default=None)) -> str | None:
-    """Igual que get_id_empleado_actual, pero no obliga a enviarlo.
-
-    Se usa donde también puede operar un cliente (ej. crear remisión desde la página):
-    si no llega empleado, la BD deja al cliente como responsable en el seguimiento.
-    """
-    return x_empleado_id or None
+def requiere_rol(*roles: str):
+    """Uso en un router: Depends(requiere_rol("Administrador"))"""
+    def _dependencia(usuario: Usuario = Depends(get_usuario_actual)) -> Usuario:
+        if usuario.rol not in roles:
+            raise ForbiddenError("No tienes permiso para esta acción.")
+        return usuario
+    return _dependencia

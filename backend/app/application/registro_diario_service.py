@@ -32,6 +32,14 @@ class RegistroDiarioService:
         nuevo_id = self.repo.crear(id_detalle_de_produccion, cantidad)
         return self.obtener(nuevo_id)
 
+    def corregir_cantidad(self, id_registro: str, cantidad: int, id_usuario: str) -> RegistroDiario:
+        """Corrige la cantidad de un reporte (el dueño o el administrador). La fecha no cambia."""
+        registro = self.obtener(id_registro)
+        if registro.id_empleado != id_usuario and not self.repo.es_administrador(id_usuario):
+            raise ForbiddenError("Solo puede corregir sus propios registros.")
+        self.repo.actualizar_cantidad(id_registro, cantidad)
+        return self.obtener(id_registro)
+
     def eliminar(self, id_registro: str, id_usuario: str) -> None:
         registro = self.obtener(id_registro)
         if registro.id_empleado != id_usuario and not self.repo.es_administrador(id_usuario):

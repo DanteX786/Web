@@ -1,8 +1,9 @@
 fastapi
-    uvicorn[standard]
-    sqlalchemy>=2.0
-    psycopg[binary]
-    pydantic-settings
-    bcrypt
-    pyjwt
-    python-multipart
+uvicorn[standard]
+sqlalchemy>=2.0
+psycopg[binary]
+pydantic-settings
+bcrypt
+pyjwt
+python-multipart
+email-validator
