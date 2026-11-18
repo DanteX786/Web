@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  MapPin, Phone, Mail, Clock, Camera, Globe, MessageCircle, Music2, Briefcase, ArrowUp, ShieldCheck,
+  MapPin, Phone, Mail, Clock, Camera, Globe, MessageCircle, Music2, Briefcase, ArrowUp, ShieldCheck, FileText,
 } from 'lucide-react';
 
 import logo_blanco from '../../../public/images/logo blanco.png';
@@ -38,7 +38,7 @@ interface FooterProps {
   /** "landing": pie de página completo. "app": barra compacta dentro del aplicativo. */
   variant: 'landing' | 'app';
   dark?: boolean;
-  /** Solo landing: navegar a una sección (#id) o al inicio de sesión. */
+  /** Navegar a una sección (#id), al inicio de sesión o a "licencias". */
   onNavegar?: (destino: string) => void;
 }
 
@@ -86,6 +86,15 @@ export const Footer: React.FC<FooterProps> = ({ variant, dark = false, onNavegar
           </span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+          <button onClick={() => onNavegar?.('licencias')} style={{
+            background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: subtle, fontSize: 12, fontFamily: FONT,
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+          }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = GOLD; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = subtle; }}
+          >
+            <FileText size={13} color={GOLD} /> Licencias
+          </button>
           <a href={`mailto:${EMPRESA.correo}`} style={{ color: subtle, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <Mail size={13} color={GOLD} /> Soporte: {EMPRESA.correo}
           </a>
@@ -139,6 +148,7 @@ export const Footer: React.FC<FooterProps> = ({ variant, dark = false, onNavegar
             <button style={enlace} {...hover} onClick={() => ir('proceso')}>Cómo trabajamos</button>
             <button style={enlace} {...hover} onClick={() => ir('nosotros')}>Sobre nosotros</button>
             <button style={enlace} {...hover} onClick={() => ir('login')}>Iniciar sesión</button>
+            <button style={enlace} {...hover} onClick={() => ir('licencias')}>Licencias de software</button>
           </div>
         </div>
 
@@ -183,6 +193,9 @@ export const Footer: React.FC<FooterProps> = ({ variant, dark = false, onNavegar
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <ShieldCheck size={14} color={GOLD} /> Tus datos se tratan conforme a la Ley 1581 de 2012 (Habeas Data).
           </span>
+          <button style={{ ...enlace, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }} {...hover} onClick={() => ir('licencias')}>
+            <FileText size={14} color={GOLD} /> Licencias
+          </button>
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             title="Volver arriba"

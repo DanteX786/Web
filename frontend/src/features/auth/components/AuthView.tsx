@@ -30,6 +30,8 @@ interface AuthViewProps {
   onLoginSuccess: (usuario: Usuario) => void;
   /** Mensaje al llegar (ej. "Tu sesión se cerró porque la contraseña cambió"). */
   mensajeInicial?: string;
+  /** Volver a la página de inicio (landing). */
+  onVolver?: () => void;
 }
 
 type Vista = 'login' | 'register' | 'recover';
@@ -38,7 +40,7 @@ type CampoRegistro = 'documento' | 'nombre' | 'correo' | 'telefono' | 'direccion
 
 const mmss = (seg: number) => `${String(Math.floor(seg / 60)).padStart(2, '0')}:${String(seg % 60).padStart(2, '0')}`;
 
-export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInicial }) => {
+export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInicial, onVolver }) => {
   const [view, setView] = useState<Vista>('login');
   const [isDark, setIsDark] = useState(false);
   const [cargando, setCargando] = useState(false);
@@ -328,6 +330,20 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
       padding: 16, position: 'relative', overflow: 'hidden', fontFamily: FONT, transition: 'background-color 0.3s ease',
     }}>
       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: `linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT})` }} />
+
+      {onVolver && (
+        <button onClick={onVolver} title="Volver a la página de inicio" style={{
+          position: 'absolute', top: 20, left: 20, background: cardBg, border: `1px solid ${borderNormal}`, borderRadius: 999,
+          height: 40, padding: '0 16px 0 12px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)', zIndex: 10, color: fg, fontSize: 13, fontWeight: 700, fontFamily: FONT,
+          transition: 'border-color 0.2s ease',
+        }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = GOLD; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = borderNormal; }}
+        >
+          <ArrowLeft size={16} color={GOLD} /> Volver al inicio
+        </button>
+      )}
 
       <button onClick={() => setIsDark(!isDark)} title="Cambiar modo" style={{
         position: 'absolute', top: 20, right: 20, background: cardBg, border: `1px solid ${borderNormal}`, borderRadius: '50%',

@@ -3,6 +3,7 @@ import { Toaster } from 'sonner';
 import MainLayout from './shared/components/MainLayout';
 import { AuthView } from './features/auth/components/AuthView';
 import LandingPage from './shared/components/LandingPage';
+import LicenciasView from './shared/components/LicenciasView';
 import { EVENTO_SESION_CERRADA } from './shared/utils/api';
 import { EVENTO_USUARIO_ACTUALIZADO, cerrarSesionLocal, obtenerUsuario, vigilarSesion, vistaInicial, type Usuario } from './features/auth/services/authService';
 import { puedeVer } from './features/auth/utils/permisos';
@@ -70,7 +71,7 @@ export default function App() {
   }, []);
 
   // Nadie puede quedarse en una vista para la que no tiene permiso
-  const vistaPermitida = !usuario || ['landing', 'login'].includes(currentView) || puedeVer(usuario, currentView);
+  const vistaPermitida = !usuario || ['landing', 'login', 'licencias'].includes(currentView) || puedeVer(usuario, currentView);
   useEffect(() => {
     if (usuario && !vistaPermitida) setCurrentView(vistaInicial(usuario));
   }, [usuario, vistaPermitida]);
@@ -80,9 +81,17 @@ export default function App() {
     return (
       <>
         <Toaster position="top-right" richColors />
-        <LandingPage onNavigateToLogin={() => setCurrentView('login')} />
+        <LandingPage
+          onNavigateToLogin={() => setCurrentView('login')}
+          onNavigateToLicencias={() => { setCurrentView('licencias'); window.scrollTo({ top: 0 }); }}
+        />
       </>
     );
+  }
+
+  // 1.1 LICENCIAS DESDE LA PÁGINA PÚBLICA (sin sesión)
+  if (currentView === 'licencias' && !isAuthenticated) {
+    return <LicenciasView onVolver={() => setCurrentView('landing')} />;
   }
 
   // 2. SI NO ESTÁ AUTENTICADO, MUESTRA LA VISTA DE INICIO DE SESIÓN
@@ -93,6 +102,7 @@ export default function App() {
         <AuthView
           key={mensajeLogin}
           mensajeInicial={mensajeLogin}
+          onVolver={() => { setMensajeLogin(''); setCurrentView('landing'); window.scrollTo({ top: 0 }); }}
           onLoginSuccess={(u) => {
             setUsuario(u);
             setMensajeLogin('');
@@ -150,6 +160,9 @@ export default function App() {
       {currentView === 'tiposMaquinaria' && <TiposMaquinaria dark={dark} />}
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
       {currentView === 'roles' && <Roles dark={dark} />}
+
+      {/* LICENCIAS DE SOFTWARE (todos los usuarios) */}
+      {currentView === 'licencias' && <LicenciasView dark={dark} />}
 
       {/* MI PERFIL */}
       {currentView === 'miPerfil' && (
