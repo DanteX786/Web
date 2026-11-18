@@ -65,16 +65,56 @@ def problemas_contrasena(contrasena: str) -> list[str]:
     return problemas
 
 
+# Tipos de documento usados en Colombia (código que se guarda -> nombre que se muestra)
+TIPOS_DOCUMENTO = {
+    "NIT": "NIT",
+    "CC": "Cédula de ciudadanía",
+    "CE": "Cédula de extranjería",
+    "PA": "Pasaporte",
+    "PPT": "Permiso por Protección Temporal (PPT)",
+}
+
+# Formato de cada documento y el mensaje si no lo cumple
+_REGLAS_DOCUMENTO = {
+    "NIT": (r"\d{9,10}(-\d)?",
+            "El NIT debe tener 9 o 10 dígitos y, opcional, el dígito de verificación (ej. 900123456-1)."),
+    "CC": (r"\d{6,10}", "La cédula de ciudadanía debe tener entre 6 y 10 dígitos, sin puntos ni espacios."),
+    "CE": (r"\d{6,10}", "La cédula de extranjería debe tener entre 6 y 10 dígitos, sin puntos ni espacios."),
+    "PA": (r"[A-Z0-9]{5,15}", "El pasaporte debe tener entre 5 y 15 letras o números, sin espacios ni guiones."),
+    "PPT": (r"\d{6,15}", "El PPT debe tener entre 6 y 15 dígitos, sin puntos ni espacios."),
+}
+
+
+def normalizar_documento(tipo: str, numero: str) -> str:
+    """Quita espacios y puntos; el pasaporte se guarda en mayúsculas."""
+    valor = re.sub(r"[\s.]", "", numero or "")
+    return valor.upper() if tipo == "PA" else valor
+
+
 def problema_documento(tipo: str, numero: str) -> str | None:
-    if tipo not in ("NIT", "Cédula"):
-        return "Elige el tipo de documento: NIT o Cédula."
+    if tipo not in _REGLAS_DOCUMENTO:
+        return "Elige el tipo de documento: " + ", ".join(TIPOS_DOCUMENTO.values()) + "."
     if not numero:
         return "Ingresa el número de documento."
-    if tipo == "NIT":
-        if not re.fullmatch(r"\d{9,10}(-\d)?", numero):
-            return "El NIT debe tener 9 o 10 dígitos y, opcional, el dígito de verificación (ej. 900123456-1)."
-    elif not re.fullmatch(r"\d{6,10}", numero):
-        return "La cédula debe tener entre 6 y 10 dígitos, sin puntos ni espacios."
+    patron, mensaje = _REGLAS_DOCUMENTO[tipo]
+    if not re.fullmatch(patron, numero):
+        return mensaje
+    return None
+
+
+def problema_contacto(tipo_documento: str, nombre_contacto: str | None) -> str | None:
+    """Si el cliente es una empresa (NIT) debe decir a qué persona contactar."""
+    valor = (nombre_contacto or "").strip()
+    if tipo_documento != "NIT" and not valor:
+        return None
+    if not valor:
+        return "Escribe el nombre de la persona a contactar en la empresa."
+    if len(valor) < 3:
+        return "El nombre de la persona a contactar debe tener al menos 3 letras."
+    if len(valor) > 100:
+        return "El nombre de la persona a contactar puede tener máximo 100 caracteres."
+    if not re.fullmatch(r"[A-Za-zÁÉÍÓÚáéíóúÑñÜü .'\-]+", valor):
+        return "El nombre de la persona a contactar solo puede tener letras y espacios."
     return None
 
 

@@ -10,12 +10,12 @@ import logo_blanco from '../../../../public/images/logo blanco.png';
 import logo_negro from '../../../../public/images/logo negro.png';
 
 import {
-  authService, guardarSesion,
+  authService, guardarSesion, TIPOS_DOCUMENTO,
   type Usuario, type TipoDocumento, type TipoTelefono,
 } from '../services/authService';
 import {
-  REGLAS_CONTRASENA, soloDigitos, validarConfirmacion, validarContrasenaNueva, validarCorreo,
-  validarDireccion, validarDocumento, validarNombre, validarTelefono,
+  REGLAS_CONTRASENA, limpiarDocumento, soloDigitos, validarConfirmacion, validarContacto, validarContrasenaNueva,
+  validarCorreo, validarDireccion, validarDocumento, validarNombre, validarTelefono,
 } from '../utils/validaciones';
 import { mensajeError } from '../../../shared/utils/api';
 
@@ -34,7 +34,7 @@ interface AuthViewProps {
 
 type Vista = 'login' | 'register' | 'recover';
 type PasoRecuperar = 'correo' | 'codigo' | 'nueva';
-type CampoRegistro = 'documento' | 'nombre' | 'correo' | 'telefono' | 'direccion' | 'contrasena' | 'confirmar';
+type CampoRegistro = 'documento' | 'nombre' | 'contacto' | 'correo' | 'telefono' | 'direccion' | 'contrasena' | 'confirmar';
 
 const mmss = (seg: number) => `${String(Math.floor(seg / 60)).padStart(2, '0')}:${String(seg % 60).padStart(2, '0')}`;
 
@@ -56,6 +56,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
   const [regTipoDoc, setRegTipoDoc] = useState<TipoDocumento>('NIT');
   const [regDoc, setRegDoc] = useState('');
   const [regName, setRegName] = useState('');
+  const [regContacto, setRegContacto] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regTipoTel, setRegTipoTel] = useState<TipoTelefono>('Empresarial');
   const [regPhone, setRegPhone] = useState('');
@@ -199,6 +200,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
     switch (campo) {
       case 'documento': return validarDocumento(regTipoDoc, regDoc);
       case 'nombre': return validarNombre(regName, regTipoDoc);
+      case 'contacto': return validarContacto(regTipoDoc, regContacto);
       case 'correo': return validarCorreo(regEmail);
       case 'telefono': return validarTelefono(regTipoTel, regPhone);
       case 'direccion': return validarDireccion(regAddress);
@@ -210,7 +212,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const campos: CampoRegistro[] = ['documento', 'nombre', 'correo', 'telefono', 'direccion', 'contrasena', 'confirmar'];
+    const campos: CampoRegistro[] = ['documento', 'nombre', 'contacto', 'correo', 'telefono', 'direccion', 'contrasena', 'confirmar'];
     const errs = Object.fromEntries(campos.map((c) => [c, validarCampoReg(c)])) as Partial<Record<CampoRegistro, string | null>>;
     setErroresReg(errs);
     if (Object.values(errs).some(Boolean)) { toast.error('Revisa los campos marcados en rojo.'); return; }
@@ -219,8 +221,9 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
     try {
       const sesion = await authService.registro({
         tipo_documento: regTipoDoc,
-        numero_documento: regDoc.replace(/[\s.]/g, ''),
+        numero_documento: limpiarDocumento(regTipoDoc, regDoc),
         nombre: regName.trim(),
+        nombre_contacto: regTipoDoc === 'NIT' ? regContacto.trim() : null,
         correo: regEmail.trim().toLowerCase(),
         tipo_telefono: regTipoTel,
         telefono: regPhone,
@@ -426,19 +429,19 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
                   {/* Documento (PBI-15) */}
                   <div>
                     <label style={labelStyle}>Tipo de documento *</label>
-                    <select value={regTipoDoc} onChange={(e) => { setRegTipoDoc(e.target.value as TipoDocumento); setRegDoc(''); setErroresReg((x) => ({ ...x, documento: null })); }}
+                    <select value={regTipoDoc} onChange={(e) => { setRegTipoDoc(e.target.value as TipoDocumento); setRegDoc(''); setErroresReg((x) => ({ ...x, documento: null, contacto: null })); }}
                       style={inputStyle(null, false)}>
-                      <option value="NIT">NIT (empresa)</option>
-                      <option value="Cédula">Cédula (persona)</option>
+                      {TIPOS_DOCUMENTO.map((t) => <option key={t.valor} value={t.valor}>{t.etiqueta}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label style={labelStyle}>{regTipoDoc === 'NIT' ? 'NIT *' : 'Número de cédula *'}</label>
+                    <label style={labelStyle}>{regTipoDoc === 'NIT' ? 'NIT *' : 'Número de documento *'}</label>
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <Hash size={14} color={subtle} style={{ position: 'absolute', left: 10 }} />
-                      <input type="text" inputMode="numeric" maxLength={regTipoDoc === 'NIT' ? 12 : 10}
-                        placeholder={regTipoDoc === 'NIT' ? '900123456-1' : '1025760798'} value={regDoc}
-                        onChange={(e) => setRegDoc(regTipoDoc === 'NIT' ? e.target.value.replace(/[^\d-]/g, '') : soloDigitos(e.target.value))}
+                      <input type="text" inputMode={regTipoDoc === 'PA' ? 'text' : 'numeric'}
+                        maxLength={regTipoDoc === 'NIT' ? 12 : regTipoDoc === 'CC' || regTipoDoc === 'CE' ? 10 : 15}
+                        placeholder={{ NIT: '900123456-1', CC: '1025760798', CE: '1234567', PA: 'AB123456', PPT: '1234567' }[regTipoDoc]} value={regDoc}
+                        onChange={(e) => setRegDoc(limpiarDocumento(regTipoDoc, e.target.value))}
                         onBlur={() => salirReg('documento')} style={inputStyle(erroresReg.documento)} />
                     </div>
                     <ErrorTxt msg={erroresReg.documento} />
@@ -453,6 +456,19 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
                     </div>
                     <ErrorTxt msg={erroresReg.nombre} />
                   </div>
+
+                  {/* Empresa: persona a contactar (corrección de la instructora) */}
+                  {regTipoDoc === 'NIT' && (
+                    <div style={{ gridColumn: 'span 2' }}>
+                      <label style={labelStyle}>Nombre de la persona a contactar *</label>
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                        <User size={14} color={subtle} style={{ position: 'absolute', left: 10 }} />
+                        <input type="text" maxLength={100} placeholder="Ej. María Gómez" value={regContacto}
+                          onChange={(e) => setRegContacto(e.target.value)} onBlur={() => salirReg('contacto')} style={inputStyle(erroresReg.contacto)} />
+                      </div>
+                      <ErrorTxt msg={erroresReg.contacto} />
+                    </div>
+                  )}
 
                   <div style={{ gridColumn: 'span 2' }}>
                     <label style={labelStyle}>Correo electrónico *</label>

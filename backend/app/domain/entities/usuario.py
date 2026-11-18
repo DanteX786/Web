@@ -20,7 +20,8 @@ class Usuario:
     telefono: str | None = None
     direccion: str | None = None
     documento: str | None = None          # NIT/cédula del cliente o identificación del empleado
-    tipo_documento: str | None = None     # NIT | Cédula (solo clientes)
+    tipo_documento: str | None = None     # NIT | CC | CE | PA | PPT (solo clientes)
+    nombre_contacto: str | None = None    # persona a contactar cuando el cliente es empresa (NIT)
     tipo_telefono: str | None = None      # Empresarial | Personal (solo clientes)
     permisos: list[str] = field(default_factory=list)
 
@@ -36,7 +37,7 @@ class Usuario:
 @dataclass
 class NuevoCliente:
     """Datos del formulario de registro de clientes."""
-    tipo_documento: Literal["NIT", "Cédula"]
+    tipo_documento: Literal["NIT", "CC", "CE", "PA", "PPT"]
     numero_documento: str
     nombre: str
     correo: str
@@ -44,6 +45,7 @@ class NuevoCliente:
     telefono: str
     direccion: str | None
     contrasena_hash: str
+    nombre_contacto: str | None = None
 
 
 @dataclass
@@ -54,6 +56,7 @@ class PerfilCliente:
     tipo_telefono: Literal["Empresarial", "Personal"]
     telefono: str
     direccion: str | None
+    nombre_contacto: str | None = None
 
 
 @dataclass

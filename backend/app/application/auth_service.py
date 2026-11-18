@@ -1,11 +1,14 @@
 import re
 import secrets
+import threading
+import time
+from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from app.application.validaciones import (
-    normalizar_correo, problema_correo, problema_direccion, problema_documento,
-    problema_nombre, problema_telefono, problemas_contrasena,
+    normalizar_correo, normalizar_documento, problema_contacto, problema_correo, problema_direccion,
+    problema_documento, problema_nombre, problema_telefono, problemas_contrasena,
 )
 from app.domain.entities.usuario import NuevoCliente, PerfilCliente, Usuario
 from app.domain.exceptions.errors import (
@@ -22,6 +25,14 @@ _HASH_RELLENO = "$2a$12$OIKVxWkPfrhee9SqSSfD4uIXgRLpg9F4PoqWKa2LdYs7raRcpwAU6"
 MENSAJE_CODIGO_ENVIADO = (
     "Si el correo está registrado, te enviamos un código de 6 dígitos. Revisa también la carpeta de spam."
 )
+
+
+# Verificación en vivo de la contraseña actual (Mi perfil): máximo de consultas por
+# usuario en una ventana de tiempo, para que no se pueda usar para adivinar contraseñas.
+VERIFICACIONES_MAXIMAS = 10
+VENTANA_VERIFICACION_SEG = 60
+_verificaciones: dict[str, deque] = defaultdict(deque)
+_candado_verificaciones = threading.Lock()
 
 
 @dataclass
@@ -89,8 +100,9 @@ class AuthService:
     # ================================================================ Registro de clientes (PBI-14/15/16)
     def registrar_cliente(self, tipo_documento: str, numero_documento: str, nombre: str, correo: str,
                           tipo_telefono: str, telefono: str, direccion: str | None,
-                          contrasena: str, confirmar: str) -> Sesion:
-        numero_documento = re.sub(r"[\s.]", "", numero_documento or "")
+                          contrasena: str, confirmar: str, nombre_contacto: str | None = None) -> Sesion:
+        numero_documento = normalizar_documento(tipo_documento, numero_documento)
+        nombre_contacto = " ".join((nombre_contacto or "").split()) or None
         telefono = re.sub(r"[\s\-()+]", "", telefono or "")
         correo = normalizar_correo(correo)
         direccion = (direccion or "").strip() or None
@@ -98,6 +110,7 @@ class AuthService:
         for problema in (
             problema_documento(tipo_documento, numero_documento),
             problema_nombre(nombre),
+            problema_contacto(tipo_documento, nombre_contacto),
             problema_correo(correo),
             problema_telefono(tipo_telefono, telefono),
             problema_direccion(direccion),
@@ -120,6 +133,7 @@ class AuthService:
             nombre=" ".join(nombre.split()), correo=correo,
             tipo_telefono=tipo_telefono, telefono=telefono, direccion=direccion,
             contrasena_hash=self.hasher.hashear(contrasena),
+            nombre_contacto=nombre_contacto if tipo_documento == "NIT" else None,
         ))
         return Sesion(self._token_sesion(usuario), usuario)
 
@@ -207,6 +221,25 @@ class AuthService:
         self.repo.cambiar_contrasena(usuario.tipo, usuario.id, self.hasher.hashear(nueva))
 
     # ================================================================ Usuario con sesión
+    def verificar_contrasena_actual(self, usuario: Usuario, actual: str) -> bool:
+        """Mi perfil: dice si la contraseña actual es correcta mientras el cliente la escribe.
+
+        Tiene límite de consultas por usuario para que no sirva para adivinar contraseñas.
+        """
+        if usuario.tipo != "Cliente":
+            raise ForbiddenError("Tu contraseña la administra el taller. Pide al administrador que la cambie.")
+        clave = f"{usuario.tipo}:{usuario.id}"
+        ahora = time.monotonic()
+        with _candado_verificaciones:
+            consultas = _verificaciones[clave]
+            while consultas and ahora - consultas[0] > VENTANA_VERIFICACION_SEG:
+                consultas.popleft()
+            if len(consultas) >= VERIFICACIONES_MAXIMAS:
+                espera = int(VENTANA_VERIFICACION_SEG - (ahora - consultas[0])) + 1
+                raise DemasiadosIntentosError(f"Demasiados intentos. Espera {espera} segundos e intenta de nuevo.")
+            consultas.append(ahora)
+        return self.hasher.verificar(actual or "", usuario.contrasena_hash)
+
     def cambiar_contrasena(self, usuario: Usuario, actual: str, nueva: str, confirmar: str) -> None:
         """Cambio desde Mi perfil (solo clientes). Cierra TODAS las sesiones, incluida la actual (PBI-21)."""
         if usuario.tipo != "Cliente":
@@ -221,15 +254,18 @@ class AuthService:
         self.repo.cambiar_contrasena(usuario.tipo, usuario.id, self.hasher.hashear(nueva))
 
     def actualizar_perfil(self, usuario: Usuario, nombre: str, correo: str, tipo_telefono: str,
-                          telefono: str, direccion: str | None) -> Usuario:
+                          telefono: str, direccion: str | None, nombre_contacto: str | None = None) -> Usuario:
         """Mi perfil: solo el CLIENTE edita sus datos. Los de los empleados son de la empresa."""
         if usuario.tipo != "Cliente":
             raise ForbiddenError("Tus datos los administra el taller. Si algo está mal, avísale al administrador.")
         correo = normalizar_correo(correo)
         telefono = re.sub(r"[\s\-()+]", "", telefono or "")
         direccion = (direccion or "").strip() or None
+        es_empresa = usuario.tipo_documento == "NIT"
+        nombre_contacto = (" ".join((nombre_contacto or "").split()) or None) if es_empresa else None
         for problema in (problema_nombre(nombre), problema_correo(correo),
-                         problema_telefono(tipo_telefono, telefono), problema_direccion(direccion)):
+                         problema_telefono(tipo_telefono, telefono), problema_direccion(direccion),
+                         problema_contacto(usuario.tipo_documento or "", nombre_contacto)):
             if problema:
                 raise ValidacionError(problema)
         if correo != usuario.correo.lower():
@@ -239,7 +275,7 @@ class AuthService:
                 raise ValidacionError(f"El dominio @{correo.split('@')[1]} no existe o no recibe correos.")
         return self.repo.actualizar_perfil_cliente(usuario.id, PerfilCliente(
             nombre=" ".join(nombre.split()), correo=correo, tipo_telefono=tipo_telefono,
-            telefono=telefono, direccion=direccion,
+            telefono=telefono, direccion=direccion, nombre_contacto=nombre_contacto,
         ))
 
     def cerrar_todas_las_sesiones(self, usuario: Usuario) -> None:

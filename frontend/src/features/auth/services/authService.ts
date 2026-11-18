@@ -6,7 +6,23 @@ export const EVENTO_USUARIO_ACTUALIZADO = "eslabon:usuario-actualizado";
 
 // ---------- Tipos ----------
 export type TipoUsuario = "Empleado" | "Cliente";
-export type TipoDocumento = "NIT" | "Cédula";
+export type TipoDocumento = "NIT" | "CC" | "CE" | "PA" | "PPT";
+
+/** Tipos de documento usados en Colombia: código que se guarda -> nombre que se muestra. */
+export const TIPOS_DOCUMENTO: { valor: TipoDocumento; etiqueta: string; corta: string }[] = [
+  { valor: "CC", etiqueta: "Cédula de ciudadanía", corta: "C.C." },
+  { valor: "NIT", etiqueta: "NIT (empresa)", corta: "NIT" },
+  { valor: "CE", etiqueta: "Cédula de extranjería", corta: "C.E." },
+  { valor: "PA", etiqueta: "Pasaporte", corta: "Pasaporte" },
+  { valor: "PPT", etiqueta: "Permiso por Protección Temporal (PPT)", corta: "PPT" },
+];
+
+/** Nombre del tipo de documento para mostrar (acepta también el antiguo "Cédula"). */
+export function nombreTipoDocumento(tipo: string | null | undefined): string {
+  if (!tipo) return "Documento";
+  if (tipo === "Cédula") return "Cédula de ciudadanía";
+  return TIPOS_DOCUMENTO.find((t) => t.valor === tipo)?.etiqueta.replace(" (empresa)", "") ?? tipo;
+}
 export type TipoTelefono = "Empresarial" | "Personal";
 
 export interface Usuario {
@@ -19,6 +35,7 @@ export interface Usuario {
   direccion: string | null;
   documento: string | null;        // NIT/cédula (cliente) o identificación (empleado)
   tipo_documento: TipoDocumento | null;
+  nombre_contacto?: string | null; // persona a contactar (clientes con NIT)
   tipo_telefono: TipoTelefono | null;
   permisos: string[];
 }
@@ -29,6 +46,7 @@ export interface PerfilDatos {
   tipo_telefono: TipoTelefono;
   telefono: string;
   direccion?: string | null;
+  nombre_contacto?: string | null;
 }
 
 export interface Sesion {
@@ -41,6 +59,7 @@ export interface RegistroDatos {
   tipo_documento: TipoDocumento;
   numero_documento: string;
   nombre: string;
+  nombre_contacto?: string | null;
   correo: string;
   tipo_telefono: TipoTelefono;
   telefono: string;
@@ -86,6 +105,11 @@ export const authService = {
       window.dispatchEvent(new CustomEvent(EVENTO_USUARIO_ACTUALIZADO, { detail: r.data }));
       return r.data;
     }),
+
+  /** Mi perfil: dice si la contraseña actual es correcta (el backend limita a 10 consultas por minuto). */
+  verificarContrasenaActual: (contrasena_actual: string) =>
+    api.post<{ correcta: boolean }>("/auth/verificar-contrasena-actual", { contrasena_actual })
+      .then((r) => r.data.correcta),
 
   /** Cambia la contraseña (solo clientes) y cierra la sesión en TODOS los dispositivos, incluido este. */
   cambiarContrasena: (contrasena_actual: string, nueva_contrasena: string, confirmar_contrasena: string) =>

@@ -50,11 +50,45 @@ export const validarConfirmacion = (c: string, conf: string) =>
   !conf ? "Confirma la contraseña." : c === conf ? null : "Las contraseñas no coinciden.";
 
 // ---------- Registro ----------
+/** Formato de cada tipo de documento (mismas reglas del backend). */
+const REGLAS_DOCUMENTO: Record<TipoDocumento, { patron: RegExp; vacio: string; mensaje: string }> = {
+  NIT: { patron: /^\d{9,10}(-\d)?$/, vacio: "Ingresa el NIT.",
+         mensaje: "El NIT tiene 9 o 10 dígitos y, opcional, el dígito de verificación (900123456-1)." },
+  CC: { patron: /^\d{6,10}$/, vacio: "Ingresa el número de cédula.",
+        mensaje: "La cédula de ciudadanía tiene entre 6 y 10 dígitos, sin puntos." },
+  CE: { patron: /^\d{6,10}$/, vacio: "Ingresa el número de la cédula de extranjería.",
+        mensaje: "La cédula de extranjería tiene entre 6 y 10 dígitos, sin puntos." },
+  PA: { patron: /^[A-Z0-9]{5,15}$/, vacio: "Ingresa el número de pasaporte.",
+        mensaje: "El pasaporte tiene entre 5 y 15 letras o números, sin espacios ni guiones." },
+  PPT: { patron: /^\d{6,15}$/, vacio: "Ingresa el número del PPT.",
+         mensaje: "El PPT tiene entre 6 y 15 dígitos, sin puntos." },
+};
+
+/** Limpia lo que se escribe en el número de documento según el tipo. */
+export function limpiarDocumento(tipo: TipoDocumento, valor: string): string {
+  if (tipo === "PA") return valor.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15);
+  if (tipo === "NIT") return valor.replace(/[^\d-]/g, "").slice(0, 12);
+  return soloDigitos(valor).slice(0, 15);
+}
+
 export function validarDocumento(tipo: TipoDocumento, numero: string): string | null {
+  const regla = REGLAS_DOCUMENTO[tipo];
+  if (!regla) return "Elige el tipo de documento.";
   const v = numero.replace(/[\s.]/g, "");
-  if (!v) return tipo === "NIT" ? "Ingresa el NIT." : "Ingresa el número de cédula.";
-  if (tipo === "NIT") return /^\d{9,10}(-\d)?$/.test(v) ? null : "El NIT tiene 9 o 10 dígitos y, opcional, el dígito de verificación (900123456-1).";
-  return /^\d{6,10}$/.test(v) ? null : "La cédula tiene entre 6 y 10 dígitos, sin puntos.";
+  const valor = tipo === "PA" ? v.toUpperCase() : v;
+  if (!valor) return regla.vacio;
+  return regla.patron.test(valor) ? null : regla.mensaje;
+}
+
+/** Persona a contactar: obligatoria cuando el cliente es una empresa (NIT). */
+export function validarContacto(tipo: TipoDocumento, contacto: string): string | null {
+  const v = contacto.trim();
+  if (tipo !== "NIT") return null;
+  if (!v) return "Escribe el nombre de la persona a contactar.";
+  if (v.length < 3) return "Mínimo 3 letras.";
+  if (v.length > 100) return "Máximo 100 caracteres.";
+  if (!/^[A-Za-zÁÉÍÓÚáéíóúÑñÜü .'-]+$/.test(v)) return "Solo letras y espacios.";
+  return null;
 }
 
 export function validarTelefono(tipo: TipoTelefono, tel: string): string | null {

@@ -8,6 +8,8 @@ import {
   type Cliente,
   type EstadoCliente,
 } from '../services/clienteService';
+import { TIPOS_DOCUMENTO, type TipoDocumento } from '../../auth/services/authService';
+import { limpiarDocumento, validarContacto, validarDocumento } from '../../auth/utils/validaciones';
 
 // ==========================================
 // PALETA DE COLORES - SISTEMA DE DISEÑO BASE
@@ -212,6 +214,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   // Estados del formulario
   const [formNombre, setFormNombre] = useState('');
   const [formNit, setFormNit] = useState('');
+  const [formTipoDoc, setFormTipoDoc] = useState<TipoDocumento>('NIT');
+  const [formContacto, setFormContacto] = useState('');
   const [formContrasena, setFormContrasena] = useState('');
   const [formDireccion, setFormDireccion] = useState('');
   const [formCorreo, setFormCorreo] = useState('');
@@ -234,6 +238,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       setClienteEditar(cli);
       setFormNombre(cli.nombre);
       setFormNit(cli.nit);
+      setFormTipoDoc(cli.tipo_documento ?? 'NIT');
+      setFormContacto(cli.nombre_contacto ?? '');
       setFormDireccion(cli.direccion ?? '');
       setFormCorreo(cli.correo);
       setFormTelefono(cli.telefono ?? '');
@@ -242,6 +248,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       setClienteEditar(null);
       setFormNombre('');
       setFormNit('');
+      setFormTipoDoc('NIT');
+      setFormContacto('');
       setFormDireccion('');
       setFormCorreo('');
       setFormTelefono('');
@@ -256,6 +264,10 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       toast.error('Todos los campos son obligatorios para guardar el cliente.');
       return;
     }
+    const problemaDoc = clienteEditar ? null : validarDocumento(formTipoDoc, formNit);
+    if (problemaDoc) { toast.error(problemaDoc); return; }
+    const problemaContacto = validarContacto(formTipoDoc, formContacto);
+    if (problemaContacto) { toast.error(problemaContacto); return; }
     if (!clienteEditar && formContrasena.length < 6) {
       toast.error('La contraseña debe tener al menos 6 caracteres.');
       return;
@@ -267,6 +279,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
 
     const datos = {
       nombre: formNombre.trim(),
+      ...(formTipoDoc === 'NIT' ? { nombre_contacto: formContacto.trim() } : {}),
       direccion: formDireccion.trim(),
       correo: formCorreo.trim(),
       telefono: formTelefono.trim(),
@@ -283,7 +296,9 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
         setClientes(clientes.map(c => c.nit === actualizado.nit ? actualizado : c));
         toast.success('Cliente actualizado exitosamente');
       } else {
-        const nuevo = await clienteService.crear({ ...datos, nit: formNit.trim(), contrasena: formContrasena });
+        const nuevo = await clienteService.crear({
+          ...datos, tipo_documento: formTipoDoc, nit: limpiarDocumento(formTipoDoc, formNit), contrasena: formContrasena,
+        });
         setClientes([...clientes, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
         toast.success('Nuevo cliente registrado con éxito');
       }
@@ -424,7 +439,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
         </div>
       </div>
 
-      <TableShell headers={['NIT', 'NOMBRE', 'DIRECCIÓN', 'CORREO', 'TELÉFONO', 'ESTADO', 'ACCIONES']} dark={dark}>
+      <TableShell headers={['DOCUMENTO', 'NOMBRE', 'DIRECCIÓN', 'CORREO', 'TELÉFONO', 'ESTADO', 'ACCIONES']} dark={dark}>
         {cargando ? (
           <tr>
             <td colSpan={8} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
@@ -444,9 +459,15 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
               <tr key={cli.nit} style={{ borderBottom: `1px solid ${borderNormal}` }}>
                 <td style={{ padding: '12px 14px' }}>
                   <IdBadge id={cli.nit} />
+                  <div style={{ fontSize: 10, color: subtle, marginTop: 3, fontWeight: 600 }}>
+                    {TIPOS_DOCUMENTO.find(t => t.valor === cli.tipo_documento)?.corta ?? cli.tipo_documento}
+                  </div>
                 </td>
                 <td style={{ padding: '12px 14px', fontWeight: 700, color: fg, fontSize: 13 }}>
                   {cli.nombre}
+                  {cli.tipo_documento === 'NIT' && cli.nombre_contacto && (
+                    <div style={{ fontSize: 11, color: subtle, fontWeight: 500, marginTop: 2 }}>Contacto: {cli.nombre_contacto}</div>
+                  )}
                 </td>
                 <td style={{ padding: '12px 14px', fontSize: 12, color: subtle }}>
                   {cli.direccion ?? '—'}
@@ -557,17 +578,30 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
 
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16, maxHeight: '80vh', overflowY: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <Field label={clienteEditar ? 'NIT (no editable)' : 'NIT / Identificación'} dark={dark}>
+                <Field label={clienteEditar ? 'Tipo de documento (no editable)' : 'Tipo de documento'} dark={dark}>
+                  <select
+                    disabled={!!clienteEditar}
+                    value={formTipoDoc}
+                    onChange={(e) => { setFormTipoDoc(e.target.value as TipoDocumento); setFormNit(''); }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: clienteEditar ? subtle : fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
+                  >
+                    {TIPOS_DOCUMENTO.map(t => <option key={t.valor} value={t.valor}>{t.etiqueta}</option>)}
+                  </select>
+                </Field>
+                <Field label={clienteEditar ? 'Número de documento (no editable)' : 'Número de documento'} dark={dark}>
                   <input
                     type="text"
                     disabled={!!clienteEditar}
-                    placeholder="Ej: 10458231"
+                    placeholder={{ NIT: '900123456-1', CC: '10458231', CE: '1234567', PA: 'AB123456', PPT: '1234567' }[formTipoDoc]}
                     value={formNit}
-                    onChange={(e) => setFormNit(e.target.value.replace(/[^0-9-]/g, ''))}
+                    onChange={(e) => setFormNit(limpiarDocumento(formTipoDoc, e.target.value))}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: clienteEditar ? subtle : fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
                   />
                 </Field>
-                <Field label="Nombre (Solo Letras)" dark={dark}>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: formTipoDoc === 'NIT' ? '1fr 1fr' : '1fr', gap: 16 }}>
+                <Field label={formTipoDoc === 'NIT' ? 'Razón social' : 'Nombre (Solo Letras)'} dark={dark}>
                   <input
                     type="text"
                     placeholder="Nombre del cliente"
@@ -579,6 +613,18 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
                   />
                 </Field>
+                {formTipoDoc === 'NIT' && (
+                  <Field label="Nombre de la persona a contactar" dark={dark}>
+                    <input
+                      type="text"
+                      maxLength={100}
+                      placeholder="Ej: María Gómez"
+                      value={formContacto}
+                      onChange={(e) => setFormContacto(e.target.value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.'-]/g, ''))}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
+                    />
+                  </Field>
+                )}
               </div>
 
               <Field label="Dirección" dark={dark}>
@@ -677,4 +723,4 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       )}
     </div>
   );
-};
+};

@@ -12,13 +12,14 @@ _SQL_USUARIOS = """
         SELECT e.id_empleados AS id, 'Empleado' AS tipo, e.nombre, e.correo,
                e.contrasena AS contrasena_hash, e.estado, e.id_rol,
                r.descripcion_rol AS rol, e.version_token, e.telefono, e.direccion,
-               e.identificacion AS documento, NULL AS tipo_documento, NULL AS tipo_telefono
+               e.identificacion AS documento, NULL AS tipo_documento, NULL AS nombre_contacto,
+               NULL AS tipo_telefono
           FROM empleados e LEFT JOIN roles r ON r.id_rol = e.id_rol
         UNION ALL
         SELECT c.nit, 'Cliente', c.nombre, c.correo,
                c.contrasena, c.estado, c.id_rol,
                COALESCE(r.descripcion_rol, 'Cliente'), c.version_token, c.telefono, c.direccion,
-               c.nit, c.tipo_documento, c.tipo_telefono
+               c.nit, c.tipo_documento, c.nombre_contacto, c.tipo_telefono
           FROM tb_clientes c LEFT JOIN roles r ON r.id_rol = c.id_rol
     ) u
 """
@@ -72,10 +73,11 @@ class AuthRepository(IAuthRepository):
         self.db.execute(
             text("""UPDATE tb_clientes
                        SET nombre = :nombre, correo = :correo, tipo_telefono = :tipo_tel,
-                           telefono = :telefono, direccion = :direccion
+                           telefono = :telefono, direccion = :direccion, nombre_contacto = :contacto
                      WHERE nit = :nit"""),
             {"nombre": perfil.nombre, "correo": perfil.correo.strip().lower(), "tipo_tel": perfil.tipo_telefono,
-             "telefono": perfil.telefono, "direccion": perfil.direccion, "nit": nit},
+             "telefono": perfil.telefono, "direccion": perfil.direccion, "contacto": perfil.nombre_contacto,
+             "nit": nit},
         )
         self.db.commit()
         return self.buscar_por_id("Cliente", nit)
@@ -94,13 +96,14 @@ class AuthRepository(IAuthRepository):
             raise RuntimeError("Falta el rol 'Cliente' (activo) en la tabla roles.")
         self.db.execute(
             text("""INSERT INTO tb_clientes
-                        (nit, tipo_documento, nombre, correo, tipo_telefono, telefono,
+                        (nit, tipo_documento, nombre, nombre_contacto, correo, tipo_telefono, telefono,
                          direccion, contrasena, id_rol)
-                    VALUES (:nit, :tipo_doc, :nombre, :correo, :tipo_tel, :telefono,
+                    VALUES (:nit, :tipo_doc, :nombre, :contacto, :correo, :tipo_tel, :telefono,
                             :direccion, :hash, :rol)"""),
             {
                 "nit": cliente.numero_documento, "tipo_doc": cliente.tipo_documento,
-                "nombre": cliente.nombre, "correo": cliente.correo.strip().lower(),
+                "nombre": cliente.nombre, "contacto": cliente.nombre_contacto,
+                "correo": cliente.correo.strip().lower(),
                 "tipo_tel": cliente.tipo_telefono, "telefono": cliente.telefono,
                 "direccion": cliente.direccion, "hash": cliente.contrasena_hash, "rol": id_rol,
             },

@@ -10,7 +10,8 @@ from app.domain.interfaces.cliente_repository import IClienteRepository
 ROL_CLIENTE = "Cliente"
 
 SELECT_CLIENTES = """
-    SELECT c.nit, c.nombre, c.direccion, c.correo, c.telefono, c.estado
+    SELECT c.nit, c.nombre, c.direccion, c.correo, c.telefono, c.estado,
+           c.tipo_documento, c.nombre_contacto
       FROM tb_clientes c
 """
 
@@ -18,6 +19,7 @@ SELECT_CLIENTES = """
 # El NIT no está aquí porque es la llave primaria: se fija al crear y no se edita.
 CAMPOS_EDITABLES = {
     "nombre": "nombre",
+    "nombre_contacto": "nombre_contacto",
     "direccion": "direccion",
     "correo": "correo",
     "telefono": "telefono",
@@ -79,13 +81,14 @@ class ClienteRepository(IClienteRepository):
         datos = _preparar(datos)
         campos = [c for c in CAMPOS_EDITABLES if c in datos]
         sql = f"""
-            INSERT INTO tb_clientes (nit, id_rol, {", ".join(CAMPOS_EDITABLES[c] for c in campos)})
-            VALUES (:nit, (SELECT id_rol FROM roles WHERE descripcion_rol = :rol),
+            INSERT INTO tb_clientes (nit, tipo_documento, id_rol, {", ".join(CAMPOS_EDITABLES[c] for c in campos)})
+            VALUES (:nit, :tipo_documento, (SELECT id_rol FROM roles WHERE descripcion_rol = :rol),
                     {", ".join(f":{c}" for c in campos)})
             RETURNING nit
         """
         params = {c: datos[c] for c in campos}
         params["nit"] = datos["nit"]
+        params["tipo_documento"] = datos.get("tipo_documento", "NIT")
         params["rol"] = ROL_CLIENTE
         nit = self.db.execute(text(sql), params).scalar_one()
         self.db.commit()

@@ -11,9 +11,11 @@ class LoginEntrada(BaseModel):
 
 
 class RegistroClienteEntrada(BaseModel):
-    tipo_documento: Literal["NIT", "Cédula"]
+    tipo_documento: Literal["NIT", "CC", "CE", "PA", "PPT"]
     numero_documento: str = Field(max_length=20)
     nombre: str = Field(max_length=100, description="Razón social o nombre completo")
+    nombre_contacto: str | None = Field(default=None, max_length=100,
+                                        description="Persona a contactar (obligatorio si el documento es NIT)")
     correo: str = Field(max_length=100)
     tipo_telefono: Literal["Empresarial", "Personal"]
     telefono: str = Field(max_length=20)
@@ -37,6 +39,14 @@ class RestablecerEntrada(BaseModel):
     confirmar_contrasena: str = Field(max_length=72)
 
 
+class ContrasenaActualEntrada(BaseModel):
+    contrasena_actual: str = Field(max_length=72)
+
+
+class ContrasenaActualRespuesta(BaseModel):
+    correcta: bool
+
+
 class CambiarContrasenaEntrada(BaseModel):
     contrasena_actual: str = Field(max_length=72)
     nueva_contrasena: str = Field(max_length=72)
@@ -49,6 +59,7 @@ class PerfilEntrada(BaseModel):
     tipo_telefono: Literal["Empresarial", "Personal"]
     telefono: str = Field(max_length=20)
     direccion: str | None = Field(default=None, max_length=150)
+    nombre_contacto: str | None = Field(default=None, max_length=100)
 
 
 class UsuarioRespuesta(BaseModel):
@@ -64,6 +75,7 @@ class UsuarioRespuesta(BaseModel):
     direccion: str | None
     documento: str | None
     tipo_documento: str | None
+    nombre_contacto: str | None = None
     tipo_telefono: str | None
     permisos: list[str]
 

@@ -13,3 +13,5 @@ class Cliente:
     correo: str
     telefono: str | None
     estado: str
+    tipo_documento: str = "NIT"           # NIT | CC | CE | PA | PPT
+    nombre_contacto: str | None = None    # persona a contactar (obligatoria si es NIT)

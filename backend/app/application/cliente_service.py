@@ -1,5 +1,6 @@
+from app.application.validaciones import normalizar_documento, problema_contacto, problema_documento
 from app.domain.entities.cliente import Cliente
-from app.domain.exceptions.errors import ConflictError, NotFoundError
+from app.domain.exceptions.errors import ConflictError, NotFoundError, ValidacionError
 from app.domain.interfaces.cliente_repository import IClienteRepository
 
 
@@ -11,6 +12,7 @@ class ClienteService:
     - El correo no se puede repetir entre clientes.
     - El rol siempre es "Cliente" (lo asigna el backend, no se pide en el formulario).
     - No se elimina un cliente que ya tiene remisiones; en ese caso se debe inactivar.
+    - Si el cliente es una empresa (NIT) se debe registrar la persona a contactar.
     """
 
     def __init__(self, repo: IClienteRepository):
@@ -31,13 +33,28 @@ class ClienteService:
         return cliente
 
     def crear(self, datos: dict) -> Cliente:
+        tipo = datos.get("tipo_documento", "NIT")
+        datos["nit"] = normalizar_documento(tipo, datos["nit"])
+        for problema in (problema_documento(tipo, datos["nit"]),
+                         problema_contacto(tipo, datos.get("nombre_contacto"))):
+            if problema:
+                raise ValidacionError(problema)
+        if tipo != "NIT":
+            datos.pop("nombre_contacto", None)
         if self.repo.obtener(datos["nit"]):
             raise ConflictError(f"Ya existe un cliente con el NIT {datos['nit']}.")
         self._validar(datos)
         return self.repo.crear(datos)
 
     def actualizar(self, nit: str, datos: dict) -> Cliente:
-        self.obtener(nit)  # lanza 404 si no existe
+        actual = self.obtener(nit)  # lanza 404 si no existe
+        if "nombre_contacto" in datos:
+            if actual.tipo_documento != "NIT":
+                datos.pop("nombre_contacto")
+            else:
+                problema = problema_contacto("NIT", datos["nombre_contacto"])
+                if problema:
+                    raise ValidacionError(problema)
         self._validar(datos, excluir_nit=nit)
         return self.repo.actualizar(nit, datos)
 
