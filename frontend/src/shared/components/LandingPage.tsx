@@ -39,9 +39,10 @@ const SunIcon = () => (
 
 interface LandingPageProps {
   onNavigateToLogin?: () => void;
+  onNavigateToLicencias?: () => void;
 }
 
-export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
+export default function LandingPage({ onNavigateToLogin, onNavigateToLicencias }: LandingPageProps) {
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const themeColors = {
     bgPage: darkMode ? '#121212' : '#F8F9FA',
@@ -108,6 +109,7 @@ export default function LandingPage({ onNavigateToLogin }: LandingPageProps) {
 
   const navegar = (destino: string) => {
     if (destino === 'login') { handleLoginRedirect(); return; }
+    if (destino === 'licencias') { onNavigateToLicencias?.(); return; }
     if (destino === 'inicio') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     document.getElementById(destino)?.scrollIntoView({ behavior: 'smooth' });
   };

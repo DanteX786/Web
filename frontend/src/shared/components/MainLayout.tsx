@@ -352,7 +352,7 @@ export default function MainLayout({
           
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: fg, textTransform: 'capitalize' }}>
-              {currentView === 'miPerfil' ? 'Mi Perfil' : currentView.replace(/([A-Z])/g, ' $1')}
+              {currentView === 'miPerfil' ? 'Mi Perfil' : currentView === 'licencias' ? 'Licencias de software' : currentView.replace(/([A-Z])/g, ' $1')}
             </div>
           </div>
 
@@ -502,7 +502,7 @@ export default function MainLayout({
         </main>
 
         {/* Pie de página del aplicativo */}
-        <Footer variant="app" dark={dark} />
+        <Footer variant="app" dark={dark} onNavegar={(destino) => { if (destino === 'licencias') setCurrentView('licencias'); }} />
 
       </div>
 
@@ -519,4 +519,4 @@ export default function MainLayout({
 
     </div>
   );
-}
+}
