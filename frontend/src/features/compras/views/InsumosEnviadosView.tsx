@@ -7,6 +7,9 @@ import { toast } from 'sonner';
 import { mensajeError } from '../../../shared/utils/api';
 import { insumoEnviadoService, type InsumoEnviado } from '../services/insumoEnviadoService';
 import { remisionService, type Remision } from '../../ventas/services/remisionService';
+import {
+  UNIDADES_INSUMO, cargarSugerenciasInsumos, problemaInsumo, requiereEspecificacion, separarNombre, unirNombre,
+} from '../utils/insumosEnviados';
 
 // PALETA DE DISEÑO ESLABÓN
 const GOLD       = "#C9A227";
@@ -18,7 +21,6 @@ const SUCCESS    = "#28A745";
 
 // Mientras la remisión esté en uno de estos estados se pueden registrar o corregir insumos
 const ESTADOS_EDITABLES = ['Pendiente', 'Aprobada', 'En producción'];
-const UNIDADES = ['Unidad', 'Metros', 'Conos', 'Rollos', 'Pares'];
 
 export const IdBadge: React.FC<{ id: string }> = ({ id }) => (
   <span style={{
@@ -167,6 +169,8 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
 
   const [formRemision, setFormRemision] = useState('');
   const [formNombre, setFormNombre] = useState('');
+  const [formEspecificacion, setFormEspecificacion] = useState('');
+  const [sugerencias, setSugerencias] = useState<string[]>([]);
   const [formCantidad, setFormCantidad] = useState<number | ''>('');
   const [formUnidad, setFormUnidad] = useState('Unidad');
 
@@ -185,6 +189,11 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
     cargar();
   }, []);
 
+  // Sugerencias del buscador de insumos (catálogo del taller + insumos comunes)
+  useEffect(() => {
+    if (modalEdit && sugerencias.length === 0) cargarSugerenciasInsumos().then(setSugerencias);
+  }, [modalEdit]);
+
   const remisionesAbiertas = remisiones.filter(r => ESTADOS_EDITABLES.includes(r.estado));
   const esEditable = (item: InsumoEnviado) => ESTADOS_EDITABLES.includes(item.estado_remision ?? '');
 
@@ -192,6 +201,7 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
     setModalEdit('nuevo');
     setFormRemision(remisionesAbiertas[0]?.id_remision ?? '');
     setFormNombre('');
+    setFormEspecificacion('');
     setFormCantidad('');
     setFormUnidad('Unidad');
   };
@@ -199,14 +209,21 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
   const handleOpenEdit = (item: InsumoEnviado) => {
     setModalEdit(item);
     setFormRemision(item.id_remision);
-    setFormNombre(item.nombre);
+    const { insumo, especificacion } = separarNombre(item.nombre);
+    setFormNombre(insumo);
+    setFormEspecificacion(especificacion);
     setFormCantidad(item.cantidad);
     setFormUnidad(item.unidad);
   };
 
   const handleSaveEdit = async () => {
-    if (!formNombre.trim() || formCantidad === '' || Number(formCantidad) <= 0 || (modalEdit === 'nuevo' && !formRemision)) {
-      toast.error('Por favor completa todos los campos correctamente');
+    if (modalEdit === 'nuevo' && !formRemision) {
+      toast.error('Elige la remisión asociada');
+      return;
+    }
+    const problema = problemaInsumo(formNombre, formEspecificacion, Number(formCantidad || 0), formUnidad);
+    if (problema) {
+      toast.error(problema);
       return;
     }
     if (modalEdit && modalEdit !== 'nuevo' && Number(formCantidad) < modalEdit.cantidad_usada) {
@@ -216,7 +233,7 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
 
     setGuardando(true);
     try {
-      const datos = { nombre: formNombre.trim(), cantidad: Number(formCantidad), unidad: formUnidad };
+      const datos = { nombre: unirNombre(formNombre, formEspecificacion), cantidad: Number(formCantidad), unidad: formUnidad };
       if (modalEdit === 'nuevo') {
         const nuevo = await insumoEnviadoService.crear({ ...datos, id_remision: formRemision });
         setInsumos([nuevo, ...insumos]);
@@ -413,9 +430,19 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
                 style={{ ...inputEstilo, backgroundColor: dark ? '#333' : '#EAEAEA', color: subtle, cursor: 'not-allowed' }} />
             )}
           </Field>
-          <Field label="Nombre del Insumo" dark={dark}>
-            <input type="text" value={formNombre} maxLength={100} onChange={(e) => setFormNombre(e.target.value)} placeholder="Ej. Botones blancos 4 huecos" style={inputEstilo} />
-          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="Insumo" dark={dark}>
+              <input type="text" list="sugerencias-insumos-enviados" value={formNombre} maxLength={60}
+                onChange={(e) => setFormNombre(e.target.value)} placeholder="Buscar o escribir (ej. Botones)" style={inputEstilo} />
+              <datalist id="sugerencias-insumos-enviados">
+                {sugerencias.map(n => <option key={n} value={n} />)}
+              </datalist>
+            </Field>
+            <Field label={requiereEspecificacion(formUnidad) ? 'Especificación *' : 'Especificación (opcional)'} dark={dark}>
+              <input type="text" value={formEspecificacion} maxLength={60} onChange={(e) => setFormEspecificacion(e.target.value)}
+                placeholder="Ej. blancos 4 huecos" title="Color, tamaño, calibre, metros por cono..." style={inputEstilo} />
+            </Field>
+          </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="Cantidad enviada" dark={dark}>
               <input type="number" min={1} value={formCantidad}
@@ -423,9 +450,12 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
             </Field>
             <Field label="Unidad" dark={dark}>
               <select value={formUnidad} onChange={(e) => setFormUnidad(e.target.value)} style={inputEstilo}>
-                {(UNIDADES.includes(formUnidad) ? UNIDADES : [formUnidad, ...UNIDADES]).map(u => <option key={u} value={u}>{u}</option>)}
+                {(UNIDADES_INSUMO.includes(formUnidad) ? UNIDADES_INSUMO : [formUnidad, ...UNIDADES_INSUMO]).map(u => <option key={u} value={u}>{u}</option>)}
               </select>
             </Field>
+          </div>
+          <div style={{ fontSize: 11, color: subtle }}>
+            Se guarda como «{unirNombre(formNombre || 'Insumo', formEspecificacion) }». La especificación es obligatoria para Unidad, Paquete y Carrete.
           </div>
           {modalEdit !== 'nuevo' && modalEdit.cantidad_usada > 0 && (
             <div style={{ fontSize: 12, color: subtle }}>

@@ -1,13 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   User, Mail, Phone, MapPin, Hash, Shield, Lock, Eye, EyeOff,
-  Pencil, Save, X, CheckCircle, Key, Info, Building2,
+  Pencil, Save, X, CheckCircle, Key, Info, Building2, XCircle, Loader2, UserCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { authService, obtenerUsuario, type TipoTelefono, type Usuario } from "../../auth/services/authService";
 import {
-  REGLAS_CONTRASENA, soloDigitos, validarConfirmacion, validarContrasenaNueva,
+  authService, nombreTipoDocumento, obtenerUsuario, type TipoTelefono, type Usuario,
+} from "../../auth/services/authService";
+import {
+  REGLAS_CONTRASENA, soloDigitos, validarConfirmacion, validarContacto, validarContrasenaNueva,
   validarCorreo, validarDireccion, validarNombre, validarTelefono,
 } from "../../auth/utils/validaciones";
 import { mensajeError } from "../../../shared/utils/api";
@@ -23,10 +25,14 @@ const SUCCESS_BG = "#DCF7E6";
 const INFO = "#4A90E2";
 const FONT = "Montserrat, sans-serif";
 
-type CampoPerfil = "nombre" | "correo" | "telefono" | "direccion";
+type CampoPerfil = "nombre" | "contacto" | "correo" | "telefono" | "direccion";
+
+/** Estado de la verificación en vivo de la contraseña actual. */
+type EstadoActual = "vacio" | "verificando" | "correcta" | "incorrecta" | "error";
 
 interface FormPerfil {
   nombre: string;
+  contacto: string;
   correo: string;
   tipo_telefono: TipoTelefono;
   telefono: string;
@@ -35,6 +41,7 @@ interface FormPerfil {
 
 const formDesde = (u: Usuario | null): FormPerfil => ({
   nombre: u?.nombre ?? "",
+  contacto: u?.nombre_contacto ?? "",
   correo: u?.correo ?? "",
   tipo_telefono: u?.tipo_telefono ?? "Empresarial",
   telefono: u?.telefono ?? "",
@@ -96,10 +103,36 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
   const [pass, setPass] = useState({ actual: "", nueva: "", confirmar: "" });
   const [ver, setVer] = useState({ actual: false, nueva: false, confirmar: false });
   const [cambiando, setCambiando] = useState(false);
+  const [estadoActual, setEstadoActual] = useState<EstadoActual>("vacio");
+  const [avisoActual, setAvisoActual] = useState("");
+  const consultaActual = useRef(0); // para ignorar respuestas viejas si el usuario sigue escribiendo
+
+  // Verifica la contraseña actual mientras se escribe (espera 600 ms después de la última tecla)
+  useEffect(() => {
+    if (!esCliente) return;
+    const numero = ++consultaActual.current;
+    if (!pass.actual) { setEstadoActual("vacio"); setAvisoActual(""); return; }
+    setEstadoActual("verificando");
+    const espera = window.setTimeout(() => {
+      authService.verificarContrasenaActual(pass.actual)
+        .then((ok) => {
+          if (numero !== consultaActual.current) return;
+          setEstadoActual(ok ? "correcta" : "incorrecta");
+          setAvisoActual(ok ? "Contraseña actual correcta" : "La contraseña actual no es correcta");
+        })
+        .catch((e) => {
+          if (numero !== consultaActual.current) return;
+          setEstadoActual("error");
+          setAvisoActual(mensajeError(e));
+        });
+    }, 600);
+    return () => window.clearTimeout(espera);
+  }, [pass.actual, esCliente]);
 
   const validar = (campo: CampoPerfil, f: FormPerfil = form): string | null => {
     switch (campo) {
       case "nombre": return validarNombre(f.nombre, usuario?.tipo_documento ?? "NIT");
+      case "contacto": return usuario?.tipo_documento === "NIT" ? validarContacto("NIT", f.contacto) : null;
       case "correo": return validarCorreo(f.correo);
       case "telefono": return validarTelefono(f.tipo_telefono, f.telefono);
       case "direccion": return validarDireccion(f.direccion);
@@ -113,7 +146,7 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
   };
 
   const guardarPerfil = async () => {
-    const campos: CampoPerfil[] = ["nombre", "correo", "telefono", "direccion"];
+    const campos: CampoPerfil[] = ["nombre", "contacto", "correo", "telefono", "direccion"];
     const errs = Object.fromEntries(campos.map((c) => [c, validar(c)])) as Partial<Record<CampoPerfil, string | null>>;
     setErrores(errs);
     if (Object.values(errs).some(Boolean)) { toast.error("Revisa los campos marcados en rojo."); return; }
@@ -121,6 +154,7 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
     try {
       const u = await authService.actualizarPerfil({
         nombre: form.nombre.trim(),
+        nombre_contacto: usuario?.tipo_documento === "NIT" ? form.contacto.trim() : null,
         correo: form.correo.trim().toLowerCase(),
         tipo_telefono: form.tipo_telefono,
         telefono: form.telefono,
@@ -138,6 +172,7 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
 
   const cambiarContrasena = async () => {
     if (!pass.actual) { toast.error("Ingresa tu contraseña actual"); return; }
+    if (estadoActual === "incorrecta") { toast.error("La contraseña actual no es correcta"); return; }
     const problema = validarContrasenaNueva(pass.nueva) ?? validarConfirmacion(pass.nueva, pass.confirmar);
     if (problema) { toast.error(problema); return; }
     if (pass.nueva === pass.actual) { toast.error("La nueva contraseña debe ser diferente a la actual"); return; }
@@ -181,7 +216,7 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
     msg ? <div style={{ color: DANGER, fontSize: 11, fontWeight: 600, marginTop: 4 }}>{msg}</div> : null;
 
   // Se usa como función {campoPass(...)} y no como <Componente/>, así el input conserva el foco
-  const campoPass = (campo: "actual" | "nueva" | "confirmar", etiqueta: string) => (
+  const campoPass = (campo: "actual" | "nueva" | "confirmar", etiqueta: string, aviso?: React.ReactNode, colorBorde?: string) => (
     <div key={campo} style={{ marginBottom: 12 }}>
       <Etiqueta texto={etiqueta} />
       <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
@@ -191,13 +226,24 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
           autoComplete={campo === "actual" ? "current-password" : "new-password"}
           onChange={(e) => setPass({ ...pass, [campo]: e.target.value })}
           onPaste={campo === "confirmar" ? (e) => e.preventDefault() : undefined}
-          style={{ ...inputStyle(), paddingRight: 38 }}
+          style={{ ...inputStyle(), paddingRight: 38, ...(colorBorde ? { border: `1px solid ${colorBorde}` } : {}) }}
         />
         <button type="button" onClick={() => setVer({ ...ver, [campo]: !ver[campo] })} title={ver[campo] ? "Ocultar" : "Ver contraseña"}
           style={{ position: "absolute", right: 10, background: "none", border: "none", cursor: "pointer", display: "flex" }}>
           {ver[campo] ? <EyeOff size={15} color={subtle} /> : <Eye size={15} color={subtle} />}
         </button>
       </div>
+      {aviso}
+    </div>
+  );
+
+  /** Mensaje pequeño con icono debajo de un campo de contraseña. */
+  const avisoPass = (tipo: "ok" | "mal" | "cargando", texto: string) => (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 5, fontSize: 11, fontWeight: 600,
+      color: tipo === "ok" ? SUCCESS : tipo === "mal" ? DANGER : subtle }}>
+      {tipo === "ok" ? <CheckCircle size={12} /> : tipo === "mal" ? <XCircle size={12} />
+        : <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />}
+      {texto}
     </div>
   );
 
@@ -212,7 +258,23 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
 
   if (!usuario) return null;
 
-  const etiquetaDocumento = esCliente ? (usuario.tipo_documento ?? "Documento") : "Identificación";
+  const etiquetaDocumento = esCliente ? nombreTipoDocumento(usuario.tipo_documento) : "Identificación";
+  const esEmpresa = esCliente && usuario.tipo_documento === "NIT";
+
+  // Avisos en vivo de la tarjeta Seguridad
+  const avisoActualUI =
+    estadoActual === "verificando" ? avisoPass("cargando", "Verificando...")
+    : estadoActual === "correcta" ? avisoPass("ok", avisoActual)
+    : estadoActual === "incorrecta" || estadoActual === "error" ? avisoPass("mal", avisoActual)
+    : null;
+  const bordeActual = estadoActual === "correcta" ? SUCCESS : estadoActual === "incorrecta" ? DANGER : undefined;
+  const avisoNuevaUI = pass.nueva && pass.actual && pass.nueva === pass.actual
+    ? avisoPass("mal", "Debe ser diferente a la contraseña actual") : null;
+  const coinciden = pass.confirmar.length > 0 && pass.nueva === pass.confirmar;
+  const avisoConfirmarUI = !pass.confirmar ? null
+    : coinciden ? avisoPass("ok", "Las contraseñas coinciden")
+    : avisoPass("mal", "Las contraseñas no coinciden");
+  const bordeConfirmar = !pass.confirmar ? undefined : coinciden ? SUCCESS : DANGER;
 
   // ==========================================
   // RENDER
@@ -252,8 +314,9 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
           {/* ----- Contraseña: solo cliente ----- */}
           {esCliente ? (
             <Tarjeta t={tema} titulo="Seguridad" icono={<Key size={15} color={GOLD} />}>
-              {campoPass("actual", "Contraseña actual")}
-              {campoPass("nueva", "Nueva contraseña")}
+              <style>{"@keyframes spin { to { transform: rotate(360deg); } }"}</style>
+              {campoPass("actual", "Contraseña actual", avisoActualUI, bordeActual)}
+              {campoPass("nueva", "Nueva contraseña", avisoNuevaUI)}
               <div style={{ background: surfaceBg, borderRadius: 8, padding: "10px 14px", marginBottom: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                 {REGLAS_CONTRASENA.map((r) => {
                   const ok = r.cumple(pass.nueva);
@@ -264,11 +327,12 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
                   );
                 })}
               </div>
-              {campoPass("confirmar", "Confirmar nueva contraseña")}
+              {campoPass("confirmar", "Confirmar nueva contraseña", avisoConfirmarUI, bordeConfirmar)}
               <div style={{ fontSize: 11, color: subtle, marginBottom: 12 }}>
                 Por seguridad, al cambiarla se cerrará tu sesión en todos los dispositivos.
               </div>
-              <button onClick={cambiarContrasena} disabled={cambiando} style={{ ...botonOro, width: "100%", justifyContent: "center", padding: 12, opacity: cambiando ? 0.6 : 1 }}>
+              <button onClick={cambiarContrasena} disabled={cambiando || estadoActual === "incorrecta"}
+                style={{ ...botonOro, width: "100%", justifyContent: "center", padding: 12, opacity: cambiando || estadoActual === "incorrecta" ? 0.6 : 1 }}>
                 <Key size={14} /> {cambiando ? "Actualizando..." : "Actualizar contraseña"}
               </button>
             </Tarjeta>
@@ -304,9 +368,14 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
               <Dato icono={<Hash size={14} />} etiqueta={etiquetaDocumento} valor={usuario.documento} />
               <Dato icono={<Shield size={14} />} etiqueta="Rol" valor={usuario.rol} />
               <div style={{ gridColumn: "span 2" }}>
-                <Dato icono={esCliente && usuario.tipo_documento === "NIT" ? <Building2 size={14} /> : <User size={14} />}
-                  etiqueta={esCliente && usuario.tipo_documento === "NIT" ? "Razón social" : "Nombre completo"} valor={usuario.nombre} />
+                <Dato icono={esEmpresa ? <Building2 size={14} /> : <User size={14} />}
+                  etiqueta={esEmpresa ? "Razón social" : "Nombre completo"} valor={usuario.nombre} />
               </div>
+              {esEmpresa && (
+                <div style={{ gridColumn: "span 2" }}>
+                  <Dato icono={<UserCheck size={14} />} etiqueta="Persona a contactar" valor={usuario.nombre_contacto} />
+                </div>
+              )}
               <div style={{ gridColumn: "span 2" }}>
                 <Dato icono={<Mail size={14} />} etiqueta="Correo electrónico" valor={usuario.correo} />
               </div>
@@ -326,6 +395,18 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
                 </div>
                 <Error msg={errores.nombre} />
               </div>
+              {esEmpresa && (
+                <div style={{ gridColumn: "span 2" }}>
+                  <Etiqueta texto="Nombre de la persona a contactar *" />
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <UserCheck size={14} color={subtle} style={{ position: "absolute", left: 12 }} />
+                    <input value={form.contacto} maxLength={100} placeholder="Ej. María Gómez"
+                      onChange={(e) => setForm({ ...form, contacto: e.target.value })}
+                      onBlur={() => setErrores((x) => ({ ...x, contacto: validar("contacto") }))} style={inputStyle(errores.contacto)} />
+                  </div>
+                  <Error msg={errores.contacto} />
+                </div>
+              )}
               <div style={{ gridColumn: "span 2" }}>
                 <Etiqueta texto="Correo electrónico *" />
                 <div style={{ position: "relative", display: "flex", alignItems: "center" }}>

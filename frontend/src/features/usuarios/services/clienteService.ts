@@ -1,4 +1,5 @@
 import { api } from "../../../shared/utils/api";
+import type { TipoDocumento } from "../../auth/services/authService";
 
 export type EstadoCliente = "Activo" | "Inactivo";
 
@@ -9,12 +10,16 @@ export interface Cliente {
   correo: string;
   telefono: string | null;
   estado: EstadoCliente;
+  tipo_documento: TipoDocumento;
+  nombre_contacto: string | null; // persona a contactar (empresas con NIT)
 }
 
 /** El rol "Cliente" lo asigna el backend automáticamente. */
 export interface ClienteCrearDatos {
+  tipo_documento?: TipoDocumento;
   nit: string;
   nombre: string;
+  nombre_contacto?: string | null;
   direccion?: string | null;
   correo: string;
   telefono?: string | null;
@@ -23,7 +28,7 @@ export interface ClienteCrearDatos {
 }
 
 /** El NIT no se edita. La contraseña solo se cambia si se envía. */
-export type ClienteActualizarDatos = Partial<Omit<ClienteCrearDatos, "nit">>;
+export type ClienteActualizarDatos = Partial<Omit<ClienteCrearDatos, "nit" | "tipo_documento">>;
 
 export const clienteService = {
   listar: (estado?: EstadoCliente) =>

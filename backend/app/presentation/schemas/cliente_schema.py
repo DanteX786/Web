@@ -12,7 +12,8 @@ def _limpiar(valor):
     return texto or None
 
 
-TEXTOS = ("nit", "nombre", "direccion", "correo", "telefono")
+TEXTOS = ("nit", "nombre", "direccion", "correo", "telefono", "nombre_contacto")
+TipoDocumento = Literal["NIT", "CC", "CE", "PA", "PPT"]
 PATRON_CORREO = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # Así se guarda en la base de datos (columna estado, default 'Activo')
 Estado = Literal["Activo", "Inactivo"]
@@ -27,14 +28,17 @@ def _validar_formato(campo: str, valor):
         raise ValueError("debe tener solo números (entre 7 y 20 dígitos)")
     if campo == "correo" and not PATRON_CORREO.match(valor):
         raise ValueError("no es un correo válido")
-    if campo == "nit" and not re.fullmatch(r"[0-9\-]+", valor):
-        raise ValueError("solo puede contener números y guiones")
+    if campo == "nit" and not re.fullmatch(r"[0-9A-Za-z\-]+", valor):
+        raise ValueError("solo puede contener letras, números y guiones")
     return valor
 
 
 class ClienteCrear(BaseModel):
-    nit: str = Field(max_length=30, description="Identificación / NIT del cliente")
+    tipo_documento: TipoDocumento = "NIT"
+    nit: str = Field(max_length=30, description="Número de documento del cliente (NIT, cédula, pasaporte...)")
     nombre: str = Field(max_length=100)
+    nombre_contacto: str | None = Field(default=None, max_length=100,
+                                        description="Persona a contactar (obligatoria si es NIT)")
     direccion: str | None = Field(default=None, max_length=150)
     correo: str = Field(max_length=100)
     telefono: str | None = Field(default=None, max_length=20)
@@ -54,6 +58,7 @@ class ClienteActualizar(BaseModel):
     El NIT no se edita porque es la llave del cliente.
     La contraseña solo se cambia si se envía."""
     nombre: str | None = Field(default=None, max_length=100)
+    nombre_contacto: str | None = Field(default=None, max_length=100)
     direccion: str | None = Field(default=None, max_length=150)
     correo: str | None = Field(default=None, max_length=100)
     telefono: str | None = Field(default=None, max_length=20)
@@ -85,3 +90,5 @@ class ClienteRespuesta(BaseModel):
     correo: str
     telefono: str | None
     estado: str
+    tipo_documento: str
+    nombre_contacto: str | None

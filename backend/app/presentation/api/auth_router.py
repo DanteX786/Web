@@ -5,7 +5,8 @@ from app.application.auth_service import MENSAJE_CODIGO_ENVIADO, AuthService, Se
 from app.domain.entities.usuario import Usuario
 from app.presentation.dependencies.auth_dependencies import get_auth_service, get_usuario_actual
 from app.presentation.schemas.auth_schema import (
-    CambiarContrasenaEntrada, CodigoEnviadoRespuesta, CorreoEntrada, LoginEntrada,
+    CambiarContrasenaEntrada, CodigoEnviadoRespuesta, ContrasenaActualEntrada,
+    ContrasenaActualRespuesta, CorreoEntrada, LoginEntrada,
     MensajeRespuesta, PerfilEntrada, RegistroClienteEntrada, RestablecerEntrada, SesionRespuesta,
     TokenRestablecerRespuesta, UsuarioRespuesta, VerificarCodigoEntrada,
 )
@@ -43,7 +44,7 @@ def actualizar_perfil(datos: PerfilEntrada,
                       usuario: Usuario = Depends(get_usuario_actual),
                       service: AuthService = Depends(get_auth_service)):
     return service.actualizar_perfil(usuario, datos.nombre, datos.correo, datos.tipo_telefono,
-                                     datos.telefono, datos.direccion)
+                                     datos.telefono, datos.direccion, datos.nombre_contacto)
 
 
 # ------------------------------------------------------------------ Registro
@@ -52,7 +53,7 @@ def actualizar_perfil(datos: PerfilEntrada,
 def registro(datos: RegistroClienteEntrada, service: AuthService = Depends(get_auth_service)):
     return _sesion(service.registrar_cliente(
         tipo_documento=datos.tipo_documento, numero_documento=datos.numero_documento,
-        nombre=datos.nombre, correo=datos.correo,
+        nombre=datos.nombre, nombre_contacto=datos.nombre_contacto, correo=datos.correo,
         tipo_telefono=datos.tipo_telefono, telefono=datos.telefono, direccion=datos.direccion,
         contrasena=datos.contrasena, confirmar=datos.confirmar_contrasena,
     ))
@@ -88,6 +89,14 @@ def restablecer(datos: RestablecerEntrada, service: AuthService = Depends(get_au
 
 
 # ------------------------------------------------------------------ Usuario con sesión
+@router.post("/verificar-contrasena-actual", response_model=ContrasenaActualRespuesta,
+             summary="Mi perfil: comprobar la contraseña actual mientras se escribe (máx. 10 por minuto)")
+def verificar_contrasena_actual(datos: ContrasenaActualEntrada,
+                                usuario: Usuario = Depends(get_usuario_actual),
+                                service: AuthService = Depends(get_auth_service)):
+    return {"correcta": service.verificar_contrasena_actual(usuario, datos.contrasena_actual)}
+
+
 @router.post("/cambiar-contrasena", response_model=MensajeRespuesta,
              summary="Cambiar contraseña desde Mi perfil (solo clientes); cierra TODAS las sesiones")
 def cambiar_contrasena(datos: CambiarContrasenaEntrada,
