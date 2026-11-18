@@ -14,6 +14,9 @@ import {
 import { seguimientoService, type Seguimiento } from '../../produccion/services/seguimientoService';
 import { clienteService, type Cliente } from '../../usuarios/services/clienteService';
 import { obtenerUsuario } from '../../auth/services/authService';
+import {
+  UNIDADES_INSUMO, cargarSugerenciasInsumos, problemaInsumo, requiereEspecificacion, separarNombre, unirNombre,
+} from '../../compras/utils/insumosEnviados';
 
 // ==========================================
 // PALETA DE COLORES Y ESTILOS BASE
@@ -40,7 +43,6 @@ const ESTADOS_STYLES: Record<EstadoRemision, { bg: string; color: string }> = {
 const estiloEstado = (estado: string) => ESTADOS_STYLES[estado as EstadoRemision] ?? { bg: '#EEE', color: '#555' };
 
 const TALLAS = ['XS', 'S', 'M', 'L', 'XL', 'XXL', 'Única'];
-const UNIDADES = ['Unidad', 'Metros', 'Conos', 'Rollos', 'Pares'];
 
 // TEMPORAL mientras no hay login de clientes: el NIT del "cliente actual" se guarda aquí
 
@@ -59,7 +61,8 @@ interface DetallePieza {
 }
 
 interface InsumoForm {
-  nombre: string;
+  nombre: string;          // insumo (ej. "Hilo")
+  especificacion: string;  // color, tamaño, metros... (ej. "negro 45 m")
   cantidad: number;
   unidad: string;
 }
@@ -203,6 +206,12 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
   const [habilitarInsumos, setHabilitarInsumos] = useState(false);
   const [detalles, setDetalles] = useState<DetallePieza[]>([{ nombre: '', talla: 'S', cantidad: 0 }]);
   const [insumosEnviados, setInsumosEnviados] = useState<InsumoForm[]>([]);
+  const [sugerenciasInsumos, setSugerenciasInsumos] = useState<string[]>([]);
+
+  // Sugerencias para el buscador de insumos (catálogo del taller + insumos comunes)
+  useEffect(() => {
+    if (habilitarInsumos && sugerenciasInsumos.length === 0) cargarSugerenciasInsumos().then(setSugerenciasInsumos);
+  }, [habilitarInsumos]);
 
   // El total lo vuelve a calcular la base de datos; aquí solo se muestra
   const totalPrendas = detalles.reduce((s, d) => s + (Number(d.cantidad) || 0), 0);
@@ -233,7 +242,10 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
     setCostoPrenda(remision.costo_prenda);
     setHabilitarInsumos(remision.insumos.length > 0);
     setDetalles(remision.detalles.map(d => ({ nombre: d.nombre_de_la_pieza, talla: d.talla, cantidad: d.cantidad })));
-    setInsumosEnviados(remision.insumos.map(i => ({ nombre: i.nombre, cantidad: i.cantidad, unidad: i.unidad })));
+    setInsumosEnviados(remision.insumos.map(i => {
+      const { insumo, especificacion } = separarNombre(i.nombre);
+      return { nombre: insumo, especificacion, cantidad: i.cantidad, unidad: i.unidad };
+    }));
     setNombreArchivoFicha(remision.ficha_tecnica_url ? remision.ficha_tecnica_nombre : '');
     setFichaTecnica(null);
     setVistaActual('formulario');
@@ -261,7 +273,7 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
       return;
     }
     if (fechaEntrega < fechaRecibo) {
-      toast.error('La fecha de entrega no puede ser anterior a la fecha de recibo.');
+      toast.error('La fecha de entrega no puede ser anterior a la fecha de creación.');
       return;
     }
     const claves = detalles.map(d => `${d.nombre.trim().toLowerCase()}|${d.talla.toLowerCase()}`);
@@ -270,8 +282,9 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
       return;
     }
     const insumos = habilitarInsumos ? insumosEnviados : [];
-    if (insumos.some(i => !i.nombre.trim() || i.cantidad <= 0)) {
-      toast.error('Completa el nombre y la cantidad de cada insumo, o quita las filas vacías.');
+    const problemaIns = insumos.map(i => problemaInsumo(i.nombre, i.especificacion, Number(i.cantidad), i.unidad)).find(Boolean);
+    if (problemaIns) {
+      toast.error(problemaIns);
       return;
     }
 
@@ -281,7 +294,7 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
       fecha_entrega: fechaEntrega,
       costo_prenda: Number(costoPrenda),
       detalles: detalles.map(d => ({ nombre_de_la_pieza: d.nombre.trim(), talla: d.talla, cantidad: Number(d.cantidad) })),
-      insumos: insumos.map(i => ({ nombre: i.nombre.trim(), cantidad: Number(i.cantidad), unidad: i.unidad })),
+      insumos: insumos.map(i => ({ nombre: unirNombre(i.nombre, i.especificacion), cantidad: Number(i.cantidad), unidad: i.unidad })),
     };
 
     setGuardando(true);
@@ -407,7 +420,7 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ background: dark ? '#252525' : '#FAFAFA', borderBottom: `2px solid ${GOLD}` }}>
-                {['ID', rolActivo === 'ADMIN' ? 'CLIENTE' : '', 'FECHA RECIBO', 'FECHA ENTREGA', 'TOTAL PRENDAS', 'COSTO TOTAL', 'INSUMOS ENVIADOS', 'ESTADO', 'ACCIONES'].filter(Boolean).map(h => (
+                {['ID', rolActivo === 'ADMIN' ? 'CLIENTE' : '', 'FECHA CREACIÓN', 'FECHA ENTREGA', 'TOTAL PRENDAS', 'COSTO TOTAL', 'INSUMOS ENVIADOS', 'ESTADO', 'ACCIONES'].filter(Boolean).map(h => (
                   <th key={h} style={{ fontSize: 10, fontWeight: 700, color: GOLD, padding: '12px 14px' }}>{h}</th>
                 ))}
               </tr>
@@ -542,7 +555,7 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
                 ['ESTADO', <span style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 6, backgroundColor: estiloEstado(modalDetalle.estado).bg, color: estiloEstado(modalDetalle.estado).color }}>{modalDetalle.estado}</span>],
                 ['CLIENTE', <span style={{ fontSize: 13, fontWeight: 800, color: fg }}>{modalDetalle.cliente} <span style={{ color: subtle, fontWeight: 600 }}>({modalDetalle.nit_cliente})</span></span>],
                 ['COSTO POR PRENDA', <span style={{ fontSize: 13, fontWeight: 800, color: fg }}>{pesos(modalDetalle.costo_prenda)}</span>],
-                ['FECHA RECIBO', <span style={{ fontSize: 13, fontWeight: 600, color: fg }}>{modalDetalle.fecha_recibo}</span>],
+                ['FECHA CREACIÓN', <span style={{ fontSize: 13, fontWeight: 600, color: fg }}>{modalDetalle.fecha_recibo}</span>],
                 ['FECHA ENTREGA ESPERADA', <span style={{ fontSize: 13, fontWeight: 600, color: fg }}>{modalDetalle.fecha_entrega ?? '—'}</span>],
                 ['TOTAL PRENDAS / COSTO TOTAL', <span style={{ fontSize: 16, fontWeight: 800, color: GOLD }}>{modalDetalle.total_prendas} · {pesos(modalDetalle.costo_total)}</span>],
               ].map(([titulo, valor]) => (
@@ -697,7 +710,7 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
                 <input type="number" min={0} value={costoPrenda} onChange={(e) => setCostoPrenda(e.target.value === '' ? '' : Number(e.target.value))} style={inputEstilo} placeholder="Ej. 13400" />
               </div>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: subtle, display: 'block', marginBottom: 6 }}>FECHA DE RECIBO</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: subtle, display: 'block', marginBottom: 6 }}>FECHA DE CREACIÓN</label>
                 <input type="date" value={fechaRecibo} onChange={(e) => setFechaRecibo(e.target.value)} disabled={rolActivo === 'CLIENTE'} style={{ ...inputEstilo, color: rolActivo === 'CLIENTE' ? subtle : fg, opacity: rolActivo === 'CLIENTE' ? 0.7 : 1 }} />
               </div>
               <div>
@@ -741,22 +754,47 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
               <div style={{ borderTop: `1px solid ${borderNormal}`, paddingTop: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <span style={{ fontSize: 12, fontWeight: 700, color: fg }}>Listado de Insumos</span>
-                  <button onClick={() => setInsumosEnviados([...insumosEnviados, { nombre: '', cantidad: 0, unidad: 'Unidad' }])} style={{ background: `${INFO}15`, color: INFO, border: 'none', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={12} /> Agregar Insumo</button>
+                  <button onClick={() => setInsumosEnviados([...insumosEnviados, { nombre: '', especificacion: '', cantidad: 0, unidad: 'Unidad' }])} style={{ background: `${INFO}15`, color: INFO, border: 'none', padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}><Plus size={12} /> Agregar Insumo</button>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {insumosEnviados.length === 0 ? (
                     <div style={{ textAlign: 'center', padding: 16, color: subtle, fontSize: 12, backgroundColor: inputBg, borderRadius: 8 }}>Aún no has agregado insumos.</div>
                   ) : (
-                    insumosEnviados.map((ins, idx) => (
-                      <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, alignItems: 'center' }}>
-                        <input type="text" placeholder="Nombre insumo" value={ins.nombre} onChange={(e) => setInsumosEnviados(insumosEnviados.map((x, i) => i === idx ? { ...x, nombre: e.target.value } : x))} style={{ ...inputEstilo, padding: '8px 10px', fontSize: 12 }} />
-                        <input type="number" min={1} placeholder="Cant." value={ins.cantidad || ''} onChange={(e) => setInsumosEnviados(insumosEnviados.map((x, i) => i === idx ? { ...x, cantidad: Number(e.target.value) } : x))} style={{ ...inputEstilo, padding: '8px 10px', fontSize: 12 }} />
-                        <select value={ins.unidad} onChange={(e) => setInsumosEnviados(insumosEnviados.map((x, i) => i === idx ? { ...x, unidad: e.target.value } : x))} style={{ ...inputEstilo, padding: '8px 10px', fontSize: 12 }}>
-                          {(UNIDADES.includes(ins.unidad) ? UNIDADES : [ins.unidad, ...UNIDADES]).map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
-                        <button onClick={() => setInsumosEnviados(insumosEnviados.filter((_, i) => i !== idx))} style={{ background: 'transparent', border: 'none', color: DANGER, cursor: 'pointer' }}><Trash2 size={16} /></button>
+                    <>
+                      <datalist id="sugerencias-insumos">
+                        {sugerenciasInsumos.map(n => <option key={n} value={n} />)}
+                      </datalist>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 0.8fr 1fr auto', gap: 8, fontSize: 10, fontWeight: 700, color: subtle, textTransform: 'uppercase' }}>
+                        <span>Insumo</span><span>Especificación</span><span>Cantidad</span><span>Unidad</span><span style={{ width: 16 }} />
                       </div>
-                    ))
+                      {insumosEnviados.map((ins, idx) => {
+                        const cambiar = (cambios: Partial<InsumoForm>) =>
+                          setInsumosEnviados(insumosEnviados.map((x, i) => i === idx ? { ...x, ...cambios } : x));
+                        const obligatoria = requiereEspecificacion(ins.unidad);
+                        return (
+                          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 0.8fr 1fr auto', gap: 8, alignItems: 'center' }}>
+                            <input type="text" list="sugerencias-insumos" placeholder="Buscar o escribir (ej. Hilo)" maxLength={60}
+                              value={ins.nombre} onChange={(e) => cambiar({ nombre: e.target.value })}
+                              style={{ ...inputEstilo, padding: '8px 10px', fontSize: 12 }} />
+                            <input type="text" maxLength={60}
+                              placeholder={obligatoria ? 'Obligatoria (ej. negro 45 m)' : 'Opcional (ej. negro)'}
+                              value={ins.especificacion} onChange={(e) => cambiar({ especificacion: e.target.value })}
+                              title="Color, tamaño, calibre, metros por cono..."
+                              style={{ ...inputEstilo, padding: '8px 10px', fontSize: 12 }} />
+                            <input type="number" min={1} placeholder="Cant." value={ins.cantidad || ''}
+                              onChange={(e) => cambiar({ cantidad: Number(e.target.value) })}
+                              style={{ ...inputEstilo, padding: '8px 10px', fontSize: 12 }} />
+                            <select value={ins.unidad} onChange={(e) => cambiar({ unidad: e.target.value })} style={{ ...inputEstilo, padding: '8px 10px', fontSize: 12 }}>
+                              {(UNIDADES_INSUMO.includes(ins.unidad) ? UNIDADES_INSUMO : [ins.unidad, ...UNIDADES_INSUMO]).map(u => <option key={u} value={u}>{u}</option>)}
+                            </select>
+                            <button onClick={() => setInsumosEnviados(insumosEnviados.filter((_, i) => i !== idx))} style={{ background: 'transparent', border: 'none', color: DANGER, cursor: 'pointer' }}><Trash2 size={16} /></button>
+                          </div>
+                        );
+                      })}
+                      <div style={{ fontSize: 11, color: subtle }}>
+                        La especificación es obligatoria si la unidad es Unidad, Paquete o Carrete. Se guarda como «Hilo · negro 45 m».
+                      </div>
+                    </>
                   )}
                 </div>
               </div>

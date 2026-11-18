@@ -6,7 +6,7 @@ import {
   Factory, Scissors, Wrench, Users, FileText,
   SlidersHorizontal, Key, Truck, ShoppingBag, ClipboardList,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  Sun, Moon, Bell, Search, LogOut, User, Send, UserCheck, History
+  Sun, Moon, Bell, LogOut, User, Send, UserCheck, History
 } from "lucide-react";
 
 import logo_blanco from '../../../public/images/logo blanco.png';
@@ -39,13 +39,10 @@ export default function MainLayout({
 }: MainLayoutProps) {
   const [collapsed, setCollapsed] = useState<boolean>(false);
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
   
   // Estado inicial de los menús (todos cerrados por defecto)
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
     configuracion: false,
-    parametros: false,
-    usuarios: false,
     ventas: false,
     compras: false,
     produccion: false
@@ -84,7 +81,6 @@ export default function MainLayout({
   const cardBg = dark ? "#1E1E1E" : "#FFFFFF";
   const fg = dark ? "#F8F9FA" : "#121212";
   const subtle = dark ? "#9A9A9A" : "#6B6B6B";
-  const inputBg = dark ? "#2A2A2A" : "#F3F3F5";
   const surfaceBg = dark ? "#252525" : "#F8F8F8";
 
   // LÓGICA DE ACORDEÓN: Cierra todos los demás al abrir uno nuevo
@@ -148,7 +144,8 @@ export default function MainLayout({
     );
   };
 
-  const renderAccordionGroup = (groupKey: string, groupLabel: string, ParentIcon: any, todos: { id: string, label: string, icon: any }[]) => {
+  /** `seccion` muestra un subtítulo pequeño antes de esas opciones (ej. "Parámetros" dentro de Producción). */
+  const renderAccordionGroup = (groupKey: string, groupLabel: string, ParentIcon: any, todos: { id: string, label: string, icon: any, seccion?: string }[]) => {
     const items = todos.filter(i => puedeVer(i.id)); // solo las opciones permitidas
     if (items.length === 0) return null;              // grupo sin opciones: se oculta
     const isOpen = openGroups[groupKey];
@@ -180,7 +177,19 @@ export default function MainLayout({
             marginLeft: 18, paddingLeft: 12, borderLeft: `2px solid ${GOLD}30`
           }}
         >
-            {items.map(sub => renderNavBtn(sub.id, sub.label, sub.icon, true))}
+            {items.map((sub, i) => (
+              <React.Fragment key={sub.id}>
+                {sub.seccion && sub.seccion !== items[i - 1]?.seccion && (
+                  <div style={{
+                    fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em',
+                    color: `${GOLD}B0`, padding: '8px 0 2px 12px', fontFamily: 'Montserrat, sans-serif'
+                  }}>
+                    {sub.seccion}
+                  </div>
+                )}
+                {renderNavBtn(sub.id, sub.label, sub.icon, true)}
+              </React.Fragment>
+            ))}
           </div>
         )}
       </div>
@@ -261,25 +270,9 @@ export default function MainLayout({
           {/* PROCESO DE MEDICIÓN Y DESEMPEÑO */}
           {renderNavBtn("dashboard", "Dashboard", LayoutDashboard)}
 
-          {/* PROCESO DE CONFIGURACIÓN */}
-          {renderAccordionGroup("configuracion", "Configuración", SlidersHorizontal, [
-            { id: "roles", label: "Roles y Permisos", icon: Key }
-          ])}
-
-          {/* PARÁMETROS (Separado según Casos de Uso) */}
-          {renderAccordionGroup("parametros", "Parámetros", Wrench, [
-            { id: "tiposMaquinaria", label: "Tipos de Máquina", icon: Wrench },
-            { id: "catalogoPiezas", label: "Tipos de Pieza", icon: Scissors }
-          ])}
-
-          {/* PROCESO DE USUARIOS */}
-          {renderAccordionGroup("usuarios", "Usuarios", Users, [
-            { id: "empleados", label: "Empleados", icon: Users },
-            { id: "clientes", label: "Clientes", icon: User }
-          ])}
-
-          {/* PROCESO DE VENTAS */}
+          {/* PROCESO DE VENTAS (incluye Clientes) */}
           {renderAccordionGroup("ventas", "Ventas", ShoppingCart, [
+            { id: "clientes", label: "Clientes", icon: User },
             { id: "remisiones", label: "Remisiones", icon: FileText },
             { id: "seguimientoRemision", label: "Seguimiento de Estados", icon: History },
             { id: "remisionEntrega", label: "Remisiones de Entrega", icon: Truck }
@@ -294,11 +287,19 @@ export default function MainLayout({
             { id: "insumosEnviados", label: "Insumos Enviados", icon: Send }
           ])}
 
-          {/* PROCESO DE PRODUCCIÓN */}
+          {/* PROCESO DE PRODUCCIÓN (incluye Empleados y los Parámetros) */}
           {renderAccordionGroup("produccion", "Producción", Factory, [
             { id: "produccion", label: "Producciones en curso", icon: Factory },
             { id: "registroDiario", label: "Registro Diario", icon: ClipboardList },
-            { id: "registroDiarioEmpleado", label: "Registro Empleado", icon: UserCheck }
+            { id: "registroDiarioEmpleado", label: "Registro Empleado", icon: UserCheck },
+            { id: "empleados", label: "Empleados", icon: Users },
+            { id: "tiposMaquinaria", label: "Tipos de Máquina", icon: Wrench, seccion: "Parámetros" },
+            { id: "catalogoPiezas", label: "Tipos de Pieza", icon: Scissors, seccion: "Parámetros" }
+          ])}
+
+          {/* PROCESO DE CONFIGURACIÓN (al final) */}
+          {renderAccordionGroup("configuracion", "Configuración", SlidersHorizontal, [
+            { id: "roles", label: "Roles y Permisos", icon: Key }
           ])}
 
           <div style={{ borderTop: `4px solid ${GOLD}90`, marginTop: 8, paddingTop: 8 }}></div>
@@ -353,20 +354,6 @@ export default function MainLayout({
             <div style={{ fontSize: 15, fontWeight: 700, color: fg, textTransform: 'capitalize' }}>
               {currentView === 'miPerfil' ? 'Mi Perfil' : currentView === 'licencias' ? 'Licencias de software' : currentView.replace(/([A-Z])/g, ' $1')}
             </div>
-          </div>
-
-          <div style={{ position: 'relative' }}>
-            <Search size={14} color={subtle} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
-            <input
-              type="text"
-              placeholder="Buscar en el sistema…"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: 320, padding: '8px 12px 8px 36px', borderRadius: 10, fontSize: 13,
-                backgroundColor: inputBg, color: fg, border: `1px solid ${borderCol}`, outline: 'none', fontFamily: 'Montserrat, sans-serif'
-              }}
-            />
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

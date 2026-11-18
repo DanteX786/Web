@@ -8,9 +8,14 @@ from sqlalchemy.orm import Session
 
 from core.config import settings
 from app.infrastructure.database.database import get_db
-from app.domain.exceptions.errors import ConflictError, ForbiddenError, NotFoundError
+from app.presentation.dependencies.auth_dependencies import permisos_de_ruta
+from app.domain.exceptions.errors import (
+    AuthError, ConflictError, DemasiadosIntentosError, ForbiddenError, NotFoundError,
+    ServicioNoDisponibleError, ValidacionError,
+)
 
 # ---- Routers de Camilo ----
+from app.presentation.api.auth_router import router as auth_router
 from app.presentation.api.produccion_router import asignaciones_router, router as produccion_router
 from app.presentation.api.registro_diario_router import router as registro_diario_router
 from app.presentation.api.seguimiento_router import router as seguimiento_router
@@ -65,6 +70,26 @@ async def forbidden_handler(request: Request, exc: ForbiddenError):
     return JSONResponse(status_code=403, content={"detail": str(exc)})
 
 
+@app.exception_handler(ValidacionError)
+async def validacion_handler(request: Request, exc: ValidacionError):
+    return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(AuthError)
+async def auth_handler(request: Request, exc: AuthError):
+    return JSONResponse(status_code=401, content={"detail": str(exc)}, headers={"WWW-Authenticate": "Bearer"})
+
+
+@app.exception_handler(DemasiadosIntentosError)
+async def intentos_handler(request: Request, exc: DemasiadosIntentosError):
+    return JSONResponse(status_code=429, content={"detail": str(exc)})
+
+
+@app.exception_handler(ServicioNoDisponibleError)
+async def servicio_handler(request: Request, exc: ServicioNoDisponibleError):
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
 @app.exception_handler(DBAPIError)
 async def db_error_handler(request: Request, exc: DBAPIError):
     # Devuelve el mensaje de los triggers de la BD, ej: "Stock insuficiente del insumo..."
@@ -81,25 +106,65 @@ def health(db: Session = Depends(get_db)):
 
 
 # ---------- Routers ----------
-app.include_router(produccion_router)
-app.include_router(asignaciones_router)
-app.include_router(registro_diario_router)
-app.include_router(seguimiento_router)
-app.include_router(proveedor_router)  # PB-36
-app.include_router(tipo_maquina_router)  # PB-39
-app.include_router(tipo_pieza_router)  # PB-40
+# Seguridad por permisos (nivel 3): cada grupo de endpoints exige su permiso de la
+# tabla rol_x_permiso, que el administrador asigna en "Roles y Permisos".
+# Formato: _p(lectura=(permisos para consultar), escritura=(permisos para crear/editar/eliminar))
+# Algunas consultas se abren a otros módulos porque las necesitan (ej. Producción lee empleados).
+P_ROLES = "Gestionar roles y permisos"
+P_USUARIOS = "Gestionar usuarios"
+P_CLIENTES = "Gestionar clientes"
+P_REMISIONES = "Gestionar remisiones"
+P_REMISION_CLIENTE = "Crear remisión (cliente)"
+P_ENTREGAS = "Gestionar remisiones de entrega"
+P_PROVEEDORES = "Gestionar proveedores"
+P_COMPRAS = "Gestionar compras"
+P_INSUMOS = "Gestionar insumos"
+P_PRODUCCION = "Gestionar producción"
+P_PARAMETROS = "Gestionar parámetros de producción"
+P_AVANCE = "Registrar avance diario"
+P_DASHBOARD = "Ver dashboard"
 
-# app.include_router(...)  <- routers de los demás módulos
-app.include_router(rol_router)
-app.include_router(empleado_router)
-app.include_router(insumo_router)
-app.include_router(cliente_router)
-app.include_router(tipo_insumo_router)
-app.include_router(compra_router)
-app.include_router(remision_router)
-app.include_router(insumo_enviado_router)
-app.include_router(entrega_router)
-app.include_router(dashboard_router)
+
+def _p(lectura, escritura, **kwargs):
+    return [Depends(permisos_de_ruta(tuple(lectura), tuple(escritura), **kwargs))]
+
+
+app.include_router(auth_router)  # login, registro y recuperación son públicos
+
+# Producción (Camilo)
+app.include_router(produccion_router, dependencies=_p([P_PRODUCCION], [P_PRODUCCION]))
+app.include_router(asignaciones_router, dependencies=_p([P_PRODUCCION, P_AVANCE], [P_PRODUCCION]))
+app.include_router(registro_diario_router, dependencies=_p([P_PRODUCCION, P_AVANCE], [P_PRODUCCION, P_AVANCE]))
+app.include_router(seguimiento_router, dependencies=_p(
+    [P_REMISIONES, P_REMISION_CLIENTE, P_PRODUCCION, P_ENTREGAS], [], solo_personal=False))
+
+# Parámetros y proveedores (Jordy)
+app.include_router(proveedor_router, dependencies=_p([P_PROVEEDORES, P_COMPRAS], [P_PROVEEDORES]))  # PB-36
+app.include_router(tipo_maquina_router, dependencies=_p([P_PARAMETROS, P_PRODUCCION], [P_PARAMETROS]))  # PB-39
+app.include_router(tipo_pieza_router, dependencies=_p([P_PARAMETROS, P_PRODUCCION], [P_PARAMETROS]))  # PB-40
+
+# Roles, empleados e insumos (Axebiel)
+app.include_router(rol_router, dependencies=_p([P_ROLES, P_USUARIOS], [P_ROLES]))
+app.include_router(empleado_router, dependencies=_p([P_USUARIOS, P_PRODUCCION], [P_USUARIOS]))
+app.include_router(insumo_router, dependencies=_p([P_INSUMOS, P_COMPRAS, P_PRODUCCION], [P_INSUMOS]))
+
+# Clientes, categorías de insumo y compras (Emerson)
+app.include_router(cliente_router, dependencies=_p([P_CLIENTES, P_REMISIONES, P_ENTREGAS], [P_CLIENTES]))
+app.include_router(tipo_insumo_router, dependencies=_p([P_INSUMOS, P_COMPRAS], [P_INSUMOS]))
+app.include_router(compra_router, dependencies=_p([P_COMPRAS], [P_COMPRAS]))
+
+# Remisiones, insumos enviados, entregas y dashboard (Daniel)
+# El cliente consulta, crea y edita SUS remisiones; aprobar, rechazar y eliminar es solo del personal.
+app.include_router(remision_router, dependencies=_p(
+    [P_REMISIONES, P_REMISION_CLIENTE, P_PRODUCCION, P_ENTREGAS, P_INSUMOS],
+    [P_REMISIONES, P_REMISION_CLIENTE],
+    por_metodo={"PATCH": (P_REMISIONES,), "DELETE": (P_REMISIONES,)},
+    solo_personal=False))
+app.include_router(insumo_enviado_router, dependencies=_p(
+    [P_REMISIONES, P_REMISION_CLIENTE, P_INSUMOS, P_PRODUCCION], [P_REMISIONES, P_REMISION_CLIENTE],
+    solo_personal=False))
+app.include_router(entrega_router, dependencies=_p([P_ENTREGAS], [P_ENTREGAS]))
+app.include_router(dashboard_router, dependencies=_p([P_DASHBOARD], [P_DASHBOARD]))
 
 # ---------- Archivos subidos (fichas técnicas, remisiones firmadas, comprobantes) ----------
 # Se sirven en http://localhost:8000/uploads/...

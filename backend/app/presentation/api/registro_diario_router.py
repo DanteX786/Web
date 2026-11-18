@@ -5,7 +5,11 @@ from fastapi import APIRouter, Depends, status
 from app.application.registro_diario_service import RegistroDiarioService
 from app.presentation.dependencies.auth_dependencies import get_id_empleado_actual
 from app.presentation.dependencies.produccion_dependencies import get_registro_diario_service
-from app.presentation.schemas.registro_diario_schema import RegistroDiarioCrear, RegistroDiarioRespuesta
+from app.presentation.schemas.registro_diario_schema import (
+    RegistroDiarioCantidad,
+    RegistroDiarioCrear,
+    RegistroDiarioRespuesta,
+)
 
 router = APIRouter(prefix="/api/registros-diarios", tags=["Registro diario"])
 
@@ -37,6 +41,14 @@ def registrar(datos: RegistroDiarioCrear,
               id_empleado: str = Depends(get_id_empleado_actual),
               service: RegistroDiarioService = Depends(get_registro_diario_service)):
     return service.registrar(datos.id_detalle_de_produccion, datos.cantidad, id_empleado)
+
+
+@router.patch("/{id_registro}", response_model=RegistroDiarioRespuesta,
+              summary="Corregir la cantidad de un reporte (dueño o administrador)")
+def corregir_cantidad(id_registro: str, datos: RegistroDiarioCantidad,
+                      id_empleado: str = Depends(get_id_empleado_actual),
+                      service: RegistroDiarioService = Depends(get_registro_diario_service)):
+    return service.corregir_cantidad(id_registro, datos.cantidad, id_empleado)
 
 
 @router.delete("/{id_registro}", status_code=status.HTTP_204_NO_CONTENT,

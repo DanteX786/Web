@@ -51,6 +51,13 @@ class RegistroDiarioRepository(IRegistroDiarioRepository):
         self.db.commit()
         return nuevo_id
 
+    def actualizar_cantidad(self, id_registro: str, cantidad: int) -> None:
+        # El trigger de la BD valida que la producción siga En proceso
+        # y que el total reportado no supere lo asignado.
+        m = self.db.get(RegistroDiarioModel, id_registro)
+        m.cantidad = cantidad
+        self.db.commit()
+
     def eliminar(self, id_registro: str) -> None:
         m = self.db.get(RegistroDiarioModel, id_registro)
         self.db.delete(m)

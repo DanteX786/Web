@@ -13,3 +13,4 @@ class SeguimientoRespuesta(BaseModel):
     responsable: str
     tipo_responsable: str
     fecha_hora: datetime
+    cliente: str | None = None
