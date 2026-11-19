@@ -91,11 +91,11 @@ export default function TipoMaquinaCRUD({ dark = false }: Props) {
       if (modalMode === 'add') {
         const creado = await tipoMaquinaService.crear(datos);
         setData(prev => [...prev, creado]);
-        toast.success(`Tipo de máquina ${creado.id_tipo_de_maquina} registrado`, { style: estiloExito });
+        toast.success(`Máquina ${creado.id_tipo_de_maquina} registrado`, { style: estiloExito });
       } else if (modalMode === 'edit' && current) {
         const actualizado = await tipoMaquinaService.actualizar(current.id_tipo_de_maquina, datos);
         setData(prev => prev.map(d => d.id_tipo_de_maquina === actualizado.id_tipo_de_maquina ? actualizado : d));
-        toast.success("Tipo de máquina actualizado", { style: estiloExito });
+        toast.success("Máquina actualizada", { style: estiloExito });
       }
       setModalMode(null);
     } catch (e) {
@@ -109,7 +109,7 @@ export default function TipoMaquinaCRUD({ dark = false }: Props) {
     try {
       await tipoMaquinaService.eliminar(deleteItem.id_tipo_de_maquina);
       setData(prev => prev.filter(d => d.id_tipo_de_maquina !== deleteItem.id_tipo_de_maquina));
-      toast.success("Tipo de máquina eliminado", { style: estiloExito });
+      toast.success("Máquina eliminada", { style: estiloExito });
     } catch (e) {
       toast.error(mensajeError(e), { style: estiloError });
     } finally {
@@ -140,7 +140,7 @@ export default function TipoMaquinaCRUD({ dark = false }: Props) {
       {/* ENCABEZADO */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: fg }}>Tipos de Máquina</h2>
+          <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: fg }}>Máquinas</h2>
           <p style={{ fontSize: 13, color: subtle, margin: 0 }}>Gestión y estandarización de capacidades del taller (PB-39)</p>
         </div>
 
@@ -190,7 +190,7 @@ export default function TipoMaquinaCRUD({ dark = false }: Props) {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={5} style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13 }}>
-                  No se encontraron registros de tipos de máquina.
+                  No se encontraron máquinas registradas.
                 </td>
               </tr>
             ) : (
@@ -280,7 +280,7 @@ export default function TipoMaquinaCRUD({ dark = false }: Props) {
             <div style={{ height: 2, background: `linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT}, transparent)` }} />
             <div style={{ padding: '16px 24px', borderBottom: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: fg, fontFamily: 'Montserrat, sans-serif' }}>
-                {modalMode === 'add' ? 'Registrar Tipo de Máquina' : 'Editar Tipo de Máquina'}
+                {modalMode === 'add' ? 'Registrar Máquina' : 'Editar Máquina'}
               </h3>
               <button onClick={() => setModalMode(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: subtle }}><X size={18}/></button>
             </div>
@@ -327,7 +327,7 @@ export default function TipoMaquinaCRUD({ dark = false }: Props) {
 
             <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ background: surfaceBg, padding: 12, borderRadius: 8 }}>
-                <div style={{ fontSize: 10, color: subtle, textTransform: 'uppercase', marginBottom: 4 }}>ID Tipo de Máquina</div>
+                <div style={{ fontSize: 10, color: subtle, textTransform: 'uppercase', marginBottom: 4 }}>ID Máquina</div>
                 <span style={{ fontFamily: 'monospace', fontWeight: 700, color: GOLD }}>{current.id_tipo_de_maquina}</span>
               </div>
               <div style={{ background: surfaceBg, padding: 12, borderRadius: 8 }}>

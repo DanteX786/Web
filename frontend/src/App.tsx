@@ -22,6 +22,7 @@ import { InsumosEnviadosView } from './features/compras/views/InsumosEnviadosVie
 import OrdenesPedido from './features/ventas/views/producciones';
 import { ClientesView } from './features/usuarios/views/ClientesView';
 import { RegistroDiarioView } from './features/produccion/views/RegistroDiarioView';
+import { AsistenciaView } from './features/produccion/views/AsistenciaView';
 import { RemisionesView } from './features/ventas/views/RemisionesView';
 import { SeguimientoRemisionView } from './features/produccion/views/SeguimientoRemisionView';
 import { RemisionEntregaView } from './features/ventas/views/RemisionEntregaView';
@@ -30,6 +31,7 @@ import { RemisionEntregaView } from './features/ventas/views/RemisionEntregaView
 import Proveedores from './features/compras/views/Proveedores';
 import TiposPieza from './features/parametros/views/TiposPieza';
 import TiposMaquinaria from './features/parametros/views/TiposMaquinaria';
+import Procesos from './features/parametros/views/Procesos';
 import EmpleadosView from './features/usuarios/views/Empleados';
 import Roles from './features/configuracion/views/Roles';
 
@@ -158,6 +160,8 @@ export default function App() {
       {currentView === 'proveedores' && <Proveedores dark={dark} />}
       {currentView === 'catalogoPiezas' && <TiposPieza dark={dark} />}
       {currentView === 'tiposMaquinaria' && <TiposMaquinaria dark={dark} />}
+      {currentView === 'procesos' && <Procesos dark={dark} />}
+      {currentView === 'asistencia' && <AsistenciaView dark={dark} />}
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
       {currentView === 'roles' && <Roles dark={dark} />}
 
@@ -171,4 +175,4 @@ export default function App() {
       </>)}
     </MainLayout>
   );
-}
+}

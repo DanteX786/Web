@@ -12,6 +12,7 @@ export interface RegistroDiario {
   cantidad: number;
   id_produccion: string;
   id_remision: string;
+  proceso: string | null;   // las tareas antiguas no tienen proceso
 }
 
 export interface FiltrosRegistro {

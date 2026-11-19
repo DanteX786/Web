@@ -221,7 +221,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
 
     setCargando(true);
     try {
-      const sesion = await authService.registro({
+      // La cuenta se crea pero NO se inicia sesión: el cliente vuelve al login y entra él mismo
+      await authService.registro({
         tipo_documento: regTipoDoc,
         numero_documento: limpiarDocumento(regTipoDoc, regDoc),
         nombre: regName.trim(),
@@ -233,10 +234,18 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
         contrasena: regPass,
         confirmar_contrasena: regConfirmPass,
       });
-      guardarSesion(sesion);
+      const correoNuevo = regEmail.trim().toLowerCase();
       setRegisterSuccess(true);
       toast.success('Cuenta creada con éxito');
-      window.setTimeout(() => onLoginSuccess(sesion.usuario), 1500);
+      window.setTimeout(() => {
+        setRegisterSuccess(false);
+        setRegDoc(''); setRegName(''); setRegContacto(''); setRegEmail(''); setRegPhone('');
+        setRegAddress(''); setRegPass(''); setRegConfirmPass(''); setErroresReg({});
+        setEmail(correoNuevo);
+        setPassword('');
+        setView('login');
+        setAviso('Tu cuenta fue creada. Inicia sesión con tu correo y contraseña.');
+      }, 1800);
     } catch (err) {
       toast.error(mensajeError(err), { duration: 7000 });
     } finally {
@@ -438,7 +447,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
                 <div style={{ textAlign: 'center', padding: '30px 0' }}>
                   <CheckCircle size={40} color={SUCCESS} style={{ margin: '0 auto 12px' }} />
                   <div style={{ fontSize: 18, fontWeight: 800, color: fg, marginBottom: 6 }}>¡Cuenta creada con éxito!</div>
-                  <div style={{ fontSize: 13, color: subtle }}>Entrando al sistema...</div>
+                  <div style={{ fontSize: 13, color: subtle }}>Te llevamos al inicio de sesión para que entres con tu cuenta...</div>
                 </div>
               ) : (
                 <form onSubmit={handleRegisterSubmit} noValidate style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from datetime import date
 
 from app.domain.entities.produccion import (
-    Asignacion, LineaRemision, NuevaAsignacion, Produccion, RemisionDisponible,
+    Asignacion, EmpleadoDisponibilidad, FaltantePaso, LineaRemision, MaquinaDisponibilidad, NuevaAsignacion,
+    NuevoPaso, PasoProduccion, Produccion, RemisionDisponible, SeguimientoProduccion,
 )
 
 
@@ -18,18 +18,41 @@ class IProduccionRepository(ABC):
     def remisiones_disponibles(self) -> list[RemisionDisponible]: ...
 
     @abstractmethod
+    def produccion_de_remision(self, id_remision: str) -> str | None: ...
+
+    @abstractmethod
     def lineas_remision(self, id_produccion: str) -> list[LineaRemision]: ...
 
     @abstractmethod
-    def crear(self, id_remision: str, fecha_entrega: date | None, id_responsable: str) -> str: ...
+    def crear(self, id_remision: str, id_responsable: str) -> str:
+        """Crea la producción en estado Por asignar (la remisión pasa a En producción)."""
 
     @abstractmethod
-    def finalizar(self, id_produccion: str, id_responsable: str) -> None: ...
+    def cambiar_estado(self, id_produccion: str, estado: str, id_responsable: str) -> None: ...
 
-    # ----- Asignaciones -----
+    @abstractmethod
+    def seguimiento(self, id_produccion: str) -> list[SeguimientoProduccion]: ...
+
+    @abstractmethod
+    def pasos(self, id_produccion: str) -> list[PasoProduccion]: ...
+
+    @abstractmethod
+    def guardar_pasos(self, id_produccion: str, pasos: list[NuevoPaso]) -> None:
+        """Deja exactamente esos pasos: quita los que no vienen, actualiza y agrega."""
+
+    @abstractmethod
+    def faltantes(self, id_produccion: str) -> list[FaltantePaso]: ...
+
+    @abstractmethod
+    def maquinas(self) -> list[MaquinaDisponibilidad]: ...
+
+    @abstractmethod
+    def empleados(self) -> list[EmpleadoDisponibilidad]: ...
+
+    # ----- Tareas (asignaciones) -----
     @abstractmethod
     def listar_asignaciones(self, id_produccion: str | None = None, id_empleado: str | None = None,
-                            solo_en_proceso: bool = False) -> list[Asignacion]: ...
+                            solo_en_produccion: bool = False) -> list[Asignacion]: ...
 
     @abstractmethod
     def obtener_asignacion(self, id_detalle: str) -> Asignacion | None: ...

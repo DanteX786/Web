@@ -16,3 +16,4 @@ class RegistroDiario:
     cantidad: int
     id_produccion: str
     id_remision: str
+    proceso: str | None = None   # las tareas antiguas no tienen proceso
