@@ -6,7 +6,7 @@ import {
   Factory, Scissors, Wrench, Users, FileText,
   SlidersHorizontal, Key, Truck, ShoppingBag, ClipboardList,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  Sun, Moon, Bell, LogOut, User, Send, UserCheck, History
+  Sun, Moon, Bell, LogOut, User, Send, UserCheck, History, ListChecks, CalendarCheck
 } from "lucide-react";
 
 import logo_blanco from '../../../public/images/logo blanco.png';
@@ -292,8 +292,10 @@ export default function MainLayout({
             { id: "produccion", label: "Producciones en curso", icon: Factory },
             { id: "registroDiario", label: "Registro Diario", icon: ClipboardList },
             { id: "registroDiarioEmpleado", label: "Registro Empleado", icon: UserCheck },
+            { id: "asistencia", label: "Asistencia", icon: CalendarCheck },
             { id: "empleados", label: "Empleados", icon: Users },
-            { id: "tiposMaquinaria", label: "Tipos de Máquina", icon: Wrench, seccion: "Parámetros" },
+            { id: "tiposMaquinaria", label: "Máquinas", icon: Wrench, seccion: "Parámetros" },
+            { id: "procesos", label: "Procesos", icon: ListChecks, seccion: "Parámetros" },
             { id: "catalogoPiezas", label: "Tipos de Pieza", icon: Scissors, seccion: "Parámetros" }
           ])}
 

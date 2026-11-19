@@ -26,3 +26,4 @@ class RegistroDiarioRespuesta(BaseModel):
     cantidad: int
     id_produccion: str
     id_remision: str
+    proceso: str | None = None

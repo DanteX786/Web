@@ -11,6 +11,7 @@ export const PERMISOS_POR_VISTA: Record<string, string[]> = {
   roles: ["Gestionar roles y permisos"],
   tiposMaquinaria: ["Gestionar parámetros de producción"],
   catalogoPiezas: ["Gestionar parámetros de producción"],
+  procesos: ["Gestionar parámetros de producción"],
   empleados: ["Gestionar usuarios"],
   clientes: ["Gestionar clientes"],
   remisiones: ["Gestionar remisiones", "Crear remisión (cliente)"],
@@ -25,6 +26,7 @@ export const PERMISOS_POR_VISTA: Record<string, string[]> = {
   produccion: ["Gestionar producción"],
   registroDiario: ["Gestionar producción"],
   registroDiarioEmpleado: ["Registrar avance diario"],
+  asistencia: [],   // solo el Administrador
 };
 
 

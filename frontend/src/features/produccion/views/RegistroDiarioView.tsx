@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ClipboardList, Pencil, Trash2, RefreshCw } from 'lucide-react';
+import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { registroDiarioService, type RegistroDiario } from '../services/registroDiarioService';
@@ -7,9 +7,9 @@ import { produccionService, type Produccion } from '../services/produccionServic
 import { empleadoService, type Empleado } from '../../usuarios/services/empleadoService';
 import { mensajeError } from '../../../shared/utils/api';
 import {
-  GOLD, INFO, SUCCESS, WARNING, FONT,
-  tema, estiloInput, fechaHora,
-  IdBadge, ActionCircleBtn, TableShell, FilaMensaje, Modal, Field, ModuleHeader, Kpi, Paginacion, ConfirmDialog,
+  GOLD, FONT,
+  tema, estiloInput, fechaHora, coincide, useAutoRefresco,
+  IdBadge, ActionCircleBtn, TableShell, FilaMensaje, Modal, Field, ModuleHeader, Paginacion, ConfirmDialog,
 } from '../components/ui';
 
 interface RegistroDiarioViewProps {
@@ -20,7 +20,8 @@ const POR_PAGINA = 8;
 
 /**
  * Historial de reportes diarios para el administrador (HU_57): quién hizo qué, cuánto y cuándo.
- * Permite corregir la cantidad o eliminar un reporte mientras la producción esté En proceso.
+ * Permite corregir la cantidad o eliminar un reporte mientras la producción esté En producción.
+ * Los datos se actualizan solos (sin botón de refrescar).
  */
 export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = false }) => {
   const t = tema(dark);
@@ -49,8 +50,8 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
       .catch((e) => toast.error(mensajeError(e)));
   }, []);
 
-  const cargar = useCallback(async () => {
-    setCargando(true);
+  const cargar = useCallback(async (silencioso = false) => {
+    if (!silencioso) setCargando(true);
     try {
       setRegistros(await registroDiarioService.listar({
         id_empleado: fEmpleado || undefined,
@@ -59,13 +60,17 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
         hasta: fHasta || undefined,
       }));
     } catch (e) {
-      toast.error(mensajeError(e));
+      if (!silencioso) toast.error(mensajeError(e));
     } finally {
-      setCargando(false);
+      if (!silencioso) setCargando(false);
     }
   }, [fEmpleado, fProduccion, fDesde, fHasta]);
 
   useEffect(() => { cargar(); }, [cargar]);
+  useAutoRefresco(() => {
+    cargar(true);
+    produccionService.listar().then(setProducciones).catch(() => undefined);
+  });
 
   const estadoProduccion = (id: string) => producciones.find((p) => p.id_produccion === id)?.estado;
   const editable = (r: RegistroDiario) => estadoProduccion(r.id_produccion) !== 'Finalizada';
@@ -110,19 +115,14 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
     }
   };
 
-  // ---------- Búsqueda, KPI y paginación ----------
-  const filtrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-    if (!q) return registros;
-    return registros.filter((r) =>
-      [r.id_registro_diario, r.empleado, r.pieza, r.maquina, r.prenda, r.talla, r.id_remision, r.id_produccion]
-        .some((v) => v.toLowerCase().includes(q)));
-  }, [registros, busqueda]);
+  // ---------- Búsqueda (en todas las columnas) y paginación ----------
+  const filtrados = useMemo(() => registros.filter((r) => coincide(busqueda, [
+    r.id_registro_diario, fechaHora(r.fecha), r.empleado, r.id_remision, r.id_produccion, r.prenda, r.talla,
+    `${r.prenda} · ${r.talla}`, r.proceso, r.pieza, r.maquina, r.cantidad, estadoProduccion(r.id_produccion),
+  ])), [registros, busqueda, producciones]);
 
   useEffect(() => { setPagina(1); }, [busqueda, fEmpleado, fProduccion, fDesde, fHasta]);
 
-  const totalUnidades = filtrados.reduce((s, r) => s + r.cantidad, 0);
-  const operarios = new Set(filtrados.map((r) => r.id_empleado)).size;
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
   const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
 
@@ -137,7 +137,6 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
         search={busqueda}
         onSearch={setBusqueda}
         dark={dark}
-        extra={<ActionCircleBtn variant="blue" onClick={cargar} title="Actualizar"><RefreshCw size={14} /></ActionCircleBtn>}
       />
 
       {/* Filtros */}
@@ -168,15 +167,10 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 24 }}>
-        <Kpi label="Reportes" valor={filtrados.length} color={INFO} dark={dark} />
-        <Kpi label="Unidades confeccionadas" valor={totalUnidades} color={SUCCESS} dark={dark} />
-        <Kpi label="Operarios que reportaron" valor={operarios} color={WARNING} dark={dark} />
-      </div>
 
-      <TableShell headers={['ID registro', 'Fecha y hora', 'Empleado', 'Remisión', 'Prenda / talla', 'Pieza', 'Máquina', 'Cantidad', 'Acciones']} dark={dark}>
+      <TableShell headers={['ID registro', 'Fecha y hora', 'Empleado', 'Remisión', 'Prenda / talla', 'Proceso', 'Pieza', 'Máquina', 'Cantidad', 'Acciones']} dark={dark}>
         {cargando || visibles.length === 0 ? (
-          <FilaMensaje colSpan={9} dark={dark} cargando={cargando}
+          <FilaMensaje colSpan={10} dark={dark} cargando={cargando}
             texto={hayFiltros ? 'No hay reportes con esos filtros.' : 'Todavía no hay reportes diarios.'} />
         ) : visibles.map((r) => (
           <tr key={r.id_registro_diario} style={{ borderBottom: `1px solid ${t.border}` }}>
@@ -185,6 +179,7 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
             <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600 }}>{r.empleado}</td>
             <td style={{ padding: '12px 14px' }}><IdBadge id={r.id_remision} /></td>
             <td style={{ padding: '12px 14px', fontSize: 12 }}>{r.prenda} · {r.talla}</td>
+            <td style={{ padding: '12px 14px', fontSize: 12, fontWeight: 600 }}>{r.proceso ?? '—'}</td>
             <td style={{ padding: '12px 14px', fontSize: 12 }}>{r.pieza}</td>
             <td style={{ padding: '12px 14px', fontSize: 12, color: t.subtle }}>{r.maquina}</td>
             <td style={{ padding: '12px 14px', fontSize: 14, fontWeight: 800 }}>{r.cantidad}</td>
@@ -210,7 +205,7 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
         <Modal title={`Corregir registro ${editar.id_registro_diario}`} icon={<ClipboardList size={16} color={GOLD} />}
           onClose={() => setEditar(null)} onSave={guardarEdicion} saving={procesando} dark={dark} maxWidth="480px">
           <div style={{ fontSize: 13, color: t.subtle, lineHeight: 1.6 }}>
-            <b style={{ color: t.fg }}>{editar.empleado}</b> — {editar.pieza} ({editar.prenda} {editar.talla}) en {editar.maquina}<br />
+            <b style={{ color: t.fg }}>{editar.empleado}</b> — {editar.proceso ? `${editar.proceso} · ` : ''}{editar.pieza} ({editar.prenda} {editar.talla}) en {editar.maquina}<br />
             Reportado el {fechaHora(editar.fecha)}
           </div>
           <Field label="Cantidad confeccionada" dark={dark}>

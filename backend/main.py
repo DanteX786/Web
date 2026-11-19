@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from core.config import settings
 from app.infrastructure.database.database import get_db
-from app.presentation.dependencies.auth_dependencies import permisos_de_ruta
+from app.presentation.dependencies.auth_dependencies import permisos_de_ruta, requiere_rol
 from app.domain.exceptions.errors import (
     AuthError, ConflictError, DemasiadosIntentosError, ForbiddenError, NotFoundError,
     ServicioNoDisponibleError, ValidacionError,
@@ -16,6 +16,8 @@ from app.domain.exceptions.errors import (
 
 # ---- Routers de Camilo ----
 from app.presentation.api.auth_router import router as auth_router
+from app.presentation.api.proceso_router import router as proceso_router
+from app.presentation.api.asistencia_router import router as asistencia_router
 from app.presentation.api.produccion_router import asignaciones_router, router as produccion_router
 from app.presentation.api.registro_diario_router import router as registro_diario_router
 from app.presentation.api.seguimiento_router import router as seguimiento_router
@@ -137,6 +139,8 @@ app.include_router(asignaciones_router, dependencies=_p([P_PRODUCCION, P_AVANCE]
 app.include_router(registro_diario_router, dependencies=_p([P_PRODUCCION, P_AVANCE], [P_PRODUCCION, P_AVANCE]))
 app.include_router(seguimiento_router, dependencies=_p(
     [P_REMISIONES, P_REMISION_CLIENTE, P_PRODUCCION, P_ENTREGAS], [], solo_personal=False))
+app.include_router(proceso_router, dependencies=_p([P_PARAMETROS, P_PRODUCCION], [P_PARAMETROS]))  # tabla maestra de procesos
+app.include_router(asistencia_router, dependencies=[Depends(requiere_rol("Administrador"))])  # solo el administrador
 
 # Parámetros y proveedores (Jordy)
 app.include_router(proveedor_router, dependencies=_p([P_PROVEEDORES, P_COMPRAS], [P_PROVEEDORES]))  # PB-36

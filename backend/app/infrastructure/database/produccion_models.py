@@ -20,6 +20,7 @@ class ProduccionModel(Base):
     fecha_inicio: Mapped[date] = mapped_column(Date, server_default=FetchedValue())
     fecha_entrega: Mapped[date | None] = mapped_column(Date)
     estado: Mapped[str] = mapped_column(String(20), server_default=FetchedValue())
+    fecha_estado: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=FetchedValue())
 
 
 class DetalleProduccionModel(Base):
@@ -27,6 +28,8 @@ class DetalleProduccionModel(Base):
 
     id_detalle_de_produccion: Mapped[str] = mapped_column(String(10), primary_key=True, server_default=FetchedValue())
     id_produccion: Mapped[str] = mapped_column(String(10))
+    id_proceso: Mapped[str | None] = mapped_column(String(10))   # lo llena la BD a partir del paso
+    id_paso: Mapped[str | None] = mapped_column(String(10))
     id_empleado: Mapped[str] = mapped_column(String(10))
     id_tipo_pieza: Mapped[str] = mapped_column(String(10))
     id_tipo_maquina: Mapped[str] = mapped_column(String(10))

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Search, Plus, X, AlertTriangle, Loader2 } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { Search, Plus, AlertTriangle, Loader2 } from 'lucide-react';
 
 // ==========================================
 // PALETA DE COLORES - SISTEMA DE DISEÑO BASE
@@ -135,23 +135,32 @@ export const Modal: React.FC<{
   children: React.ReactNode;
 }> = ({ title, icon, onClose, onSave, saveLabel = 'Guardar', saving, dark = false, maxWidth = "650px", children }) => {
   const t = tema(dark);
+  // Mientras la ventana está abierta, la página de fondo no se mueve con la rueda del mouse
+  useEffect(() => {
+    const anterior = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = anterior; };
+  }, []);
   return (
     <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24 }}>
       <div style={{
         width: '100%', maxWidth, borderRadius: 16, backgroundColor: t.cardBg, border: `1px solid ${GOLD}40`,
         boxShadow: '0 25px 50px rgba(0,0,0,0.25)', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
-        <div style={{ height: 3, background: `linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT}, transparent)` }} />
-        <div style={{ padding: '16px 24px', borderBottom: `1px solid ${GOLD}25`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ height: 3, flexShrink: 0, background: `linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT}, transparent)` }} />
+        <div style={{ padding: '16px 24px', flexShrink: 0, borderBottom: `1px solid ${GOLD}25`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {icon}
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: t.fg, fontFamily: FONT }}>{title}</h3>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6B6B' }}><X size={18} /></button>
         </div>
-        <div style={{ padding: 24, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT }}>{children}</div>
-        {onSave && (
-          <div style={{ padding: '16px 24px', borderTop: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'flex-end', gap: 12, backgroundColor: t.surface }}>
+        {/* El contenido hace scroll dentro de la ventana (minHeight: 0) y sus bloques no se aplastan (grid) */}
+        <div style={{
+          padding: 24, overflowY: 'auto', minHeight: 0, flex: '1 1 auto', overscrollBehavior: 'contain',
+          display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gridAutoRows: 'max-content', alignContent: 'start', gap: 16, fontFamily: FONT,
+        }}>{children}</div>
+        {onSave ? (
+          <div style={{ padding: '16px 24px', flexShrink: 0, borderTop: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'flex-end', gap: 12, backgroundColor: t.surface }}>
             <button onClick={onClose} disabled={saving} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', background: dark ? '#2A2A2A' : '#EAEAEA', color: t.fg, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: FONT }}>
               Cancelar
             </button>
@@ -160,6 +169,12 @@ export const Modal: React.FC<{
               color: '#121212', fontWeight: 700, fontSize: 13, cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1, fontFamily: FONT,
             }}>
               {saving ? 'Guardando...' : saveLabel}
+            </button>
+          </div>
+        ) : (
+          <div style={{ padding: '12px 24px', flexShrink: 0, borderTop: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'flex-end', backgroundColor: t.surface }}>
+            <button onClick={onClose} style={{ padding: '8px 18px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)', background: dark ? '#2A2A2A' : '#EAEAEA', color: t.fg, fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: FONT }}>
+              Cerrar
             </button>
           </div>
         )}
@@ -305,4 +320,32 @@ export const ConfirmDialog: React.FC<{
       </div>
     </div>
   );
+};
+
+/**
+ * Actualiza los datos solos (sin botón de refrescar): cada `ms` milisegundos mientras la
+ * pestaña está visible y cada vez que el usuario vuelve a la ventana.
+ * `cargar` debe recargar en silencio (sin mostrar "Cargando...").
+ */
+export function useAutoRefresco(cargar: () => unknown, ms = 15000): void {
+  const ref = useRef(cargar);
+  ref.current = cargar;
+  useEffect(() => {
+    const refrescar = () => { if (document.visibilityState === 'visible') ref.current(); };
+    const intervalo = window.setInterval(refrescar, ms);
+    window.addEventListener('focus', refrescar);
+    document.addEventListener('visibilitychange', refrescar);
+    return () => {
+      window.clearInterval(intervalo);
+      window.removeEventListener('focus', refrescar);
+      document.removeEventListener('visibilitychange', refrescar);
+    };
+  }, [ms]);
+}
+
+/** Busca un texto en TODOS los valores de una fila (texto, números y fechas). */
+export const coincide = (q: string, valores: unknown[]): boolean => {
+  const texto = q.trim().toLowerCase();
+  if (!texto) return true;
+  return valores.some((v) => v !== null && v !== undefined && String(v).toLowerCase().includes(texto));
 };

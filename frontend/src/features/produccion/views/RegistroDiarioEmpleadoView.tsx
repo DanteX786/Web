@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Send, PlayCircle, RefreshCw, UserCheck, ClipboardCheck } from 'lucide-react';
+import { Send, PlayCircle, UserCheck, ClipboardCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { produccionService, type Asignacion } from '../services/produccionService';
@@ -9,8 +9,8 @@ import { mensajeError } from '../../../shared/utils/api';
 import { obtenerUsuario } from '../../auth/services/authService';
 import {
   GOLD, SUCCESS, SUCCESS_BG, WARNING, INFO, FONT,
-  tema, estiloInput, fechaHora,
-  IdBadge, Pill, TableShell, FilaMensaje, Kpi, BarraAvance, ConfirmDialog, ActionCircleBtn,
+  tema, estiloInput, fechaHora, useAutoRefresco,
+  IdBadge, Pill, TableShell, FilaMensaje, Kpi, BarraAvance, ConfirmDialog,
 } from '../components/ui';
 
 interface RegistroDiarioEmpleadoViewProps {
@@ -24,7 +24,7 @@ const desplazar = (dias: number) => { const d = new Date(); d.setDate(d.getDate(
 const esDeHoy = (iso: string) => isoLocal(new Date(iso)) === isoLocal(new Date());
 
 /**
- * Vista del operario: ve sus tareas de la producción en curso y reporta lo que
+ * Vista del operario: ve sus tareas de las producciones En producción y reporta lo que
  * confeccionó en el día (HU_55, HU_56). La fecha y hora las pone la base de datos.
  */
 export const RegistroDiarioEmpleadoView: React.FC<RegistroDiarioEmpleadoViewProps> = ({ dark = false }) => {
@@ -53,25 +53,27 @@ export const RegistroDiarioEmpleadoView: React.FC<RegistroDiarioEmpleadoViewProp
       .catch((e) => toast.error(mensajeError(e)));
   }, [esAdmin]);
 
-  const cargar = useCallback(async () => {
+  // silencioso = actualización automática: no muestra "Cargando" ni borra lo que el operario está escribiendo
+  const cargar = useCallback(async (silencioso = false) => {
     if (!idEmpleado) return;
-    setCargando(true);
+    if (!silencioso) setCargando(true);
     try {
       const [asig, regs] = await Promise.all([
-        produccionService.listarAsignaciones({ id_empleado: idEmpleado, solo_en_proceso: true }),
+        produccionService.listarAsignaciones({ id_empleado: idEmpleado, solo_en_produccion: true }),
         registroDiarioService.listar({ id_empleado: idEmpleado, desde: desplazar(-1), hasta: desplazar(1) }),
       ]);
       setTareas(asig);
       setRegistrosHoy(regs.filter((r) => esDeHoy(r.fecha)));
-      setCantidades({});
+      if (!silencioso) setCantidades({});
     } catch (e) {
-      toast.error(mensajeError(e));
+      if (!silencioso) toast.error(mensajeError(e));
     } finally {
-      setCargando(false);
+      if (!silencioso) setCargando(false);
     }
   }, [idEmpleado]);
 
   useEffect(() => { cargar(); }, [cargar]);
+  useAutoRefresco(() => cargar(true));
 
   const cambiarCantidad = (tarea: Asignacion, valor: string) => {
     if (valor === '') { setCantidades({ ...cantidades, [tarea.id_detalle_de_produccion]: '' }); return; }
@@ -138,7 +140,6 @@ export const RegistroDiarioEmpleadoView: React.FC<RegistroDiarioEmpleadoViewProp
               <span style={{ fontSize: 13, fontWeight: 700 }}>{usuario?.nombre}</span>
             )}
           </div>
-          <ActionCircleBtn variant="blue" onClick={cargar} title="Actualizar"><RefreshCw size={14} /></ActionCircleBtn>
           <button onClick={abrirConfirmacion} disabled={tareas.length === 0} style={{
             background: `linear-gradient(135deg, ${SUCCESS}, #218838)`, color: '#FFF', fontWeight: 700, fontSize: 14, borderRadius: 10,
             padding: '10px 20px', border: 'none', cursor: tareas.length ? 'pointer' : 'not-allowed', opacity: tareas.length ? 1 : 0.5,
@@ -155,10 +156,10 @@ export const RegistroDiarioEmpleadoView: React.FC<RegistroDiarioEmpleadoViewProp
         <Kpi label="Pendiente por hacer" valor={totalPendiente} color={WARNING} dark={dark} nota="unidades" />
       </div>
 
-      <TableShell headers={['Tarea', 'Remisión', 'Prenda / talla', 'Pieza', 'Máquina', 'Avance', 'Pendiente', 'Cantidad hoy']} dark={dark}>
+      <TableShell headers={['Tarea', 'Remisión', 'Prenda / talla', 'Proceso', 'Pieza', 'Máquina', 'Avance', 'Pendiente', 'Cantidad hoy']} dark={dark}>
         {cargando || tareas.length === 0 ? (
-          <FilaMensaje colSpan={8} dark={dark} cargando={cargando}
-            texto={`${nombreOperario ?? 'Este empleado'} no tiene tareas en la producción en curso.`} />
+          <FilaMensaje colSpan={9} dark={dark} cargando={cargando}
+            texto={`${nombreOperario ?? 'Este empleado'} no tiene tareas en producciones iniciadas.`} />
         ) : tareas.map((tarea) => {
           const valor = cantidades[tarea.id_detalle_de_produccion] ?? '';
           const excede = valor !== '' && Number(valor) > tarea.cantidad_pendiente;
@@ -169,6 +170,7 @@ export const RegistroDiarioEmpleadoView: React.FC<RegistroDiarioEmpleadoViewProp
               <td style={{ padding: '12px 14px' }}><IdBadge id={tarea.id_detalle_de_produccion} /></td>
               <td style={{ padding: '12px 14px' }}><IdBadge id={tarea.id_remision} /></td>
               <td style={{ padding: '12px 14px', fontSize: 12 }}>{tarea.prenda} · {tarea.talla}</td>
+              <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 700 }}>{tarea.paso ?? tarea.proceso ?? '—'}</td>
               <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600 }}>{tarea.pieza}</td>
               <td style={{ padding: '12px 14px', fontSize: 12, color: t.subtle }}>{tarea.maquina}</td>
               <td style={{ padding: '12px 14px' }}>
@@ -193,14 +195,15 @@ export const RegistroDiarioEmpleadoView: React.FC<RegistroDiarioEmpleadoViewProp
       <h3 style={{ fontSize: 14, fontWeight: 700, margin: '28px 0 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
         <ClipboardCheck size={16} color={GOLD} /> Lo que reportaste hoy
       </h3>
-      <TableShell headers={['Registro', 'Hora', 'Prenda / talla', 'Pieza', 'Máquina', 'Cantidad']} dark={dark}>
+      <TableShell headers={['Registro', 'Hora', 'Prenda / talla', 'Proceso', 'Pieza', 'Máquina', 'Cantidad']} dark={dark}>
         {registrosHoy.length === 0 ? (
-          <FilaMensaje colSpan={6} dark={dark} texto="Aún no has enviado reportes hoy." />
+          <FilaMensaje colSpan={7} dark={dark} texto="Aún no has enviado reportes hoy." />
         ) : registrosHoy.map((r) => (
           <tr key={r.id_registro_diario} style={{ borderBottom: `1px solid ${t.border}` }}>
             <td style={{ padding: '10px 14px' }}><IdBadge id={r.id_registro_diario} /></td>
             <td style={{ padding: '10px 14px', fontSize: 12, fontFamily: 'monospace', color: t.subtle }}>{fechaHora(r.fecha)}</td>
             <td style={{ padding: '10px 14px', fontSize: 12 }}>{r.prenda} · {r.talla}</td>
+            <td style={{ padding: '10px 14px', fontSize: 12, fontWeight: 600 }}>{r.proceso ?? '—'}</td>
             <td style={{ padding: '10px 14px', fontSize: 12 }}>{r.pieza}</td>
             <td style={{ padding: '10px 14px', fontSize: 12, color: t.subtle }}>{r.maquina}</td>
             <td style={{ padding: '10px 14px', fontSize: 13, fontWeight: 700 }}>{r.cantidad}</td>
@@ -224,7 +227,7 @@ export const RegistroDiarioEmpleadoView: React.FC<RegistroDiarioEmpleadoViewProp
           <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
             {porEnviar.map(({ tarea, cantidad }) => (
               <div key={tarea.id_detalle_de_produccion} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, padding: '6px 10px', borderRadius: 8, background: t.inputBg }}>
-                <span>{tarea.pieza} · {tarea.prenda} {tarea.talla}</span>
+                <span>{tarea.paso ?? tarea.proceso ? `${tarea.paso ?? tarea.proceso} · ` : ''}{tarea.pieza} · {tarea.prenda} {tarea.talla}</span>
                 <b>{cantidad} und</b>
               </div>
             ))}

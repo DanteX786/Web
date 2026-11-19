@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   FileText, Plus, Trash2, UploadCloud, Save, ArrowLeft, ToggleLeft, ToggleRight, Box, Search, Eye, Pencil, X, AlertTriangle,
-  CheckCircle2, XCircle, History, Loader2
+  CheckCircle2, XCircle, History, Loader2, Factory
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { mensajeError } from '../../../shared/utils/api';
@@ -14,6 +14,9 @@ import {
 import { seguimientoService, type Seguimiento } from '../../produccion/services/seguimientoService';
 import { clienteService, type Cliente } from '../../usuarios/services/clienteService';
 import { obtenerUsuario } from '../../auth/services/authService';
+import { puedeVer } from '../../auth/utils/permisos';
+import { produccionService } from '../../produccion/services/produccionService';
+import { ConfirmDialog } from '../../produccion/components/ui';
 import {
   UNIDADES_INSUMO, cargarSugerenciasInsumos, problemaInsumo, requiereEspecificacion, separarNombre, unirNombre,
 } from '../../compras/utils/insumosEnviados';
@@ -85,7 +88,7 @@ export const IdBadge: React.FC<{ id: string }> = ({ id }) => (
 );
 
 export const ActionCircleBtn: React.FC<{
-  variant?: 'blue' | 'gold' | 'danger';
+  variant?: 'blue' | 'gold' | 'danger' | 'success';
   onClick: () => void;
   children: React.ReactNode;
   title?: string;
@@ -96,6 +99,7 @@ export const ActionCircleBtn: React.FC<{
 
   if (variant === 'blue' && !disabled) { borderColor = INFO; iconColor = INFO; } 
   else if (variant === 'danger' && !disabled) { borderColor = DANGER; iconColor = DANGER; }
+  else if (variant === 'success' && !disabled) { borderColor = '#28A745'; iconColor = '#28A745'; }
 
   return (
     <button
@@ -150,6 +154,10 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
   // Modales de confirmación
   const [idParaEliminar, setIdParaEliminar] = useState<string | null>(null);
   const [rechazo, setRechazo] = useState<{ id: string; motivo: string } | null>(null);
+  const [enviarProducir, setEnviarProducir] = useState<Remision | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  // "Enviar a producir" lo usa quien gestiona la producción (ya no se crea desde el módulo de Producción)
+  const puedeProducir = !esCliente && puedeVer(usuarioSesion, 'produccion');
 
   const [remisionEnEdicion, setRemisionEnEdicion] = useState<string | null>(null);
 
@@ -334,6 +342,22 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
     }
   };
 
+  /** Crea la producción "Por asignar" con las tallas de la remisión; la remisión pasa a "En producción". */
+  const confirmarEnviarProducir = async () => {
+    if (!enviarProducir) return;
+    setEnviando(true);
+    try {
+      const prod = await produccionService.enviarAProducir(enviarProducir.id_remision);
+      reemplazarEnLista(await remisionService.obtener(enviarProducir.id_remision));
+      toast.success(`Remisión ${prod.id_remision} enviada a producir: producción ${prod.id_produccion} creada (Por asignar).`);
+      setEnviarProducir(null);
+    } catch (error) {
+      toast.error(mensajeError(error));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   const confirmarRechazo = async () => {
     if (!rechazo) return;
     if (rechazo.motivo.trim().length < 3) {
@@ -458,6 +482,9 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
                         {rolActivo === 'ADMIN' && (
                           <>
                             <ActionCircleBtn variant="blue" onClick={() => aprobar(rem.id_remision)} title="Aprobar" disabled={rem.estado !== 'Pendiente'}><CheckCircle2 size={14} /></ActionCircleBtn>
+                            {puedeProducir && (
+                              <ActionCircleBtn variant="success" onClick={() => setEnviarProducir(rem)} title="Enviar a producir (solo Aprobada)" disabled={rem.estado !== 'Aprobada'}><Factory size={14} /></ActionCircleBtn>
+                            )}
                             <ActionCircleBtn variant="danger" onClick={() => setRechazo({ id: rem.id_remision, motivo: '' })} title="Rechazar" disabled={rem.estado !== 'Pendiente' && rem.estado !== 'Aprobada'}><XCircle size={14} /></ActionCircleBtn>
                             <ActionCircleBtn variant="danger" onClick={() => setIdParaEliminar(rem.id_remision)} title="Eliminar (Pendiente o Rechazada)" disabled={rem.estado !== 'Pendiente' && rem.estado !== 'Rechazada'}><Trash2 size={14} /></ActionCircleBtn>
                           </>
@@ -661,6 +688,19 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
             </div>
           </Modal>
         )}
+      {enviarProducir && (
+        <ConfirmDialog
+          titulo={`¿Enviar ${enviarProducir.id_remision} a producir?`}
+          mensaje={`Se creará la producción en estado "Por asignar" con las ${enviarProducir.total_prendas} prendas de la remisión (sus tallas pasan automáticamente). La remisión quedará "En producción".`}
+          confirmarLabel="Sí, enviar a producir"
+          variante="success"
+          icono={<Factory size={28} color="#28A745" />}
+          procesando={enviando}
+          onCancel={() => setEnviarProducir(null)}
+          onConfirm={confirmarEnviarProducir}
+          dark={dark}
+        />
+      )}
       </div>
     );
   }
