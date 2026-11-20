@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, X, AlertTriangle, Pencil, Trash2, Eye, Phone, Mail, MapPin, ChevronDown } from 'lucide-react';
+import { Search, Plus, X, AlertTriangle, Pencil, Trash2, Eye, Phone, Mail, MapPin, ChevronDown, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { proveedorService, type Proveedor, type EstadoProveedor } from '../services/proveedorService';
 import { mensajeError } from '../../../shared/utils/api';
+import {
+  limpiarDocumento,
+  soloDigitos,
+  validarDocumento,
+  validarNombre,
+  validarCorreo,
+  validarTelefono,
+  validarContacto,
+  validarDireccion,
+} from '../../auth/utils/validaciones';
 
 const GOLD = "#C9A227";
 const GOLD_LIGHT = "#E6B84A";
@@ -15,6 +25,49 @@ const SUCCESS_TXT = "#155724";
 
 const estiloError = { background: DANGER_BG, border: `1px solid ${DANGER}`, color: DANGER_TXT, fontFamily: 'Montserrat, sans-serif' };
 const estiloExito = { background: SUCCESS_BG, border: '1px solid #28A745', color: SUCCESS_TXT, fontFamily: 'Montserrat, sans-serif' };
+
+type Campo = 'nit' | 'nombre' | 'telefono' | 'correo' | 'contacto' | 'direccion';
+const TODOS_LOS_CAMPOS: Campo[] = ['nit', 'nombre', 'telefono', 'correo', 'contacto', 'direccion'];
+
+/** Quita tildes y pasa a minúsculas, para que "medellin" encuentre "Medellín". */
+const normalizar = (texto: string) =>
+  texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+/**
+ * Valida el formulario con las mismas reglas del equipo (auth/utils/validaciones.ts).
+ * - NIT y nombre: obligatorios, y solo se validan al CREAR (al editar no se pueden cambiar).
+ * - Los demás campos son opcionales: solo se validan si tienen algo escrito.
+ */
+function validarFormulario(f: Partial<Proveedor>, existentes: Proveedor[], esNuevo: boolean): Partial<Record<Campo, string>> {
+  const errores: Partial<Record<Campo, string>> = {};
+
+  if (esNuevo) {
+    const nit = (f.nit ?? '').trim();
+    const errorNit = validarDocumento('NIT', nit);
+    if (errorNit) errores.nit = errorNit;
+    else if (existentes.some(p => p.nit === nit)) errores.nit = 'Ya existe un proveedor con este NIT.';
+
+    const errorNombre = validarNombre(f.nombre ?? '', 'NIT');
+    if (errorNombre) errores.nombre = errorNombre;
+  }
+
+  if (f.telefono?.trim()) {
+    const e = validarTelefono('Empresarial', f.telefono.trim());
+    if (e) errores.telefono = e;
+  }
+  if (f.correo?.trim()) {
+    const e = validarCorreo(f.correo);
+    if (e) errores.correo = e;
+  }
+  if (f.contacto?.trim()) {
+    const e = validarContacto('NIT', f.contacto);
+    if (e) errores.contacto = e;
+  }
+  const errorDireccion = validarDireccion(f.direccion ?? '');
+  if (errorDireccion) errores.direccion = errorDireccion;
+
+  return errores;
+}
 
 interface Props {
   dark?: boolean;
@@ -30,12 +83,13 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
   const borderNormal = dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
 
   const [data, setData] = useState<Proveedor[]>([]);
-
   const [busqueda, setBusqueda] = useState('');
   const [modalMode, setModalMode] = useState<'add' | 'edit' | 'view' | null>(null);
   const [current, setCurrent] = useState<Proveedor | null>(null);
   const [deleteItem, setDeleteItem] = useState<Proveedor | null>(null);
   const [formData, setFormData] = useState<Partial<Proveedor>>({ estado: 'Activo' });
+  // Campos que el usuario ya tocó: solo a esos se les muestra el error mientras escribe
+  const [tocados, setTocados] = useState<Set<Campo>>(new Set());
 
   // Paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -48,26 +102,47 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
       .catch((e) => toast.error(mensajeError(e), { style: estiloError }));
   }, []);
 
-  const filtered = data.filter(p =>
-    p.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    p.nit.includes(busqueda) ||
-    p.id.toLowerCase().includes(busqueda.toLowerCase())
-  );
+  // ---------- Buscador: filtra por ID, NIT, nombre, contacto, teléfono, correo y estado ----------
+  const termino = normalizar(busqueda.trim());
+  const filtered = termino
+    ? data.filter(p =>
+        [p.id, p.nit, p.nombre, p.contacto, p.telefono, p.correo, p.estado]
+          .some(valor => valor && normalizar(valor).includes(termino))
+      )
+    : data;
+
+  const buscar = (texto: string) => {
+    setBusqueda(texto);
+    setCurrentPage(1); // al buscar siempre se vuelve a la primera página
+  };
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const currentItems = filtered.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
 
+  // ---------- Validación en tiempo real ----------
+  const esNuevo = modalMode === 'add';
+  const errores = validarFormulario(formData, data, esNuevo);
+  const hayErrores = Object.keys(errores).length > 0;
+  const errorDe = (campo: Campo) => (tocados.has(campo) ? errores[campo] : undefined);
+
+  const cambiar = (campo: Campo, valor: string) => {
+    setFormData(prev => ({ ...prev, [campo]: valor }));
+    setTocados(prev => new Set(prev).add(campo));
+  };
+
   const openAdd = () => {
     setCurrent(null);
-    setFormData({ nombre: '', nit: '', direccion: '', correo: '', telefono: '', contacto: '', estado: 'Activo' });
+    setFormData({ nit: '', nombre: '', direccion: '', correo: '', telefono: '', contacto: '', estado: 'Activo' });
+    setTocados(new Set());
     setModalMode('add');
   };
 
   const openEdit = (p: Proveedor) => {
     setCurrent(p);
     setFormData(p);
+    setTocados(new Set());
     setModalMode('edit');
   };
 
@@ -78,15 +153,14 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.nombre?.trim() || !formData.nit?.trim()) {
-      toast.error("El nombre y el NIT son obligatorios", { style: estiloError });
+    if (hayErrores) {
+      setTocados(new Set(TODOS_LOS_CAMPOS)); // muestra todos los errores
+      toast.error("Revisa los campos marcados en rojo", { style: estiloError });
       return;
     }
 
-    // El id no se envía: lo genera la base de datos
-    const datos = {
-      nombre: formData.nombre,
-      nit: formData.nit,
+    // Campos que se pueden escribir en ambos casos
+    const editables = {
       contacto: formData.contacto,
       telefono: formData.telefono,
       correo: formData.correo,
@@ -96,11 +170,13 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
 
     try {
       if (modalMode === 'add') {
-        const creado = await proveedorService.crear(datos);
+        // Al crear se envían también el NIT y el nombre. El id lo genera la base de datos.
+        const creado = await proveedorService.crear({ nit: formData.nit, nombre: formData.nombre, ...editables });
         setData(prev => [...prev, creado]);
         toast.success(`Proveedor ${creado.id} registrado`, { style: estiloExito });
       } else if (modalMode === 'edit' && current) {
-        const actualizado = await proveedorService.actualizar(current.id, datos);
+        // Al editar NO se envían el NIT ni el nombre: no se pueden cambiar
+        const actualizado = await proveedorService.actualizar(current.id, editables);
         setData(prev => prev.map(d => d.id === actualizado.id ? actualizado : d));
         toast.success("Proveedor actualizado", { style: estiloExito });
       }
@@ -141,6 +217,23 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
     }
   };
 
+  // ---------- Estilos del formulario ----------
+  const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 };
+  const inputStyle = (campo: Campo): React.CSSProperties => ({
+    width: '100%', padding: '10px 12px', background: inputBg,
+    border: `1px solid ${errorDe(campo) ? DANGER : borderNormal}`,
+    borderRadius: 8, color: fg, outline: 'none', boxSizing: 'border-box',
+  });
+  const bloqueadoStyle: React.CSSProperties = {
+    width: '100%', padding: '10px 36px 10px 12px', background: surfaceBg,
+    border: `1px solid ${borderNormal}`, borderRadius: 8, color: subtle,
+    outline: 'none', boxSizing: 'border-box', cursor: 'not-allowed',
+  };
+  const Obligatorio = () => <span style={{ color: DANGER }}> *</span>;
+  const MensajeError = ({ campo }: { campo: Campo }) =>
+    errorDe(campo) ? <div style={{ fontSize: 11, color: DANGER, marginTop: 4 }}>{errorDe(campo)}</div> : null;
+  const NoEditable = () => <div style={{ fontSize: 11, color: subtle, marginTop: 4 }}>No se puede modificar</div>;
+
   return (
     <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif', boxSizing: 'border-box' }}>
 
@@ -152,21 +245,31 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Buscador */}
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
             <input
               type="text"
-              placeholder="Buscar proveedor..."
+              placeholder="Buscar por NIT, nombre, contacto..."
               value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
+              onChange={(e) => buscar(e.target.value)}
               style={{
-                width: 220, padding: '8px 12px 8px 36px', borderRadius: 8,
+                width: 260, padding: '8px 32px 8px 36px', borderRadius: 8,
                 border: `1px solid ${borderNormal}`, background: surfaceBg, color: fg,
                 fontSize: 13, outline: 'none', fontFamily: 'Montserrat, sans-serif'
               }}
               onFocus={(e) => { e.target.style.borderColor = GOLD; }}
               onBlur={(e) => { e.target.style.borderColor = borderNormal; }}
             />
+            {busqueda && (
+              <button
+                onClick={() => buscar('')}
+                title="Limpiar búsqueda"
+                style={{ position: 'absolute', right: 8, background: 'none', border: 'none', cursor: 'pointer', color: subtle, display: 'flex', padding: 2 }}
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
 
           <button
@@ -199,7 +302,7 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13 }}>
-                  No se encontraron registros.
+                  {busqueda ? `No hay proveedores que coincidan con "${busqueda}".` : 'No hay proveedores registrados.'}
                 </td>
               </tr>
             ) : (
@@ -258,6 +361,7 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
         <div style={{ fontSize: 13, color: subtle }}>
           Mostrando de {filtered.length === 0 ? 0 : indexOfFirstItem + 1} a {Math.min(indexOfLastItem, filtered.length)} de {filtered.length} registros
+          {busqueda && ` (filtrados de ${data.length})`}
         </div>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -294,7 +398,7 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
       {/* MODAL CREAR / EDITAR */}
       {(modalMode === 'add' || modalMode === 'edit') && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
-          <div style={{ width: '100%', maxWidth: 480, borderRadius: 16, backgroundColor: cardBg, border: `1px solid ${GOLD}40`, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ width: '100%', maxWidth: 480, maxHeight: '95vh', borderRadius: 16, backgroundColor: cardBg, border: `1px solid ${GOLD}40`, boxShadow: '0 20px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             <div style={{ height: 2, background: `linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT}, transparent)` }} />
             <div style={{ padding: '16px 24px', borderBottom: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: fg, fontFamily: 'Montserrat, sans-serif' }}>
@@ -303,37 +407,118 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
               <button onClick={() => setModalMode(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: subtle }}><X size={18}/></button>
             </div>
 
-            <form onSubmit={handleSave} style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>Nombre de la Empresa</label>
-                <input value={formData.nombre || ''} onChange={e => setFormData({...formData, nombre: e.target.value})} placeholder="Ej. Textiles del Norte" style={{ width: '100%', padding: '10px 12px', background: inputBg, border: `1px solid ${borderNormal}`, borderRadius: 8, color: fg, outline: 'none', boxSizing: 'border-box' }} />
+            <form onSubmit={handleSave} noValidate style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto' }}>
+              <div style={{ fontSize: 11, color: subtle }}>
+                Los campos con <span style={{ color: DANGER }}>*</span> son obligatorios.
               </div>
+
+              {/* 1. NIT (primer campo) */}
+              <div>
+                <label style={labelStyle}>NIT<Obligatorio /></label>
+                {esNuevo ? (
+                  <>
+                    <input
+                      value={formData.nit || ''}
+                      onChange={e => cambiar('nit', limpiarDocumento('NIT', e.target.value))}
+                      onBlur={() => setTocados(prev => new Set(prev).add('nit'))}
+                      placeholder="900123456-1"
+                      autoFocus
+                      style={inputStyle('nit')}
+                    />
+                    <MensajeError campo="nit" />
+                  </>
+                ) : (
+                  <>
+                    <div style={{ position: 'relative' }}>
+                      <input value={formData.nit || ''} disabled style={bloqueadoStyle} />
+                      <Lock size={14} color={subtle} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }} />
+                    </div>
+                    <NoEditable />
+                  </>
+                )}
+              </div>
+
+              {/* 2. Nombre de la empresa */}
+              <div>
+                <label style={labelStyle}>Nombre de la Empresa<Obligatorio /></label>
+                {esNuevo ? (
+                  <>
+                    <input
+                      value={formData.nombre || ''}
+                      onChange={e => cambiar('nombre', e.target.value)}
+                      onBlur={() => setTocados(prev => new Set(prev).add('nombre'))}
+                      placeholder="Ej. Textiles del Norte S.A.S."
+                      style={inputStyle('nombre')}
+                    />
+                    <MensajeError campo="nombre" />
+                  </>
+                ) : (
+                  <>
+                    <div style={{ position: 'relative' }}>
+                      <input value={formData.nombre || ''} disabled style={bloqueadoStyle} />
+                      <Lock size={14} color={subtle} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)' }} />
+                    </div>
+                    <NoEditable />
+                  </>
+                )}
+              </div>
+
+              {/* 3. Teléfono y correo */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>NIT</label>
-                  <input value={formData.nit || ''} onChange={e => setFormData({...formData, nit: e.target.value})} placeholder="90000000-0" style={{ width: '100%', padding: '10px 12px', background: inputBg, border: `1px solid ${borderNormal}`, borderRadius: 8, color: fg, outline: 'none', boxSizing: 'border-box' }} />
+                  <label style={labelStyle}>Teléfono</label>
+                  <input
+                    value={formData.telefono || ''}
+                    onChange={e => cambiar('telefono', soloDigitos(e.target.value).slice(0, 10))}
+                    onBlur={() => setTocados(prev => new Set(prev).add('telefono'))}
+                    placeholder="3001234567"
+                    inputMode="numeric"
+                    style={inputStyle('telefono')}
+                  />
+                  <MensajeError campo="telefono" />
                 </div>
                 <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>Teléfono</label>
-                  <input value={formData.telefono || ''} onChange={e => setFormData({...formData, telefono: e.target.value})} placeholder="3000000000" style={{ width: '100%', padding: '10px 12px', background: inputBg, border: `1px solid ${borderNormal}`, borderRadius: 8, color: fg, outline: 'none', boxSizing: 'border-box' }} />
+                  <label style={labelStyle}>Correo</label>
+                  <input
+                    value={formData.correo || ''}
+                    onChange={e => cambiar('correo', e.target.value)}
+                    onBlur={() => setTocados(prev => new Set(prev).add('correo'))}
+                    placeholder="correo@empresa.com"
+                    style={inputStyle('correo')}
+                  />
+                  <MensajeError campo="correo" />
                 </div>
               </div>
+
+              {/* 4. Contacto */}
               <div>
-                <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>Dirección</label>
-                <input value={formData.direccion || ''} onChange={e => setFormData({...formData, direccion: e.target.value})} placeholder="Calle 0 #0-0" style={{ width: '100%', padding: '10px 12px', background: inputBg, border: `1px solid ${borderNormal}`, borderRadius: 8, color: fg, outline: 'none', boxSizing: 'border-box' }} />
+                <label style={labelStyle}>Contacto Principal</label>
+                <input
+                  value={formData.contacto || ''}
+                  onChange={e => cambiar('contacto', e.target.value)}
+                  onBlur={() => setTocados(prev => new Set(prev).add('contacto'))}
+                  placeholder="Nombre de la persona"
+                  style={inputStyle('contacto')}
+                />
+                <MensajeError campo="contacto" />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>Correo</label>
-                  <input value={formData.correo || ''} onChange={e => setFormData({...formData, correo: e.target.value})} placeholder="correo@empresa.com" style={{ width: '100%', padding: '10px 12px', background: inputBg, border: `1px solid ${borderNormal}`, borderRadius: 8, color: fg, outline: 'none', boxSizing: 'border-box' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>Contacto Principal</label>
-                  <input value={formData.contacto || ''} onChange={e => setFormData({...formData, contacto: e.target.value})} placeholder="Nombre persona" style={{ width: '100%', padding: '10px 12px', background: inputBg, border: `1px solid ${borderNormal}`, borderRadius: 8, color: fg, outline: 'none', boxSizing: 'border-box' }} />
-                </div>
-              </div>
+
+              {/* 5. Dirección */}
               <div>
-                <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: subtle, display: 'block', marginBottom: 6 }}>Estado</label>
+                <label style={labelStyle}>Dirección</label>
+                <input
+                  value={formData.direccion || ''}
+                  onChange={e => cambiar('direccion', e.target.value)}
+                  onBlur={() => setTocados(prev => new Set(prev).add('direccion'))}
+                  placeholder="Calle 0 #0-0"
+                  style={inputStyle('direccion')}
+                />
+                <MensajeError campo="direccion" />
+              </div>
+
+              {/* 6. Estado */}
+              <div>
+                <label style={labelStyle}>Estado</label>
                 <select
                   value={formData.estado || 'Activo'}
                   onChange={e => setFormData({...formData, estado: e.target.value as EstadoProveedor})}
@@ -343,9 +528,9 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
                 </select>
               </div>
 
-              <div style={{ padding: '16px 24px', margin: '-20px -24px -20px', marginTop: 12, borderTop: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'flex-end', gap: 12, backgroundColor: dark ? '#252525' : '#FAFAFA' }}>
+              <div style={{ padding: '16px 24px', margin: '0 -24px -20px', borderTop: `1px solid ${GOLD}25`, display: 'flex', justifyContent: 'flex-end', gap: 12, backgroundColor: dark ? '#252525' : '#FAFAFA' }}>
                 <button type="button" onClick={() => setModalMode(null)} style={{ padding: '8px 20px', borderRadius: 8, border: 'none', background: dark ? '#2A2A2A' : '#E8E8E8', color: fg, fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
-                <button type="submit" style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>Guardar</button>
+                <button type="submit" style={{ padding: '8px 24px', borderRadius: 8, border: 'none', background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: hayErrores && tocados.size > 0 ? 0.6 : 1 }}>Guardar</button>
               </div>
             </form>
           </div>
@@ -371,34 +556,38 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
                 <div style={{ fontSize: 10, color: subtle, textTransform: 'uppercase', marginBottom: 4 }}>Estado</div>
                 <span style={{ ...getEstadoBadgeStyle(current.estado), padding: '4px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, display: 'inline-block' }}>{current.estado}</span>
               </div>
-              <div style={{ background: surfaceBg, padding: 12, borderRadius: 8, gridColumn: 'span 2' }}>
+              <div style={{ background: surfaceBg, padding: 12, borderRadius: 8 }}>
+                <div style={{ fontSize: 10, color: subtle, textTransform: 'uppercase', marginBottom: 4 }}>NIT</div>
+                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: fg }}>{current.nit}</span>
+              </div>
+              <div style={{ background: surfaceBg, padding: 12, borderRadius: 8 }}>
                 <div style={{ fontSize: 10, color: subtle, textTransform: 'uppercase', marginBottom: 4 }}>Empresa</div>
-                <div style={{ fontSize: 15, fontWeight: 800, color: GOLD }}>{current.nombre}</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: GOLD }}>{current.nombre}</div>
               </div>
               <div style={{ background: surfaceBg, padding: 12, borderRadius: 8, gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <MapPin size={14} color={subtle} />
                 <div>
                   <div style={{ fontSize: 10, color: subtle, textTransform: 'uppercase' }}>Dirección</div>
-                  <div style={{ fontSize: 13, color: fg }}>{current.direccion}</div>
+                  <div style={{ fontSize: 13, color: fg }}>{current.direccion || '—'}</div>
                 </div>
               </div>
               <div style={{ background: surfaceBg, padding: 12, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Phone size={14} color={subtle} />
                 <div>
                   <div style={{ fontSize: 10, color: subtle, textTransform: 'uppercase' }}>Teléfono</div>
-                  <div style={{ fontSize: 13, color: fg }}>{current.telefono}</div>
+                  <div style={{ fontSize: 13, color: fg }}>{current.telefono || '—'}</div>
                 </div>
               </div>
               <div style={{ background: surfaceBg, padding: 12, borderRadius: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Mail size={14} color={subtle} />
                 <div>
                   <div style={{ fontSize: 10, color: subtle, textTransform: 'uppercase' }}>Correo</div>
-                  <div style={{ fontSize: 13, color: fg }}>{current.correo}</div>
+                  <div style={{ fontSize: 13, color: fg }}>{current.correo || '—'}</div>
                 </div>
               </div>
               <div style={{ background: surfaceBg, padding: 12, borderRadius: 8, gridColumn: 'span 2' }}>
                 <div style={{ fontSize: 10, color: subtle, textTransform: 'uppercase', marginBottom: 4 }}>Contacto Principal</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: fg }}>{current.contacto}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: fg }}>{current.contacto || '—'}</div>
               </div>
             </div>
 

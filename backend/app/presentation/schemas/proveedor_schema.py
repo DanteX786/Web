@@ -26,9 +26,10 @@ class ProveedorCrear(BaseModel):
 
 
 class ProveedorActualizar(BaseModel):
-    """Todos los campos son opcionales: solo se cambian los que se envían."""
-    nit: str | None = Field(default=None, max_length=30)
-    nombre: str | None = Field(default=None, max_length=100)
+    """Solo se cambian los campos que se envían.
+
+    El NIT y el nombre NO están aquí porque no se pueden editar (PB-36).
+    """
     contacto: str | None = Field(default=None, max_length=100)
     telefono: str | None = Field(default=None, max_length=20)
     correo: str | None = Field(default=None, max_length=100)
@@ -37,7 +38,7 @@ class ProveedorActualizar(BaseModel):
 
     _limpiar_textos = field_validator("*", mode="before")(lambda cls, v: _limpiar(v))
 
-    @field_validator("nit", "nombre", "estado")
+    @field_validator("estado")
     @classmethod
     def no_vacio(cls, valor):
         if valor is None:
@@ -60,4 +61,5 @@ class ProveedorRespuesta(BaseModel):
     correo: str | None
     direccion: str | None
     estado: str
+
     
