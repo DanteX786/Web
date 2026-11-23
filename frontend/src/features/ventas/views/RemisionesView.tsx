@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   FileText, Plus, Trash2, UploadCloud, Save, ArrowLeft, ToggleLeft, ToggleRight, Box, Search, Eye, Pencil, X, AlertTriangle,
-  CheckCircle2, XCircle, History, Loader2, Factory
+  CheckCircle2, XCircle, History, Loader2, Factory, Truck, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { mensajeError } from '../../../shared/utils/api';
+import { coincideBusqueda } from '../../../shared/utils/busqueda';
 import { ACEPTA_ARCHIVOS, errorArchivo, urlArchivo } from '../../../shared/utils/archivos';
 import {
   remisionService,
@@ -16,7 +17,8 @@ import { clienteService, type Cliente } from '../../usuarios/services/clienteSer
 import { obtenerUsuario } from '../../auth/services/authService';
 import { puedeVer } from '../../auth/utils/permisos';
 import { produccionService } from '../../produccion/services/produccionService';
-import { ConfirmDialog } from '../../produccion/components/ui';
+import { ConfirmDialog, Modal as ModalUi, fechaHora } from '../../produccion/components/ui';
+import { entregaService } from '../services/entregaService';
 import {
   UNIDADES_INSUMO, cargarSugerenciasInsumos, problemaInsumo, requiereEspecificacion, separarNombre, unirNombre,
 } from '../../compras/utils/insumosEnviados';
@@ -149,7 +151,8 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
   const [rolActivo] = useState<'ADMIN' | 'CLIENTE'>(rolInicial ?? (esCliente ? 'CLIENTE' : 'ADMIN'));
   const [vistaActual, setVistaActual] = useState<'listado' | 'formulario'>('listado');
   const [modalDetalle, setModalDetalle] = useState<Remision | null>(null);
-  const [historial, setHistorial] = useState<Seguimiento[]>([]);
+  // Línea de tiempo del seguimiento de estados (botón "Seguimiento" de cada fila)
+  const [lineaTiempo, setLineaTiempo] = useState<{ id: string; pasos: Seguimiento[] | null } | null>(null);
 
   // Modales de confirmación
   const [idParaEliminar, setIdParaEliminar] = useState<string | null>(null);
@@ -158,6 +161,9 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
   const [enviando, setEnviando] = useState(false);
   // "Enviar a producir" lo usa quien gestiona la producción (ya no se crea desde el módulo de Producción)
   const puedeProducir = !esCliente && puedeVer(usuarioSesion, 'produccion');
+  // "Enviar a remisión de entrega": cuando producción la deja Terminada
+  const [enviarEntrega, setEnviarEntrega] = useState<Remision | null>(null);
+  const puedeEntregar = !esCliente && puedeVer(usuarioSesion, 'remisionEntrega');
 
   const [remisionEnEdicion, setRemisionEnEdicion] = useState<string | null>(null);
 
@@ -358,6 +364,22 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
     }
   };
 
+  /** Crea la remisión de entrega (precio y fecha los pone el sistema); la remisión pasa a "Entregada". */
+  const confirmarEnviarEntrega = async () => {
+    if (!enviarEntrega) return;
+    setEnviando(true);
+    try {
+      const ent = await entregaService.crear({ id_remision: enviarEntrega.id_remision });
+      reemplazarEnLista(await remisionService.obtener(enviarEntrega.id_remision));
+      toast.success(`Remisión ${ent.id_remision} enviada a remisión de entrega (${ent.id_entrega}). Ya puede subir la remisión firmada y la factura.`);
+      setEnviarEntrega(null);
+    } catch (error) {
+      toast.error(mensajeError(error));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
   const confirmarRechazo = async () => {
     if (!rechazo) return;
     if (rechazo.motivo.trim().length < 3) {
@@ -386,22 +408,32 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
     }
   };
 
-  const verDetalle = async (rem: Remision) => {
-    setModalDetalle(rem);
-    setHistorial([]);
+  const verDetalle = (rem: Remision) => setModalDetalle(rem);
+
+  const verSeguimiento = async (rem: Remision) => {
+    setLineaTiempo({ id: rem.id_remision, pasos: null });
     try {
-      setHistorial(await seguimientoService.historialRemision(rem.id_remision));
-    } catch {
-      /* el historial es informativo; si falla se muestra vacío */
+      const pasos = await seguimientoService.historialRemision(rem.id_remision);
+      setLineaTiempo(actual => actual?.id === rem.id_remision ? { id: rem.id_remision, pasos } : actual);
+    } catch (error) {
+      toast.error(`No se pudo cargar el seguimiento: ${mensajeError(error)}`);
+      setLineaTiempo(null);
     }
   };
 
   // ---------- Filtro y paginación ----------
   const datosMostrar = rolActivo === 'CLIENTE' ? remisiones.filter(r => r.nit_cliente === nitSesion) : remisiones;
   const remisionesFiltradas = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-    return datosMostrar.filter(r =>
-      r.id_remision.toLowerCase().includes(q) || r.nit_cliente.includes(q) || r.cliente.toLowerCase().includes(q));
+    // Busca en todos los campos de la remisión (columnas de la tabla y lo que se ve en el detalle)
+    return datosMostrar.filter(r => coincideBusqueda(busqueda, [
+      r.id_remision, r.cliente, r.nit_cliente,
+      r.fecha_recibo, r.fecha_entrega,
+      r.total_prendas, r.costo_prenda, r.costo_total,
+      r.insumos_enviados ? 'Sí' : 'No', r.estado,
+      r.ficha_tecnica_nombre, r.observaciones,
+      r.detalles.map(d => `${d.nombre_de_la_pieza} ${d.talla} ${d.cantidad}`),
+      r.insumos.map(i => `${i.nombre} ${i.cantidad} ${i.unidad}`),
+    ]));
   }, [datosMostrar, busqueda]);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -431,7 +463,7 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
 
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
-              <input type="text" placeholder="Buscar remisión o cliente..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ padding: '8px 12px 8px 36px', borderRadius: 8, border: `1px solid ${borderNormal}`, background: cardBg, color: fg, fontSize: 13, outline: 'none' }} />
+              <input type="text" placeholder="Buscar en cualquier campo..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ padding: '8px 12px 8px 36px', borderRadius: 8, border: `1px solid ${borderNormal}`, background: cardBg, color: fg, fontSize: 13, outline: 'none' }} />
             </div>
 
             <button onClick={handleNuevaRemision} disabled={rolActivo === 'CLIENTE' && !nitSesion} style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212', fontWeight: 700, fontSize: 14, borderRadius: 10, padding: '8px 16px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: rolActivo === 'CLIENTE' && !nitSesion ? 0.5 : 1 }}>
@@ -478,12 +510,16 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
                     <td style={{ padding: '12px 14px' }}>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <ActionCircleBtn variant="blue" onClick={() => verDetalle(rem)} title="Ver Detalle"><Eye size={14} /></ActionCircleBtn>
+                        <ActionCircleBtn variant="gold" onClick={() => verSeguimiento(rem)} title="Seguimiento de estados"><History size={14} /></ActionCircleBtn>
                         <ActionCircleBtn variant="gold" onClick={() => handleEditarRemision(rem)} title="Editar (solo Pendiente)" disabled={rem.estado !== 'Pendiente'}><Pencil size={14} /></ActionCircleBtn>
                         {rolActivo === 'ADMIN' && (
                           <>
                             <ActionCircleBtn variant="blue" onClick={() => aprobar(rem.id_remision)} title="Aprobar" disabled={rem.estado !== 'Pendiente'}><CheckCircle2 size={14} /></ActionCircleBtn>
                             {puedeProducir && (
                               <ActionCircleBtn variant="success" onClick={() => setEnviarProducir(rem)} title="Enviar a producir (solo Aprobada)" disabled={rem.estado !== 'Aprobada'}><Factory size={14} /></ActionCircleBtn>
+                            )}
+                            {puedeEntregar && (
+                              <ActionCircleBtn variant="success" onClick={() => setEnviarEntrega(rem)} title={rem.estado === 'Entregada' ? 'Ya se envió a remisión de entrega' : 'Enviar a remisión de entrega (solo Terminada)'} disabled={rem.estado !== 'Terminada'}><Truck size={14} /></ActionCircleBtn>
                             )}
                             <ActionCircleBtn variant="danger" onClick={() => setRechazo({ id: rem.id_remision, motivo: '' })} title="Rechazar" disabled={rem.estado !== 'Pendiente' && rem.estado !== 'Aprobada'}><XCircle size={14} /></ActionCircleBtn>
                             <ActionCircleBtn variant="danger" onClick={() => setIdParaEliminar(rem.id_remision)} title="Eliminar (Pendiente o Rechazada)" disabled={rem.estado !== 'Pendiente' && rem.estado !== 'Rechazada'}><Trash2 size={14} /></ActionCircleBtn>
@@ -664,28 +700,6 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
                 </div>
               </div>
             )}
-
-            {/* Historial de estados (tb_seguimiento_remision) */}
-            <div style={{ marginTop: 8 }}>
-              <h4 style={{ fontSize: 13, fontWeight: 800, color: fg, margin: '0 0 10px 0', display: 'flex', gap: 6, alignItems: 'center' }}>
-                <History size={14} color={GOLD} /> Seguimiento de estados
-              </h4>
-              {historial.length === 0 ? (
-                <div style={{ fontSize: 12, color: subtle }}>Sin registros de seguimiento.</div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {historial.map(h => (
-                    <div key={h.id_seguimiento} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '8px 12px', borderRadius: 8, background: inputBg, fontSize: 12 }}>
-                      <span style={{ color: fg, fontWeight: 600 }}>
-                        {h.estado_anterior ? `${h.estado_anterior} → ` : 'Creada · '}
-                        <span style={{ color: estiloEstado(h.estado_nuevo).color, fontWeight: 800 }}>{h.estado_nuevo}</span>
-                      </span>
-                      <span style={{ color: subtle }}>{h.responsable} ({h.tipo_responsable}) · {new Date(h.fecha_hora).toLocaleString('es-CO')}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </Modal>
         )}
       {enviarProducir && (
@@ -700,6 +714,50 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
           onConfirm={confirmarEnviarProducir}
           dark={dark}
         />
+      )}
+      {enviarEntrega && (
+        <ConfirmDialog
+          titulo={`¿Enviar ${enviarEntrega.id_remision} a remisión de entrega?`}
+          mensaje={`Se registrará la entrega completa: ${enviarEntrega.total_prendas} prendas por ${`$${Number(enviarEntrega.costo_total).toLocaleString('es-CO')}`} (prendas × costo por prenda), con fecha de hoy. La remisión quedará "Entregada" y la entrega no se podrá editar.`}
+          confirmarLabel="Sí, enviar a entrega"
+          variante="success"
+          icono={<Truck size={28} color="#28A745" />}
+          procesando={enviando}
+          onCancel={() => setEnviarEntrega(null)}
+          onConfirm={confirmarEnviarEntrega}
+          dark={dark}
+        />
+      )}
+      {lineaTiempo && (
+        <ModalUi title={`Línea de tiempo — ${lineaTiempo.id}`} icon={<History size={16} color={GOLD} />} onClose={() => setLineaTiempo(null)} dark={dark} maxWidth="560px">
+          {lineaTiempo.pasos === null ? (
+            <div style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13 }}><Loader2 size={16} style={{ verticalAlign: 'middle', marginRight: 8 }} />Cargando seguimiento...</div>
+          ) : lineaTiempo.pasos.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Search size={14} /> Sin registros de seguimiento.</div>
+          ) : (
+            <div style={{ position: 'relative', paddingLeft: 28 }}>
+              <div style={{ position: 'absolute', left: 9, top: 6, bottom: 6, width: 2, background: `${GOLD}40` }} />
+              {lineaTiempo.pasos.map((p, i, pasos) => {
+                const color = estiloEstado(p.estado_nuevo).color;
+                const ultimo = i === pasos.length - 1;
+                return (
+                  <div key={p.id_seguimiento} style={{ position: 'relative', paddingBottom: ultimo ? 0 : 20 }}>
+                    <div style={{ position: 'absolute', left: -25, top: 2, width: 16, height: 16, borderRadius: '50%', background: color, border: `3px solid ${cardBg}`, boxShadow: ultimo ? `0 0 0 4px ${color}33` : 'none' }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 999, backgroundColor: estiloEstado(p.estado_nuevo).bg, color }}>{p.estado_nuevo}</span>
+                      {ultimo && <span style={{ fontSize: 10, fontWeight: 700, color, textTransform: 'uppercase' }}>Estado actual</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: subtle, marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}><Clock size={12} /> {fechaHora(p.fecha_hora)}</div>
+                    <div style={{ fontSize: 12, marginTop: 2, color: fg }}>
+                      {p.estado_anterior ? <>Desde <b>{p.estado_anterior}</b> · </> : <>Remisión creada · </>}
+                      por <b>{p.responsable}</b> <span style={{ color: subtle }}>({p.tipo_responsable})</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </ModalUi>
       )}
       </div>
     );

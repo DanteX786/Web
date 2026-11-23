@@ -26,13 +26,10 @@ export interface RemisionPorEntregar {
   fecha_entrega: string | null;
 }
 
+/** Solo la remisión: precio (prendas x costo por prenda) y fecha (hoy) los pone el sistema. */
 export interface EntregaCrearDatos {
   id_remision: string;
-  fecha_finalizacion?: string; // por defecto hoy
-  precio_total?: number; // por defecto total_prendas x costo_prenda
 }
-
-export type EntregaActualizarDatos = Partial<Omit<EntregaCrearDatos, "id_remision">>;
 
 const subir = (url: string, archivo: File) => {
   const form = new FormData();
@@ -51,13 +48,12 @@ export const entregaService = {
   obtener: (id: string) =>
     api.get<Entrega>(`/entregas/${id}`).then((r) => r.data),
 
-  /** Registra la entrega COMPLETA. La remisión pasa a "Entregada". */
+  /** Se llama desde Remisiones ("Enviar a remisión de entrega"). La remisión pasa a "Entregada".
+   *  Una entrega NO se edita. */
   crear: (datos: EntregaCrearDatos) =>
     api.post<Entrega>("/entregas", datos).then((r) => r.data),
 
-  actualizar: (id: string, datos: EntregaActualizarDatos) =>
-    api.put<Entrega>(`/entregas/${id}`, datos).then((r) => r.data),
-
+  /** Los soportes se suben UNA sola vez (no se pueden reemplazar). */
   subirRemisionFirmada: (id: string, archivo: File) => subir(`/entregas/${id}/remision-firmada`, archivo),
 
   subirComprobante: (id: string, archivo: File) => subir(`/entregas/${id}/comprobante`, archivo),

@@ -22,9 +22,6 @@ class IEntregaRepository(ABC):
               precio_total: float | None, id_responsable: str) -> str: ...
 
     @abstractmethod
-    def actualizar(self, id_entrega: str, datos: dict) -> None: ...
-
-    @abstractmethod
     def guardar_url(self, id_entrega: str, campo: str, url: str) -> None: ...
 
     @abstractmethod

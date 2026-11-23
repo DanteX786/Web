@@ -1,5 +1,3 @@
-from datetime import date
-
 from app.application.archivos import validar_archivo
 from app.domain.entities.entrega import Entrega, RemisionPorEntregar
 from app.domain.exceptions.errors import ConflictError, NotFoundError
@@ -16,9 +14,12 @@ class EntregaService:
     - Regla del taller: una sola entrega por remisión y siempre COMPLETA
       (cantidad_entregada = total de prendas). Al registrarla, la remisión pasa
       a "Entregada" (lo hace la BD).
-    - Si no se indica precio, se cobra cantidad x costo por prenda (lo calcula la BD).
+    - Se crea desde el botón "Enviar a remisión de entrega" de Remisiones.
+    - La entrega NO se edita: precio = prendas x costo por prenda (lo calcula la BD)
+      y fecha = hoy. Así nadie puede alterar los valores cobrados.
+    - La remisión firmada y la factura / comprobante se suben UNA sola vez
+      (no se reemplazan) y solo mientras no esté Pagada.
     - Solo se marca "Pagada" si ya se subió el comprobante (CA_29_01).
-    - Una entrega pagada ya no se modifica.
     """
 
     def __init__(self, repo: IEntregaRepository, storage: IArchivoStorage):
@@ -39,8 +40,7 @@ class EntregaService:
         return self.repo.remisiones_por_entregar()
 
     # ---------- escritura ----------
-    def crear(self, id_remision: str, fecha: date | None, precio_total: float | None,
-              id_responsable: str) -> Entrega:
+    def crear(self, id_remision: str, id_responsable: str) -> Entrega:
         if self.repo.existe_entrega_de(id_remision):
             raise ConflictError(f"La remisión {id_remision} ya tiene su remisión de entrega.")
         pendientes = {r.id_remision: r for r in self.repo.remisiones_por_entregar()}
@@ -49,8 +49,7 @@ class EntregaService:
             raise ConflictError(
                 f"La remisión {id_remision} no está Terminada: solo se entregan remisiones Terminadas."
             )
-        nuevo_id = self.repo.crear(id_remision, remision.total_prendas, fecha, precio_total,
-                                   id_responsable)
+        nuevo_id = self.repo.crear(id_remision, remision.total_prendas, None, None, id_responsable)
         return self.obtener(nuevo_id)
 
     def _editable(self, id_entrega: str) -> Entrega:
@@ -59,26 +58,23 @@ class EntregaService:
             raise ConflictError("La entrega ya está Pagada: no se puede modificar.")
         return entrega
 
-    def actualizar(self, id_entrega: str, datos: dict) -> Entrega:
-        self._editable(id_entrega)
-        self.repo.actualizar(id_entrega, datos)
+    def _subir_una_vez(self, id_entrega: str, campo: str, carpeta: str, descripcion: str,
+                       nombre: str | None, contenido: bytes) -> Entrega:
+        actual = self._editable(id_entrega)
+        if getattr(actual, campo):
+            raise ConflictError(f"La entrega {id_entrega} ya tiene {descripcion}: no se puede reemplazar.")
+        extension = validar_archivo(nombre, contenido)
+        url = self.storage.guardar(contenido, extension, carpeta, id_entrega)
+        self.repo.guardar_url(id_entrega, campo, url)
         return self.obtener(id_entrega)
 
     def subir_remision_firmada(self, id_entrega: str, nombre: str | None, contenido: bytes) -> Entrega:
-        actual = self._editable(id_entrega)
-        extension = validar_archivo(nombre, contenido)
-        url = self.storage.guardar(contenido, extension, "remisiones-firmadas", id_entrega)
-        self.repo.guardar_url(id_entrega, "remision_firmada_url", url)
-        self.storage.eliminar(actual.remision_firmada_url)
-        return self.obtener(id_entrega)
+        return self._subir_una_vez(id_entrega, "remision_firmada_url", "remisiones-firmadas",
+                                   "la remisión firmada", nombre, contenido)
 
     def subir_comprobante(self, id_entrega: str, nombre: str | None, contenido: bytes) -> Entrega:
-        actual = self._editable(id_entrega)
-        extension = validar_archivo(nombre, contenido)
-        url = self.storage.guardar(contenido, extension, "comprobantes", id_entrega)
-        self.repo.guardar_url(id_entrega, "comprobante_pago_url", url)
-        self.storage.eliminar(actual.comprobante_pago_url)
-        return self.obtener(id_entrega)
+        return self._subir_una_vez(id_entrega, "comprobante_pago_url", "comprobantes",
+                                   "la factura / comprobante de pago", nombre, contenido)
 
     def marcar_pagada(self, id_entrega: str) -> Entrega:
         actual = self._editable(id_entrega)
