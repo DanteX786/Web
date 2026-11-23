@@ -6,7 +6,7 @@ import {
   Factory, Scissors, Wrench, Users, FileText,
   SlidersHorizontal, Key, Truck, ShoppingBag, ClipboardList,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  Sun, Moon, Bell, LogOut, User, Send, UserCheck, History, ListChecks, CalendarCheck
+  Sun, Moon, Bell, LogOut, User, Send, UserCheck, ListChecks, CalendarCheck
 } from "lucide-react";
 
 import logo_blanco from '../../../public/images/logo blanco.png';
@@ -274,7 +274,6 @@ export default function MainLayout({
           {renderAccordionGroup("ventas", "Ventas", ShoppingCart, [
             { id: "clientes", label: "Clientes", icon: User },
             { id: "remisiones", label: "Remisiones", icon: FileText },
-            { id: "seguimientoRemision", label: "Seguimiento de Estados", icon: History },
             { id: "remisionEntrega", label: "Remisiones de Entrega", icon: Truck }
           ])}
 
@@ -305,33 +304,6 @@ export default function MainLayout({
           ])}
 
           <div style={{ borderTop: `4px solid ${GOLD}90`, marginTop: 8, paddingTop: 8 }}></div>
-        </div>
-
-        <div 
-          onClick={() => setProfileOpen(!profileOpen)}
-          style={{
-            marginTop: 'auto', borderTop: `1px solid ${borderCol}`, padding: '12px 16px',
-            display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-            background: profileOpen ? `${GOLD}08` : 'transparent', transition: 'background 0.2s'
-          }}
-        >
-          <div style={{
-            width: 34, height: 34, borderRadius: '50%', background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`,
-            color: '#FFFFFF', fontSize: 14, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-          }}>
-            {userName.charAt(0)}
-          </div>
-          {!collapsed && (
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: fg, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {userName}
-              </div>
-              <div style={{ fontSize: 10, textTransform: 'uppercase', color: GOLD, fontWeight: 600 }}>
-                {userRole}
-              </div>
-            </div>
-          )}
-          {!collapsed && <ChevronDown size={14} color={subtle} />}
         </div>
 
       </aside>

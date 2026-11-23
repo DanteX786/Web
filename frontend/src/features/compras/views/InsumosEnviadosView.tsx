@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { mensajeError } from '../../../shared/utils/api';
+import { coincideBusqueda } from '../../../shared/utils/busqueda';
 import { insumoEnviadoService, type InsumoEnviado } from '../services/insumoEnviadoService';
 import { remisionService, type Remision } from '../../ventas/services/remisionService';
 import {
@@ -265,13 +266,12 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
   };
 
   const insumosFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-    return insumos.filter(i =>
-      i.nombre.toLowerCase().includes(q) ||
-      i.id_remision.toLowerCase().includes(q) ||
-      i.id_insumo_enviado.toLowerCase().includes(q) ||
-      (i.cliente ?? '').toLowerCase().includes(q)
-    );
+    // Busca en todos los campos del insumo (todas las columnas de la tabla)
+    return insumos.filter(i => coincideBusqueda(busqueda, [
+      i.id_insumo_enviado, i.id_remision, i.cliente, i.nombre,
+      i.cantidad, i.cantidad_disponible, i.cantidad_usada, i.unidad,
+      i.estado_remision,
+    ]));
   }, [insumos, busqueda]);
 
   // Lógica para seccionar los datos por página
@@ -308,7 +308,7 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
             <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
             <input
               type="text"
-              placeholder="Buscar insumo, remisión o cliente..."
+              placeholder="Buscar en cualquier campo..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               style={{

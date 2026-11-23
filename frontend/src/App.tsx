@@ -24,7 +24,6 @@ import { ClientesView } from './features/usuarios/views/ClientesView';
 import { RegistroDiarioView } from './features/produccion/views/RegistroDiarioView';
 import { AsistenciaView } from './features/produccion/views/AsistenciaView';
 import { RemisionesView } from './features/ventas/views/RemisionesView';
-import { SeguimientoRemisionView } from './features/produccion/views/SeguimientoRemisionView';
 import { RemisionEntregaView } from './features/ventas/views/RemisionEntregaView';
 
 // MÓDULO CONFIGURACIÓN Y PARÁMETROS
@@ -153,7 +152,6 @@ export default function App() {
       {currentView === 'clientes' && <ClientesView dark={dark} />}
       {currentView === 'registroDiario' && <RegistroDiarioView dark={dark} />}
       {currentView === 'remisiones' && <RemisionesView dark={dark} />}
-      {currentView === 'seguimientoRemision' && <SeguimientoRemisionView dark={dark} />}
       {currentView === 'remisionEntrega' && <RemisionEntregaView dark={dark} />}
 
       {/* MÓDULO CONFIGURACIÓN Y PARÁMETROS */}

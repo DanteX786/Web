@@ -1,38 +1,14 @@
 from datetime import date
-from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-
-def _no_futura(valor: date | None):
-    if valor is not None and valor > date.today():
-        raise ValueError("la fecha de entrega no puede ser futura")
-    return valor
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class EntregaCrear(BaseModel):
-    """La cantidad NO se envía: siempre se entregan todas las prendas de la remisión."""
+    """Solo se envía la remisión. Para evitar fraude, cantidad, precio y fecha NO los
+    escribe el usuario: cantidad = total de prendas, precio = prendas x costo por prenda
+    (lo calcula la BD) y fecha = hoy."""
     id_remision: str = Field(min_length=1, max_length=10)
-    fecha_finalizacion: date | None = Field(default=None, description="Por defecto, hoy")
-    precio_total: Decimal | None = Field(
-        default=None, ge=0, max_digits=12, decimal_places=2,
-        description="Si no se envía: total de prendas x costo por prenda",
-    )
-
-    _fecha = field_validator("fecha_finalizacion")(lambda cls, v: _no_futura(v))
-
-
-class EntregaActualizar(BaseModel):
-    fecha_finalizacion: date | None = None
-    precio_total: Decimal | None = Field(default=None, ge=0, max_digits=12, decimal_places=2)
-
-    @field_validator("fecha_finalizacion")
-    @classmethod
-    def fecha_valida(cls, valor):
-        if valor is None:
-            raise ValueError("no puede quedar vacía")
-        return _no_futura(valor)
 
 
 class _Respuesta(BaseModel):

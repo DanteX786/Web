@@ -103,20 +103,6 @@ class EntregaRepository(IEntregaRepository):
             ).scalar_one()
         return nuevo_id
 
-    def actualizar(self, id_entrega: str, datos: dict) -> None:
-        campos = [c for c in ("fecha_finalizacion", "precio_total") if c in datos]
-        if not campos:
-            return
-        with self._transaccion():
-            params = {c: datos[c] for c in campos}
-            params["id"] = id_entrega
-            self.db.execute(
-                text(f"""UPDATE tb_remision_entrega
-                            SET {", ".join(f"{c} = :{c}" for c in campos)}
-                          WHERE id_entrega = :id"""),
-                params,
-            )
-
     def guardar_url(self, id_entrega: str, campo: str, url: str) -> None:
         if campo not in CAMPOS_URL:
             raise ValueError(f"Campo no permitido: {campo}")
