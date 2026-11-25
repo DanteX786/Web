@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { BotonExcel } from '../../../shared/components/BotonExcel';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
 
 import { mensajeError } from '../../../shared/utils/api';
 import { insumoService, type Insumo as InsumoApi, type TipoInsumo } from '../services/insumoService';
@@ -194,6 +196,20 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
   const currentItems = insumosFiltrados.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(insumosFiltrados.length / itemsPerPage);
 
+  /** Exporta los insumos de la tabla (con la búsqueda aplicada, todas las páginas). */
+  const descargarExcel = () => exportarExcel({
+    archivo: 'insumos', hoja: 'Insumos', titulo: 'Insumos del taller',
+    subtitulo: subtituloExportacion(busqueda, insumosFiltrados.length),
+    filas: insumosFiltrados,
+    columnas: [
+      { titulo: 'ID insumo', valor: i => i.id },
+      { titulo: 'Nombre', valor: i => i.nombre },
+      { titulo: 'Categoría', valor: i => i.tipoNombre },
+      { titulo: 'Descripción', valor: i => i.descripcion, ancho: 40 },
+      { titulo: 'Stock', valor: i => i.stock, tipo: 'numero' },
+    ],
+  });
+
   return (
     <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif', boxSizing: 'border-box' }}>
       
@@ -221,6 +237,8 @@ export const InsumosView: React.FC<Props> = ({ dark = false }) => {
               onBlur={(e) => { e.target.style.borderColor = borderNormal; }}
             />
           </div>
+
+          <BotonExcel onClick={descargarExcel} cantidad={insumosFiltrados.length} dark={dark} />
 
           <button
             onClick={handleOpenCreate}

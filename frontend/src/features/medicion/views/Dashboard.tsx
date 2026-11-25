@@ -18,6 +18,11 @@ import {
   Filter,
   Factory,
   ArrowRight,
+  UserCheck,
+  Timer,
+  BadgeCheck,
+  Award,
+  Medal,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { mensajeError } from '../../../shared/utils/api';
@@ -26,9 +31,13 @@ import {
   type Atencion,
   type Clientes,
   type Dinero,
+  type Empleados,
   type Indicador,
   type Produccion,
   type TipoPeriodo,
+  type FiltroPeriodo,
+  type DesempenoEmpleado as DesempenoEmpleadoT,
+  type MejorPorProceso as MejorPorProcesoT,
 } from '../services/dashboardService';
 import { remisionService, type Remision } from '../../ventas/services/remisionService';
 
@@ -47,20 +56,59 @@ const BLUE = '#4A90E2';
 const PURPLE = '#9B6DFF';
 const DANGER = '#DC3545';
 
-// Periodos que se pueden elegir en cada sección
-type PeriodoSeccion = 'trimestre' | 'semestre' | 'anio';
-const PERIODOS: Array<{ value: PeriodoSeccion; label: string }> = [
+// ==========================================
+// FILTROS DE TIEMPO (los mismos en el filtro general y en cada sección)
+// Tipo (mes, trimestre, semestre, año) + cuál (ej. Trimestre 3) + año.
+// ==========================================
+const TIPOS: Array<{ value: TipoPeriodo; label: string }> = [
+  { value: 'mes', label: 'Mes' },
   { value: 'trimestre', label: 'Trimestre' },
   { value: 'semestre', label: 'Semestre' },
   { value: 'anio', label: 'Año' },
 ];
+const MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const MESES_POR_TIPO: Record<TipoPeriodo, number> = { mes: 1, trimestre: 3, semestre: 6, anio: 12 };
 
-// Filtro general: "Ninguno" deja que cada sección use su propio filtro
-type FiltroGeneral = 'ninguno' | PeriodoSeccion;
-const FILTROS_GENERALES: Array<{ value: FiltroGeneral; label: string }> = [
-  { value: 'ninguno', label: 'Ninguno' },
-  ...PERIODOS,
-];
+const ANIO_ACTUAL = new Date().getFullYear();
+/** El mes / trimestre / semestre en el que estamos hoy. */
+const numeroActual = (tipo: TipoPeriodo) => Math.floor(new Date().getMonth() / MESES_POR_TIPO[tipo]) + 1;
+/** Por defecto: el periodo en curso. */
+const filtroActual = (tipo: TipoPeriodo): FiltroPeriodo => ({ tipo, anio: ANIO_ACTUAL, numero: numeroActual(tipo) });
+
+/** Opciones del segundo selector: los meses, los 4 trimestres o los 2 semestres del año. */
+const opcionesNumero = (tipo: TipoPeriodo): Array<{ numero: number; label: string }> => {
+  if (tipo === 'anio') return [];
+  if (tipo === 'mes') return MESES_LARGOS.map((m, i) => ({ numero: i + 1, label: m }));
+  const n = MESES_POR_TIPO[tipo];
+  return Array.from({ length: 12 / n }, (_, i) => ({
+    numero: i + 1,
+    label: `${tipo === 'trimestre' ? 'Trimestre' : 'Semestre'} ${i + 1} (${MESES_CORTOS[i * n]}–${MESES_CORTOS[i * n + n - 1]})`,
+  }));
+};
+
+/** No se puede elegir un periodo que todavía no empieza. */
+const esFuturo = (tipo: TipoPeriodo, anio: number, numero: number) =>
+  anio > ANIO_ACTUAL || (anio === ANIO_ACTUAL && numero > numeroActual(tipo));
+
+/** Al cambiar el tipo: el periodo de ese tipo en el que cae hoy (o el mismo del año elegido). */
+const conTipo = (f: FiltroPeriodo, tipo: TipoPeriodo): FiltroPeriodo => ({
+  tipo, anio: f.anio, numero: tipo === 'anio' ? 1 : numeroActual(tipo),
+});
+/** Al cambiar el año se conserva el mes/trimestre, salvo que en ese año todavía no haya llegado. */
+const conAnio = (f: FiltroPeriodo, anio: number): FiltroPeriodo => ({
+  ...f, anio, numero: esFuturo(f.tipo, anio, f.numero) ? numeroActual(f.tipo) : f.numero,
+});
+
+/** Lo que se muestra junto al título de cada sección, ej. "Trimestre 4 de 2026 · hasta hoy". */
+const descPeriodo = (p?: { etiqueta: string; completo: boolean }) =>
+  p ? `${p.etiqueta}${p.completo ? '' : ' · hasta hoy'}` : undefined;
+
+/** Texto corto del filtro, ej. "Trimestre 4 de 2026", "Marzo 2025", "Año 2024". */
+const nombreFiltro = (f: FiltroPeriodo) =>
+  f.tipo === 'anio' ? `Año ${f.anio}`
+    : f.tipo === 'mes' ? `${MESES_LARGOS[f.numero - 1]} ${f.anio}`
+    : `${f.tipo === 'trimestre' ? 'Trimestre' : 'Semestre'} ${f.numero} de ${f.anio}`;
 
 const NOMBRE_PERIODO_ANTERIOR: Record<TipoPeriodo, string> = {
   mes: 'el mes anterior',
@@ -100,21 +148,29 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false, onNavega
   const borderColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
   const tema = { cardBg, textColor, textSecColor, borderColor, dark };
 
-  // Filtro general (arriba): si no es "Ninguno", manda sobre todas las secciones
-  const [filtroGeneral, setFiltroGeneral] = useState<FiltroGeneral>('ninguno');
+  // Filtro general (arriba): null = "Ninguno". Si tiene valor, manda sobre todas las secciones.
+  const [filtroGeneral, setFiltroGeneral] = useState<FiltroPeriodo | null>(null);
   // Filtro propio de cada sección (se usa cuando el general está en "Ninguno")
-  const [periodoDinero, setPeriodoDinero] = useState<PeriodoSeccion>('trimestre');
-  const [periodoProduccion, setPeriodoProduccion] = useState<PeriodoSeccion>('trimestre');
-  const [periodoClientes, setPeriodoClientes] = useState<PeriodoSeccion>('trimestre');
-  const usarGeneral = filtroGeneral !== 'ninguno';
-  const efectivo = (propio: PeriodoSeccion): PeriodoSeccion => (filtroGeneral === 'ninguno' ? propio : filtroGeneral);
+  const [periodoDinero, setPeriodoDinero] = useState<FiltroPeriodo>(() => filtroActual('trimestre'));
+  const [periodoProduccion, setPeriodoProduccion] = useState<FiltroPeriodo>(() => filtroActual('trimestre'));
+  const [periodoEmpleados, setPeriodoEmpleados] = useState<FiltroPeriodo>(() => filtroActual('trimestre'));
+  const [periodoClientes, setPeriodoClientes] = useState<FiltroPeriodo>(() => filtroActual('trimestre'));
+  const [anios, setAnios] = useState<number[]>([ANIO_ACTUAL]);
+  const usarGeneral = filtroGeneral !== null;
+  const efectivo = (propio: FiltroPeriodo): FiltroPeriodo => filtroGeneral ?? propio;
   const pDinero = efectivo(periodoDinero);
   const pProduccion = efectivo(periodoProduccion);
+  const pEmpleados = efectivo(periodoEmpleados);
   const pClientes = efectivo(periodoClientes);
+  // Clave estable para los useEffect (el objeto cambia en cada render)
+  const clave = (f: FiltroPeriodo) => `${f.tipo}-${f.anio}-${f.numero}`;
+  const elegirTipoGeneral = (tipo: TipoPeriodo | null) =>
+    setFiltroGeneral(actual => (tipo === null ? null : conTipo(actual ?? filtroActual(tipo), tipo)));
 
   const [atencion, setAtencion] = useState<Atencion | null>(null);
   const [dinero, setDinero] = useState<Dinero | null>(null);
   const [produccion, setProduccion] = useState<Produccion | null>(null);
+  const [empleados, setEmpleados] = useState<Empleados | null>(null);
   const [clientes, setClientes] = useState<Clientes | null>(null);
   const [enProceso, setEnProceso] = useState<Remision[] | null>(null);
 
@@ -139,9 +195,13 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false, onNavega
       .catch(avisarError);
   }, [recargar]);
 
-  useEffect(() => { dashboardService.dinero(pDinero).then(setDinero).catch(avisarError); }, [pDinero, recargar]);
-  useEffect(() => { dashboardService.produccion(pProduccion).then(setProduccion).catch(avisarError); }, [pProduccion, recargar]);
-  useEffect(() => { dashboardService.clientes(pClientes).then(setClientes).catch(avisarError); }, [pClientes, recargar]);
+  useEffect(() => { dashboardService.anios().then(a => setAnios(a.length ? a : [ANIO_ACTUAL])).catch(() => undefined); }, [recargar]);
+  /* eslint-disable react-hooks/exhaustive-deps -- se recarga cuando cambia el periodo (su clave) */
+  useEffect(() => { dashboardService.dinero(pDinero).then(setDinero).catch(avisarError); }, [clave(pDinero), recargar]);
+  useEffect(() => { dashboardService.produccion(pProduccion).then(setProduccion).catch(avisarError); }, [clave(pProduccion), recargar]);
+  useEffect(() => { dashboardService.empleados(pEmpleados).then(setEmpleados).catch(avisarError); }, [clave(pEmpleados), recargar]);
+  useEffect(() => { dashboardService.clientes(pClientes).then(setClientes).catch(avisarError); }, [clave(pClientes), recargar]);
+  /* eslint-enable react-hooks/exhaustive-deps */
 
   const ir = (vista: string) => onNavegar?.(vista);
   const enCurso = atencion?.producciones_en_curso[0];
@@ -159,7 +219,7 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false, onNavega
             </div>
             <div>
               <h1 style={{ fontSize: '24px', fontWeight: 800, margin: 0, color: textColor, fontFamily: 'Montserrat, sans-serif' }}>Dashboard General</h1>
-              <p style={{ fontSize: '13px', color: textSecColor, margin: '4px 0 0 0', fontFamily: 'Montserrat, sans-serif' }}>Resumen del taller: lo pendiente, ingresos y gastos, la producción y los clientes.</p>
+              <p style={{ fontSize: '13px', color: textSecColor, margin: '4px 0 0 0', fontFamily: 'Montserrat, sans-serif' }}>Resumen del taller: lo pendiente, ingresos y gastos, la producción, los empleados y los clientes.</p>
             </div>
           </div>
           <button
@@ -183,21 +243,28 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false, onNavega
             <div>
               <span style={{ fontSize: '13px', fontWeight: 800, color: textColor, display: 'block' }}>Filtro general</span>
               <span style={{ fontSize: '11px', color: textSecColor }}>
-                {usarGeneral ? 'Aplica a todas las secciones. Elige "Ninguno" para filtrar cada sección por separado.' : 'Cada sección usa su propio filtro.'}
+                {filtroGeneral
+                  ? <>Todas las secciones muestran <b style={{ color: textColor }}>{nombreFiltro(filtroGeneral)}</b>. Elige "Ninguno" para filtrar cada sección por separado.</>
+                  : 'Cada sección usa su propio filtro.'}
               </span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '4px', padding: '4px', borderRadius: '12px', background: dark ? '#2A2A2A' : '#F3F3F5', flexWrap: 'wrap' }}>
-            {FILTROS_GENERALES.map(f => {
-              const activo = filtroGeneral === f.value;
-              return (
-                <button key={f.value} onClick={() => setFiltroGeneral(f.value)}
-                  style={{ border: 'none', borderRadius: '9px', padding: '7px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'Montserrat, sans-serif',
-                    background: activo ? GOLD : 'transparent', color: activo ? '#121212' : textSecColor, transition: 'all 0.2s ease' }}>
-                  {f.label}
-                </button>
-              );
-            })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '4px', padding: '4px', borderRadius: '12px', background: dark ? '#2A2A2A' : '#F3F3F5', flexWrap: 'wrap' }}>
+              {[{ value: null, label: 'Ninguno' } as { value: TipoPeriodo | null; label: string }, ...TIPOS].map(f => {
+                const activo = (filtroGeneral?.tipo ?? null) === f.value;
+                return (
+                  <button key={f.label} onClick={() => elegirTipoGeneral(f.value)}
+                    style={{ border: 'none', borderRadius: '9px', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: 'Montserrat, sans-serif',
+                      background: activo ? GOLD : 'transparent', color: activo ? '#121212' : textSecColor, transition: 'all 0.2s ease' }}>
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+            {filtroGeneral && (
+              <SelectorPeriodo valor={filtroGeneral} onChange={setFiltroGeneral} anios={anios} sinTipo {...tema} />
+            )}
           </div>
         </div>
 
@@ -276,27 +343,27 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false, onNavega
 
         {/* FILA 2: INGRESOS Y GASTOS */}
         <section>
-          <TituloFila titulo="Ingresos y gastos" descripcion={dinero?.periodo.etiqueta} textColor={textColor} textSecColor={textSecColor}>
-            <SelectorPeriodo valor={pDinero} onChange={setPeriodoDinero} bloqueado={usarGeneral} {...tema} />
+          <TituloFila titulo="Ingresos y gastos" descripcion={descPeriodo(dinero?.periodo)} textColor={textColor} textSecColor={textSecColor}>
+            <SelectorPeriodo valor={pDinero} onChange={setPeriodoDinero} anios={anios} bloqueado={usarGeneral} {...tema} />
           </TituloFila>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px' }}>
             <KpiCard {...tema} titulo="Ventas" valor={dinero ? pesos(dinero.facturado.valor) : '—'}
               subtitulo="Valor de las prendas entregadas"
               icono={<TrendingUp style={{ width: '20px', height: '20px', color: SUCCESS }} />} colorFondo={`${SUCCESS}20`}
-              badge={<Variacion indicador={dinero?.facturado} periodo={pDinero} />} />
+              badge={<Variacion indicador={dinero?.facturado} periodo={pDinero.tipo} />} />
             <KpiCard {...tema} titulo="Pagos recibidos" valor={dinero ? pesos(dinero.cobrado.valor) : '—'}
               subtitulo={dinero ? (dinero.cobrado.pendiente > 0 ? `Falta cobrar ${pesos(dinero.cobrado.pendiente)}` : 'Todas las ventas están pagas') : ''}
               icono={<CheckCircle2 style={{ width: '20px', height: '20px', color: GOLD }} />} colorFondo={`${GOLD}20`}
-              badge={<Variacion indicador={dinero?.cobrado} periodo={pDinero} />} />
+              badge={<Variacion indicador={dinero?.cobrado} periodo={pDinero.tipo} />} />
             <KpiCard {...tema} titulo="Gastos en insumos" valor={dinero ? pesos(dinero.gastos_compras.valor) : '—'}
               subtitulo={dinero ? `${dinero.gastos_compras.compras} compra${dinero.gastos_compras.compras === 1 ? '' : 's'} de insumos` : ''}
               icono={<ShoppingCart style={{ width: '20px', height: '20px', color: BLUE }} />} colorFondo={`${BLUE}20`}
-              badge={<Variacion indicador={dinero?.gastos_compras} periodo={pDinero} subirEsMalo />}
+              badge={<Variacion indicador={dinero?.gastos_compras} periodo={pDinero.tipo} subirEsMalo />}
               onClick={() => ir('compras')} />
             <KpiCard {...tema} titulo="Balance" valor={dinero ? pesos(dinero.ganancia.valor) : '—'}
               subtitulo="Ventas menos gastos en insumos"
               icono={<PiggyBank style={{ width: '20px', height: '20px', color: PURPLE }} />} colorFondo={`${PURPLE}20`}
-              badge={<Variacion indicador={dinero?.ganancia} periodo={pDinero} />} />
+              badge={<Variacion indicador={dinero?.ganancia} periodo={pDinero.tipo} />} />
           </div>
           <GraficaCard {...tema}
             titulo="Ventas vs. gastos en insumos"
@@ -312,7 +379,7 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false, onNavega
                   { nombre: 'Ventas', valores: dinero.grafica.facturado, color: SUCCESS },
                   { nombre: 'Gastos', valores: dinero.grafica.compras, color: BLUE },
                 ]}
-                ejeX="Mes" ejeY="Pesos ($)"
+                ejeX={dinero.periodo.unidad_tramo} ejeY="Pesos ($)"
                 dark={dark}
               />
             )}
@@ -321,19 +388,19 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false, onNavega
 
         {/* FILA 3: PRODUCCIÓN */}
         <section>
-          <TituloFila titulo="Producción" descripcion={produccion?.periodo.etiqueta} textColor={textColor} textSecColor={textSecColor}>
-            <SelectorPeriodo valor={pProduccion} onChange={setPeriodoProduccion} bloqueado={usarGeneral} {...tema} />
+          <TituloFila titulo="Producción" descripcion={descPeriodo(produccion?.periodo)} textColor={textColor} textSecColor={textSecColor}>
+            <SelectorPeriodo valor={pProduccion} onChange={setPeriodoProduccion} anios={anios} bloqueado={usarGeneral} {...tema} />
           </TituloFila>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px' }}>
             <KpiCard {...tema} titulo="Unidades confeccionadas" valor={produccion ? `${numero(produccion.unidades_confeccionadas.valor)} unds` : '—'}
               subtitulo="Reportadas en el registro diario"
               icono={<Scissors style={{ width: '20px', height: '20px', color: PURPLE }} />} colorFondo={`${PURPLE}20`}
-              badge={<Variacion indicador={produccion?.unidades_confeccionadas} periodo={pProduccion} />}
+              badge={<Variacion indicador={produccion?.unidades_confeccionadas} periodo={pProduccion.tipo} />}
               onClick={() => ir('registroDiario')} />
             <KpiCard {...tema} titulo="Prendas entregadas" valor={produccion ? `${numero(produccion.prendas_entregadas.valor)} unds` : '—'}
               subtitulo={produccion ? `${produccion.prendas_entregadas.remisiones} ${produccion.prendas_entregadas.remisiones === 1 ? 'remisión entregada' : 'remisiones entregadas'}` : ''}
               icono={<ShoppingBag style={{ width: '20px', height: '20px', color: SUCCESS }} />} colorFondo={`${SUCCESS}20`}
-              badge={<Variacion indicador={produccion?.prendas_entregadas} periodo={pProduccion} />} />
+              badge={<Variacion indicador={produccion?.prendas_entregadas} periodo={pProduccion.tipo} />} />
             <KpiCard {...tema} titulo="Entregas a tiempo"
               valor={!produccion ? '—' : produccion.entregas_a_tiempo.porcentaje === null ? 'Sin entregas' : `${Math.round(produccion.entregas_a_tiempo.porcentaje)} %`}
               subtitulo={produccion ? `${produccion.entregas_a_tiempo.a_tiempo} a tiempo · ${produccion.entregas_a_tiempo.tarde} tarde` : ''}
@@ -348,7 +415,7 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false, onNavega
             <GraficaCard {...tema} titulo="Unidades confeccionadas"
               valor={produccion ? `${numero(produccion.unidades_confeccionadas.valor)} unds` : '—'}
               porcentaje="Producción" colorBadge={PURPLE}>
-              {produccion && <BarChartCoherent dataObj={produccion.grafica_unidades} color={PURPLE} dark={dark} tipoUnidad="unds" ejeX="Mes" ejeY="Unidades" />}
+              {produccion && <BarChartCoherent dataObj={produccion.grafica_unidades} color={PURPLE} dark={dark} tipoUnidad="unds" ejeX={produccion.periodo.unidad_tramo} ejeY="Unidades" />}
             </GraficaCard>
             <GraficaCard {...tema} titulo="Unidades por empleado"
               valor={produccion?.por_empleado[0] ? produccion.por_empleado[0].empleado : 'Sin reportes'}
@@ -363,10 +430,53 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false, onNavega
           </div>
         </section>
 
+        {/* FILA: EMPLEADOS (asistencia y desempeño según la producción) */}
+        <section>
+          <TituloFila titulo="Empleados" descripcion={empleados ? `${descPeriodo(empleados.periodo)} · asistencia y desempeño` : undefined} textColor={textColor} textSecColor={textSecColor}>
+            <SelectorPeriodo valor={pEmpleados} onChange={setPeriodoEmpleados} anios={anios} bloqueado={usarGeneral} {...tema} />
+          </TituloFila>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+            <KpiCard {...tema} titulo="Hoy en el taller"
+              valor={empleados ? `${empleados.hoy.en_taller} de ${empleados.hoy.activos}` : '—'}
+              subtitulo={empleados ? `${empleados.hoy.con_tarea} con tarea asignada${empleados.hoy.con_novedad ? ` · ${empleados.hoy.con_novedad} con permiso o incapacidad` : ''}` : ''}
+              icono={<UserCheck style={{ width: '20px', height: '20px', color: SUCCESS }} />} colorFondo={`${SUCCESS}20`}
+              onClick={() => ir('asistencia')} />
+            <KpiCard {...tema} titulo="Asistencia"
+              valor={!empleados ? '—' : empleados.asistencia.porcentaje === null ? 'Sin registros' : `${empleados.asistencia.porcentaje.toLocaleString('es-CO')} %`}
+              subtitulo={empleados ? `${empleados.asistencia.faltas} falta${empleados.asistencia.faltas === 1 ? '' : 's'} · ${empleados.asistencia.novedades} permiso${empleados.asistencia.novedades === 1 ? '' : 's'} o novedades` : ''}
+              icono={<CalendarClock style={{ width: '20px', height: '20px', color: BLUE }} />} colorFondo={`${BLUE}20`}
+              badge={<VariacionPuntos puntos={empleados?.asistencia.variacion ?? null} visible={!!empleados} />}
+              onClick={() => ir('asistencia')} />
+            <KpiCard {...tema} titulo="Horas trabajadas"
+              valor={empleados ? `${numero(empleados.horas_trabajadas.valor)} h` : '—'}
+              subtitulo={empleados && empleados.desempeno.length ? `Promedio ${numero(empleados.horas_trabajadas.valor / empleados.desempeno.length)} h por empleado` : 'Según las marcaciones de entrada y salida'}
+              icono={<Timer style={{ width: '20px', height: '20px', color: PURPLE }} />} colorFondo={`${PURPLE}20`}
+              badge={<Variacion indicador={empleados?.horas_trabajadas} periodo={pEmpleados.tipo} />} />
+            <KpiCard {...tema} titulo="Calidad de la producción"
+              valor={!empleados ? '—' : empleados.calidad.porcentaje === null ? 'Sin reportes' : `${empleados.calidad.porcentaje.toLocaleString('es-CO')} %`}
+              subtitulo={empleados ? `${numero(empleados.calidad.buenas)} buenas · ${numero(empleados.calidad.defectuosas)} defectuosas` : ''}
+              alerta={empleados && empleados.calidad.porcentaje !== null && empleados.calidad.porcentaje < 90 ? 'Más del 10 % de piezas defectuosas' : undefined}
+              icono={<BadgeCheck style={{ width: '20px', height: '20px', color: GOLD }} />} colorFondo={`${GOLD}20`}
+              onClick={() => ir('registroDiario')} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+            <GraficaCard {...tema} titulo={`Asistencia por ${(empleados?.periodo.unidad_tramo ?? 'Mes').toLowerCase()}`}
+              valor={!empleados ? '—' : empleados.asistencia.porcentaje === null ? 'Sin registros' : `${empleados.asistencia.porcentaje.toLocaleString('es-CO')} %`}
+              etiquetaValor={empleados?.asistencia.porcentaje != null ? 'de asistencia en el periodo' : undefined}
+              porcentaje="Asistencia" colorBadge={BLUE}>
+              {empleados && <BarChartCoherent dataObj={empleados.grafica_asistencia} color={BLUE} dark={dark} tipoUnidad="%" ejeX={empleados.periodo.unidad_tramo} ejeY="Asistencia (%)" />}
+            </GraficaCard>
+            <MejorPorProceso datos={empleados?.mejor_por_proceso ?? null} {...tema} />
+          </div>
+
+          <DesempenoEmpleados datos={empleados?.desempeno ?? null} {...tema} />
+        </section>
+
         {/* FILA 4: CLIENTES */}
         <section>
-          <TituloFila titulo="Clientes" descripcion={clientes?.periodo.etiqueta} textColor={textColor} textSecColor={textSecColor}>
-            <SelectorPeriodo valor={pClientes} onChange={setPeriodoClientes} bloqueado={usarGeneral} {...tema} />
+          <TituloFila titulo="Clientes" descripcion={descPeriodo(clientes?.periodo)} textColor={textColor} textSecColor={textSecColor}>
+            <SelectorPeriodo valor={pClientes} onChange={setPeriodoClientes} anios={anios} bloqueado={usarGeneral} {...tema} />
           </TituloFila>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '20px' }}>
             <div style={{ background: cardBg, border: `1px solid ${borderColor}`, padding: '20px', borderRadius: '16px', boxSizing: 'border-box' }}>
@@ -419,7 +529,7 @@ export const DashboardPage: React.FC<DashboardProps> = ({ dark = false, onNavega
           </div>
         </section>
 
-        {/* FILA 5: REMISIONES POR APROBAR Y EN PROCESO */}
+        {/* FILA 5: REMISIONES (por aprobar y en proceso) */}
         <RemisionesEnProceso remisiones={enProceso} producciones={atencion?.producciones_en_curso ?? []} onVerTodas={onNavegar ? () => ir('remisiones') : undefined} {...tema} />
 
       </div>
@@ -449,26 +559,54 @@ const TituloFila: React.FC<{ titulo: string; descripcion?: string; textColor: st
   </div>
 );
 
-/** Filtro de cada sección. Con el filtro general activo queda bloqueado mostrando el periodo general. */
-const SelectorPeriodo: React.FC<Tema & { valor: PeriodoSeccion; onChange: (v: PeriodoSeccion) => void; bloqueado?: boolean }> = ({ valor, onChange, bloqueado = false, borderColor, dark, textColor }) => (
-  <select
-    value={valor}
-    disabled={bloqueado}
-    title={bloqueado ? 'Lo controla el filtro general (elige "Ninguno" arriba para cambiarlo aquí)' : 'Periodo de esta sección'}
-    onChange={(e) => onChange(e.target.value as PeriodoSeccion)}
-    style={{ fontSize: '12px', padding: '6px 10px', borderRadius: '8px', border: `1px solid ${bloqueado ? `${GOLD}60` : borderColor}`, background: dark ? '#2A2A2A' : '#F3F3F5', color: textColor, cursor: bloqueado ? 'not-allowed' : 'pointer', opacity: bloqueado ? 0.6 : 1, outline: 'none', fontFamily: 'Montserrat, sans-serif', fontWeight: 600 }}
-  >
-    {PERIODOS.map((opt) => (
-      <option key={opt.value} value={opt.value}>{opt.label}</option>
-    ))}
-  </select>
-);
+/**
+ * Filtro de tiempo: tipo (mes / trimestre / semestre / año) + cuál + año.
+ * Es el mismo en el filtro general (allí sin el selector de tipo, que va en los botones)
+ * y en cada sección. Con el filtro general activo, el de la sección queda bloqueado mostrando el general.
+ */
+const SelectorPeriodo: React.FC<Tema & {
+  valor: FiltroPeriodo;
+  onChange: (v: FiltroPeriodo) => void;
+  anios: number[];
+  bloqueado?: boolean;
+  sinTipo?: boolean;
+}> = ({ valor, onChange, anios, bloqueado = false, sinTipo = false, borderColor, dark, textColor }) => {
+  const estilo: React.CSSProperties = {
+    fontSize: '12px', padding: '6px 10px', borderRadius: '8px', border: `1px solid ${bloqueado ? `${GOLD}60` : borderColor}`,
+    background: dark ? '#2A2A2A' : '#F3F3F5', color: textColor, cursor: bloqueado ? 'not-allowed' : 'pointer',
+    opacity: bloqueado ? 0.6 : 1, outline: 'none', fontFamily: 'Montserrat, sans-serif', fontWeight: 600,
+  };
+  const titulo = bloqueado ? 'Lo controla el filtro general (elige "Ninguno" arriba para cambiarlo aquí)' : undefined;
+  const listaAnios = anios.includes(valor.anio) ? anios : [...anios, valor.anio].sort((a, b) => b - a);
+  return (
+    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }} title={titulo}>
+      {!sinTipo && (
+        <select value={valor.tipo} disabled={bloqueado} aria-label="Tipo de periodo" style={estilo}
+          onChange={(e) => onChange(conTipo(valor, e.target.value as TipoPeriodo))}>
+          {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+        </select>
+      )}
+      {valor.tipo !== 'anio' && (
+        <select value={valor.numero} disabled={bloqueado} aria-label="Periodo" style={estilo}
+          onChange={(e) => onChange({ ...valor, numero: Number(e.target.value) })}>
+          {opcionesNumero(valor.tipo).map(o => (
+            <option key={o.numero} value={o.numero} disabled={esFuturo(valor.tipo, valor.anio, o.numero)}>{o.label}</option>
+          ))}
+        </select>
+      )}
+      <select value={valor.anio} disabled={bloqueado} aria-label="Año" style={estilo}
+        onChange={(e) => onChange(conAnio(valor, Number(e.target.value)))}>
+        {listaAnios.map(a => <option key={a} value={a}>{a}</option>)}
+      </select>
+    </div>
+  );
+};
 
 /** Pastilla con el % de cambio frente al periodo anterior. */
 const Variacion: React.FC<{ indicador?: Indicador; periodo: TipoPeriodo; subirEsMalo?: boolean }> = ({ indicador, periodo, subirEsMalo = false }) => {
   if (!indicador) return null;
   const v = indicador.variacion;
-  const titulo = `Comparado con el mismo tramo de ${NOMBRE_PERIODO_ANTERIOR[periodo]}`;
+  const titulo = `Comparado con ${NOMBRE_PERIODO_ANTERIOR[periodo]} (si el periodo está en curso, hasta el mismo día)`;
   if (v === null) {
     return <span title={titulo} style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '8px', background: '#6B6B6B20', color: '#6B6B6B', whiteSpace: 'nowrap' }}>Sin comparar</span>;
   }
@@ -477,6 +615,21 @@ const Variacion: React.FC<{ indicador?: Indicador; periodo: TipoPeriodo; subirEs
   return (
     <span title={titulo} style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '8px', background: `${color}20`, color, whiteSpace: 'nowrap' }}>
       {v > 0 ? '▲' : v < 0 ? '▼' : '='} {Math.abs(v).toLocaleString('es-CO')} %
+    </span>
+  );
+};
+
+/** Cambio en puntos porcentuales (para la asistencia: 88 % -> 91 % = ▲ 3 pts). */
+const VariacionPuntos: React.FC<{ puntos: number | null; visible: boolean }> = ({ puntos, visible }) => {
+  if (!visible) return null;
+  const titulo = 'Diferencia frente al mismo tramo del periodo anterior';
+  if (puntos === null) {
+    return <span title={titulo} style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '8px', background: '#6B6B6B20', color: '#6B6B6B', whiteSpace: 'nowrap' }}>Sin comparar</span>;
+  }
+  const color = puntos === 0 ? '#6B6B6B' : puntos > 0 ? SUCCESS : DANGER;
+  return (
+    <span title={titulo} style={{ fontSize: '11px', fontWeight: 700, padding: '4px 8px', borderRadius: '8px', background: `${color}20`, color, whiteSpace: 'nowrap' }}>
+      {puntos > 0 ? '▲' : puntos < 0 ? '▼' : '='} {Math.abs(puntos).toLocaleString('es-CO')} pts
     </span>
   );
 };
@@ -570,7 +723,9 @@ const GraficaCard: React.FC<Tema & {
 );
 
 const formatoValor = (valor: number, tipoUnidad: string) =>
-  tipoUnidad === '$' ? pesos(valor) : `${numero(valor)} ${tipoUnidad}`;
+  tipoUnidad === '$' ? pesos(valor)
+    : tipoUnidad === '%' ? `${Number(valor || 0).toLocaleString('es-CO', { maximumFractionDigits: 1 })} %`
+    : `${numero(valor)} ${tipoUnidad}`;
 
 /** Máximo "redondo" del eje Y y sus marcas (0, 25 %, 50 %, 75 %, 100 %). */
 const escalaY = (max: number) => {
@@ -668,8 +823,8 @@ const BarChartCoherent = ({ dataObj, color, dark, tipoUnidad, ejeX, ejeY }: {
   return (
     <EjesGrafica
       etiquetas={etiquetas}
-      max={Math.max(...valores, 0)}
-      formatoY={tipoUnidad === '$' ? pesosCorto : numero}
+      max={tipoUnidad === '%' ? 100 : Math.max(...valores, 0)}
+      formatoY={tipoUnidad === '$' ? pesosCorto : tipoUnidad === '%' ? (n: number) => `${n} %` : numero}
       ejeX={ejeX} ejeY={ejeY} dark={dark} hoverIndex={hoverIndex} colorHover={color}
       cabecera={hoverIndex !== null ? (
         <span style={{ fontSize: '11px', fontWeight: 700, color: dark ? '#FFF' : '#333', background: dark ? '#333' : '#E9ECEF', padding: '2px 8px', borderRadius: '6px' }}>
@@ -774,7 +929,7 @@ const RemisionesEnProceso: React.FC<Tema & {
     <div style={{ background: cardBg, border: `1px solid ${borderColor}`, padding: '24px', borderRadius: '16px', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
         <div>
-          <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: textColor }}>Proceso de las remisiones</h3>
+          <h3 style={{ fontSize: '16px', fontWeight: 800, margin: 0, color: textColor }}>Remisiones</h3>
           <span style={{ fontSize: '12px', color: textSecColor }}>Remisiones por aprobar y las que están en proceso (aprobadas, en producción o listas para entregar).</span>
         </div>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
@@ -850,6 +1005,114 @@ const RemisionesEnProceso: React.FC<Tema & {
           </button>
         </div>
       )}
+    </div>
+  );
+};
+
+// ==========================================
+// EMPLEADOS: MEJOR POR PROCESO Y DESEMPEÑO
+// ==========================================
+const unoDecimal = (n: number) => n.toLocaleString('es-CO', { maximumFractionDigits: 1 });
+const COLOR_MEDALLA = ['#C9A227', '#9AA4AE', '#B87333'];
+
+/** En cada proceso, quién rinde mejor (unidades buenas por día, ajustado por calidad). */
+const MejorPorProceso: React.FC<Tema & { datos: MejorPorProcesoT[] | null }> = ({ datos, cardBg, textColor, textSecColor, borderColor, dark }) => (
+  <div style={{ background: cardBg, border: `1px solid ${borderColor}`, padding: '20px', borderRadius: '16px', boxSizing: 'border-box' }}>
+    <CabeceraCard titulo="Quién rinde mejor en cada proceso" icono={<Award style={{ width: '18px', height: '18px', color: GOLD }} />} colorFondo={`${GOLD}20`} textColor={textColor} />
+    {!datos ? <SinDatos texto="Cargando..." dark={dark} />
+      : datos.length === 0 ? <SinDatos texto="No hay reportes del registro diario en este periodo" dark={dark} />
+      : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {datos.map(m => (
+            <div key={m.proceso} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', borderRadius: '12px', border: `1px solid ${borderColor}` }}>
+              <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: `${PURPLE}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Scissors style={{ width: '16px', height: '16px', color: PURPLE }} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: textSecColor, textTransform: 'uppercase' }}>{m.proceso}</span>
+                <div style={{ fontSize: '13px', fontWeight: 800, color: textColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={m.mejor.empleado}>
+                  {m.mejor.empleado}
+                </div>
+                <span style={{ fontSize: '10px', color: textSecColor }}>
+                  {numero(m.mejor.unidades)} unds en el periodo · {m.empleados} empleado{m.empleados === 1 ? '' : 's'} en este proceso
+                </span>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: '14px', fontWeight: 800, color: textColor }}>{unoDecimal(m.mejor.unidades_por_dia)}</div>
+                <span style={{ fontSize: '10px', color: textSecColor }}>unds/día</span>
+                <div style={{ fontSize: '10px', fontWeight: 700, color: m.mejor.calidad >= 95 ? SUCCESS : m.mejor.calidad >= 90 ? GOLD : DANGER }}>{unoDecimal(m.mejor.calidad)} % calidad</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+  </div>
+);
+
+/** Tabla de desempeño: ordenada por quien más rinde (unidades buenas por día trabajado). */
+const DesempenoEmpleados: React.FC<Tema & { datos: DesempenoEmpleadoT[] | null }> = ({ datos, cardBg, textColor, textSecColor, borderColor, dark }) => {
+  const maxDia = Math.max(...(datos ?? []).map(d => d.unidades_por_dia ?? 0), 1);
+  const th: React.CSSProperties = { fontSize: '10px', fontWeight: 700, color: GOLD, padding: '10px 12px', textAlign: 'left', whiteSpace: 'nowrap', borderBottom: `2px solid ${GOLD}` };
+  const td: React.CSSProperties = { fontSize: '12px', padding: '10px 12px', borderBottom: `1px solid ${borderColor}`, color: textColor, whiteSpace: 'nowrap' };
+  const colorPct = (v: number | null, bueno: number, regular: number) => v === null ? textSecColor : v >= bueno ? SUCCESS : v >= regular ? GOLD : DANGER;
+
+  return (
+    <div style={{ background: cardBg, border: `1px solid ${borderColor}`, padding: '20px', borderRadius: '16px', boxSizing: 'border-box' }}>
+      <CabeceraCard titulo="Desempeño por empleado" icono={<Medal style={{ width: '18px', height: '18px', color: GOLD }} />} colorFondo={`${GOLD}20`} textColor={textColor}
+        extra={<span style={{ fontSize: '11px', color: textSecColor }}>Ordenado por unidades buenas por día trabajado</span>} />
+      {!datos ? <SinDatos texto="Cargando..." dark={dark} />
+        : datos.length === 0 ? <SinDatos texto="No hay asistencia ni producción registrada en este periodo" dark={dark} />
+        : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {['#', 'EMPLEADO', 'PROCESO PRINCIPAL', 'UNIDADES', 'UNDS / DÍA', 'UNDS / HORA', 'CALIDAD', 'ASISTENCIA', 'HORAS'].map(h => <th key={h} style={th}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {datos.map((d, i) => {
+                  const produce = d.unidades > 0;
+                  return (
+                    <tr key={d.id_empleado}>
+                      <td style={td}>
+                        {produce && i < 3
+                          ? <span title={`Puesto ${i + 1}`} style={{ display: 'inline-flex', width: '22px', height: '22px', borderRadius: '50%', background: `${COLOR_MEDALLA[i]}30`, color: COLOR_MEDALLA[i], alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '11px' }}>{i + 1}</span>
+                          : <span style={{ color: textSecColor, paddingLeft: '6px' }}>{i + 1}</span>}
+                      </td>
+                      <td style={{ ...td, fontWeight: 700 }}>{d.empleado}</td>
+                      <td style={{ ...td, color: textSecColor }}>{d.proceso_principal ?? 'Sin reportes'}</td>
+                      <td style={{ ...td, fontWeight: 700 }}>
+                        {numero(d.unidades)}
+                        {d.defectuosas > 0 && <span style={{ fontSize: '10px', color: DANGER, fontWeight: 600 }}> · {numero(d.defectuosas)} def.</span>}
+                      </td>
+                      <td style={{ ...td, minWidth: '120px' }}>
+                        {d.unidades_por_dia === null ? <span style={{ color: textSecColor }}>—</span> : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ flex: 1, height: '6px', borderRadius: '6px', background: dark ? '#2A2A2A' : '#F3F3F5', overflow: 'hidden', minWidth: '50px' }}>
+                              <div style={{ width: `${(d.unidades_por_dia / maxDia) * 100}%`, height: '100%', background: PURPLE, borderRadius: '6px' }} />
+                            </div>
+                            <b>{unoDecimal(d.unidades_por_dia)}</b>
+                          </div>
+                        )}
+                      </td>
+                      <td style={td}>{d.unidades_por_hora === null ? <span style={{ color: textSecColor }}>—</span> : unoDecimal(d.unidades_por_hora)}</td>
+                      <td style={{ ...td, fontWeight: 700, color: colorPct(d.calidad, 95, 90) }}>{d.calidad === null ? '—' : `${unoDecimal(d.calidad)} %`}</td>
+                      <td style={{ ...td, fontWeight: 700, color: colorPct(d.asistencia, 90, 80) }} title={`${d.dias_presente} días presente · ${d.faltas} falta${d.faltas === 1 ? '' : 's'}`}>
+                        {d.asistencia === null ? '—' : `${unoDecimal(d.asistencia)} %`}
+                      </td>
+                      <td style={{ ...td, color: textSecColor }}>{numero(d.horas)} h</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      <p style={{ fontSize: '10px', color: textSecColor, margin: '12px 0 0' }}>
+        Unidades buenas del registro diario. Unds/día = unidades ÷ días presente. Calidad = buenas ÷ (buenas + defectuosas).
+        "Quién rinde mejor" compara a los empleados dentro de cada proceso, porque no se produce igual cortando que confeccionando.
+      </p>
     </div>
   );
 };

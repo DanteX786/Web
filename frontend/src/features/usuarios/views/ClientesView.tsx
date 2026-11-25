@@ -3,6 +3,8 @@ import {
   Plus, Trash2, Pencil, X, Search, AlertTriangle, CheckCircle 
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { BotonExcel } from '../../../shared/components/BotonExcel';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
 import {
   clienteService,
   type Cliente,
@@ -352,6 +354,23 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   const currentClientes = clientesFiltrados.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(clientesFiltrados.length / itemsPerPage);
 
+  /** Exporta los clientes de la tabla (con la búsqueda aplicada, todas las páginas). */
+  const descargarExcel = () => exportarExcel({
+    archivo: 'clientes', hoja: 'Clientes', titulo: 'Clientes del taller',
+    subtitulo: subtituloExportacion(busqueda, clientesFiltrados.length),
+    filas: clientesFiltrados,
+    columnas: [
+      { titulo: 'Tipo de documento', valor: c => c.tipo_documento },
+      { titulo: 'NIT / Documento', valor: c => c.nit },
+      { titulo: 'Nombre', valor: c => c.nombre },
+      { titulo: 'Persona de contacto', valor: c => c.nombre_contacto },
+      { titulo: 'Correo', valor: c => c.correo },
+      { titulo: 'Teléfono', valor: c => c.telefono },
+      { titulo: 'Dirección', valor: c => c.direccion, ancho: 36 },
+      { titulo: 'Estado', valor: c => c.estado },
+    ],
+  });
+
   const bg = dark ? "#121212" : "#F8F9FA";
   const fg = dark ? "#F8F9FA" : "#121212";
   const subtle = dark ? "#9A9A9A" : "#6B6B6B";
@@ -424,6 +443,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
               </div>
             )}
           </div>
+
+          <BotonExcel onClick={descargarExcel} cantidad={clientesFiltrados.length} dark={dark} />
 
           <button
             onClick={() => abrirFormulario()}

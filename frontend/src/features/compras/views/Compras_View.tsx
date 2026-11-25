@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Search, Pencil, Trash2, Eye, X, AlertTriangle, Check } from 'lucide-react';
 import { toast } from 'sonner';
+import { BotonExcel } from '../../../shared/components/BotonExcel';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
 import { compraService, type Compra as CompraApi } from '../services/compraService';
 import { insumoService } from '../services/insumoService';
 import { proveedorService, type Proveedor } from '../services/proveedorService';
@@ -331,6 +333,23 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
 
   const totalGeneralItems = compras.reduce((acc, c) => acc + c.detalles.length, 0);
 
+  /** Exporta las compras de la tabla (con la búsqueda aplicada, todas las páginas). */
+  const descargarExcel = () => exportarExcel({
+    archivo: 'compras', hoja: 'Compras', titulo: 'Compras de insumos',
+    subtitulo: subtituloExportacion(busqueda, comprasFiltradas.length),
+    filas: comprasFiltradas,
+    columnas: [
+      { titulo: 'ID compra', valor: c => c.id },
+      { titulo: 'Fecha', valor: c => c.fecha, tipo: 'fecha' },
+      { titulo: 'ID proveedor', valor: c => c.idProveedor },
+      { titulo: 'Proveedor', valor: c => c.nombreProveedor },
+      { titulo: 'Descripción', valor: c => c.descripcion, ancho: 36 },
+      { titulo: 'Insumos (cantidad × valor unitario)', valor: c => c.detalles.map(d => `${d.nombreInsumo}: ${d.cantidad} × $${Math.round(d.valorUnitario).toLocaleString('es-CO')}`).join('\n'), ancho: 44 },
+      { titulo: 'N.º de insumos', valor: c => c.detalles.length, tipo: 'numero' },
+      { titulo: 'Total', valor: c => c.total, tipo: 'pesos' },
+    ],
+  });
+
   return (
     <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif', boxSizing: 'border-box' }}>
       
@@ -356,6 +375,8 @@ export const ComprasView: React.FC<Props> = ({ dark = false }) => {
               }}
             />
           </div>
+
+          <BotonExcel onClick={descargarExcel} cantidad={comprasFiltradas.length} dark={dark} />
 
           <button
             onClick={handleOpenCreate}

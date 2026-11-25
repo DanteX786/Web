@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Package, Pencil, Trash2, X,
-  Search, AlertTriangle, Plus, Loader2
+  AlertTriangle, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { mensajeError } from '../../../shared/utils/api';
 import { coincideBusqueda } from '../../../shared/utils/busqueda';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
+import { ModuleHeader } from '../../produccion/components/ui';
 import { insumoEnviadoService, type InsumoEnviado } from '../services/insumoEnviadoService';
 import { remisionService, type Remision } from '../../ventas/services/remisionService';
 import {
@@ -14,7 +16,6 @@ import {
 
 // PALETA DE DISEÑO ESLABÓN
 const GOLD       = "#C9A227";
-const GOLD_LIGHT = "#E6B84A";
 const DANGER     = "#DC3545";
 const DANGER_BG  = "#FDECEA";
 const DANGER_TXT = "#721c24";
@@ -274,6 +275,26 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
     ]));
   }, [insumos, busqueda]);
 
+  /** Exporta los insumos de la tabla (con la búsqueda aplicada, todas las páginas). */
+  const descargarExcel = () => exportarExcel({
+    archivo: 'insumos_enviados',
+    hoja: 'Insumos enviados',
+    titulo: 'Insumos enviados por cliente',
+    subtitulo: subtituloExportacion(busqueda, insumosFiltrados.length),
+    filas: insumosFiltrados,
+    columnas: [
+      { titulo: 'ID insumo', valor: i => i.id_insumo_enviado },
+      { titulo: 'ID remisión', valor: i => i.id_remision },
+      { titulo: 'Cliente', valor: i => i.cliente },
+      { titulo: 'Insumo', valor: i => i.nombre },
+      { titulo: 'Unidad', valor: i => i.unidad },
+      { titulo: 'Cantidad enviada', valor: i => i.cantidad, tipo: 'numero' },
+      { titulo: 'Usada en producción', valor: i => i.cantidad_usada, tipo: 'numero' },
+      { titulo: 'Disponible', valor: i => i.cantidad_disponible, tipo: 'numero' },
+      { titulo: 'Estado de la remisión', valor: i => i.estado_remision },
+    ],
+  });
+
   // Lógica para seccionar los datos por página
   const [currentPage, setCurrentPage] = useState(1);
   useEffect(() => { setCurrentPage(1); }, [busqueda]);
@@ -293,36 +314,19 @@ export const InsumosEnviadosView: React.FC<InsumosEnviadosViewProps> = ({ dark =
 
   return (
     <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif' }}>
-      {/* HEADER */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: GOLD, fontFamily: 'Montserrat, sans-serif' }}>
-            Insumos Enviados por Cliente
-          </h2>
-          <p style={{ fontSize: 13, color: subtle, margin: 0, fontFamily: 'Montserrat, sans-serif' }}>
-            Materias primas que manda el cliente con cada remisión. Lo disponible baja al asignarlas en producción.
-          </p>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
-            <input
-              type="text"
-              placeholder="Buscar en cualquier campo..."
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value)}
-              style={{
-                padding: '8px 12px 8px 36px', borderRadius: 8,
-                border: `1px solid ${borderNormal}`, background: dark ? '#252525' : '#F8F8F8',
-                color: fg, fontSize: 13, outline: 'none', fontFamily: 'Montserrat, sans-serif'
-              }}
-            />
-          </div>
-          <button onClick={handleOpenNuevo} disabled={remisionesAbiertas.length === 0} title={remisionesAbiertas.length === 0 ? 'No hay remisiones abiertas' : ''} style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212', fontWeight: 700, fontSize: 14, borderRadius: 10, padding: '8px 16px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: remisionesAbiertas.length === 0 ? 0.5 : 1 }}>
-            <Plus size={14} /> Registrar Insumo
-          </button>
-        </div>
-      </div>
+      {/* ENCABEZADO (misma distribución que los demás módulos) */}
+      <ModuleHeader
+        title="Insumos enviados por cliente"
+        subtitle="Materias primas que manda el cliente con cada remisión. Lo disponible baja al asignarlas en producción."
+        search={busqueda}
+        onSearch={setBusqueda}
+        excel={{ onClick: descargarExcel, cantidad: insumosFiltrados.length }}
+        onAdd={handleOpenNuevo}
+        addLabel="Registrar insumo"
+        addDisabled={remisionesAbiertas.length === 0}
+        addTitle={remisionesAbiertas.length === 0 ? 'No hay remisiones abiertas' : undefined}
+        dark={dark}
+      />
 
       {/* TABLA */}
       <TableShell headers={['ID INSUMO', 'ID REMISIÓN', 'CLIENTE', 'NOMBRE DEL INSUMO', 'ENVIADO', 'DISPONIBLE', 'ESTADO REMISIÓN', 'ACCIONES']} dark={dark}>

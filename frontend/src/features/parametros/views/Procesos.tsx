@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Plus, Pencil, Trash2, X, Search, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, X, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { procesoService, type Proceso, type EstadoTipo } from '../services/procesoService';
 import { tipoMaquinaService, type TipoMaquina } from '../services/tipoMaquinaService';
 import { mensajeError } from '../../../shared/utils/api';
+import { ModuleHeader } from '../../produccion/components/ui';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
 
 const GOLD = "#C9A227";
 const GOLD_LIGHT = "#E6B84A";
@@ -112,6 +114,20 @@ export default function Procesos({ dark }: { dark: boolean }) {
   const currentItems = filtered.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
 
+  /** Exporta los procesos de la tabla (con la búsqueda aplicada, todas las páginas). */
+  const descargarExcel = () => exportarExcel({
+    archivo: 'procesos', hoja: 'Procesos', titulo: 'Procesos de confección',
+    subtitulo: subtituloExportacion(search, filtered.length),
+    filas: filtered,
+    columnas: [
+      { titulo: 'ID', valor: p => p.id },
+      { titulo: 'Proceso', valor: p => p.nombre },
+      { titulo: 'Descripción', valor: p => p.desc, ancho: 40 },
+      { titulo: 'Máquinas', valor: p => (p.maquinas?.length ? p.maquinas.map(id => maquinas.find(m => m.id_tipo_de_maquina === id)?.nombre ?? id).join(', ') : 'Cualquiera'), ancho: 36 },
+      { titulo: 'Estado', valor: p => p.estado },
+    ],
+  });
+
   function openAdd() {
     setForm({ nombre: "", desc: "", maquinas: [] });
     setEditing(null);
@@ -168,41 +184,17 @@ export default function Procesos({ dark }: { dark: boolean }) {
   return (
     <div style={{ padding: 24, fontFamily: "Montserrat, sans-serif" }}>
 
-      {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-        <div>
-          <h2 style={{ fontSize: 24, fontWeight: 800, color: fg, margin: 0, fontFamily: "Montserrat, sans-serif" }}>
-            Procesos
-          </h2>
-          <p style={{ fontSize: 13, color: subtle, marginTop: 2, margin: 0, fontFamily: "Montserrat, sans-serif" }}>
-            Tabla maestra de procesos de confección que se asignan en cada tarea de producción
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <div style={{ position: "relative" }}>
-            <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: subtle }} />
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Buscar…"
-              style={{
-                background: surfaceBg, border: `1px solid ${borderNormal}`,
-                borderRadius: 8, padding: "8px 12px 8px 34px",
-                fontSize: 13, color: fg, fontFamily: "Montserrat, sans-serif",
-                outline: "none", width: 220,
-              }}
-            />
-          </div>
-          <button onClick={openAdd} style={{
-            background: `linear-gradient(135deg, #C9A227, ${GOLD}, ${GOLD_LIGHT})`,
-            color: "#121212", border: "none", borderRadius: 10,
-            padding: "8px 16px", fontWeight: 700, fontSize: 14,
-            fontFamily: "Montserrat, sans-serif", cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 6,
-          }}>
-            <Plus size={14} /> Agregar
-          </button>
-        </div>
-      </div>
+      {/* Encabezado (misma distribución que los demás módulos) */}
+      <ModuleHeader
+        title="Procesos"
+        subtitle="Tabla maestra de procesos de confección que se asignan en cada tarea de producción"
+        search={search}
+        onSearch={setSearch}
+        excel={{ onClick: descargarExcel, cantidad: filtered.length }}
+        onAdd={openAdd}
+        addLabel="Nuevo proceso"
+        dark={dark}
+      />
 
       {/* Tabla */}
       <div style={{ borderRadius: 12, overflow: "hidden", background: cardBg, border: `1px solid ${dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)"}` }}>

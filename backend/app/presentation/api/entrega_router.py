@@ -46,14 +46,14 @@ def crear(datos: EntregaCrear,
 
 
 @router.post("/{id_entrega}/remision-firmada", response_model=EntregaRespuesta,
-             summary="Subir la remisión firmada por el cliente (una sola vez, máx. 5 MB)")
+             summary="Subir o cambiar la remisión firmada (solo si no está Pagada, máx. 5 MB)")
 def subir_remision_firmada(id_entrega: str, archivo: UploadFile = File(...),
                            service: EntregaService = Depends(get_entrega_service)):
     return service.subir_remision_firmada(id_entrega, archivo.filename, archivo.file.read())
 
 
 @router.post("/{id_entrega}/comprobante", response_model=EntregaRespuesta,
-             summary="Subir la factura / comprobante de pago (una sola vez, máx. 5 MB)")
+             summary="Subir o cambiar la factura / comprobante (solo si no está Pagada, máx. 5 MB)")
 def subir_comprobante(id_entrega: str, archivo: UploadFile = File(...),
                       service: EntregaService = Depends(get_entrega_service)):
     return service.subir_comprobante(id_entrega, archivo.filename, archivo.file.read())

@@ -17,8 +17,8 @@ class EntregaService:
     - Se crea desde el botón "Enviar a remisión de entrega" de Remisiones.
     - La entrega NO se edita: precio = prendas x costo por prenda (lo calcula la BD)
       y fecha = hoy. Así nadie puede alterar los valores cobrados.
-    - La remisión firmada y la factura / comprobante se suben UNA sola vez
-      (no se reemplazan) y solo mientras no esté Pagada.
+    - La remisión firmada y la factura / comprobante se pueden subir y cambiar
+      mientras la entrega NO esté Pagada. Al marcarla Pagada quedan bloqueados.
     - Solo se marca "Pagada" si ya se subió el comprobante (CA_29_01).
     """
 
@@ -58,23 +58,21 @@ class EntregaService:
             raise ConflictError("La entrega ya está Pagada: no se puede modificar.")
         return entrega
 
-    def _subir_una_vez(self, id_entrega: str, campo: str, carpeta: str, descripcion: str,
+    def _subir_soporte(self, id_entrega: str, campo: str, carpeta: str,
                        nombre: str | None, contenido: bytes) -> Entrega:
+        """Sube o reemplaza un soporte. Solo mientras la entrega no esté Pagada."""
         actual = self._editable(id_entrega)
-        if getattr(actual, campo):
-            raise ConflictError(f"La entrega {id_entrega} ya tiene {descripcion}: no se puede reemplazar.")
         extension = validar_archivo(nombre, contenido)
         url = self.storage.guardar(contenido, extension, carpeta, id_entrega)
         self.repo.guardar_url(id_entrega, campo, url)
+        self.storage.eliminar(getattr(actual, campo))  # el archivo anterior ya no se usa
         return self.obtener(id_entrega)
 
     def subir_remision_firmada(self, id_entrega: str, nombre: str | None, contenido: bytes) -> Entrega:
-        return self._subir_una_vez(id_entrega, "remision_firmada_url", "remisiones-firmadas",
-                                   "la remisión firmada", nombre, contenido)
+        return self._subir_soporte(id_entrega, "remision_firmada_url", "remisiones-firmadas", nombre, contenido)
 
     def subir_comprobante(self, id_entrega: str, nombre: str | None, contenido: bytes) -> Entrega:
-        return self._subir_una_vez(id_entrega, "comprobante_pago_url", "comprobantes",
-                                   "la factura / comprobante de pago", nombre, contenido)
+        return self._subir_soporte(id_entrega, "comprobante_pago_url", "comprobantes", nombre, contenido)
 
     def marcar_pagada(self, id_entrega: str) -> Entrega:
         actual = self._editable(id_entrega)

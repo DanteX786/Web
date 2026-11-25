@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Factory, Pencil, Trash2, Eye, Hammer, CheckCircle2, History, ClipboardPlus, PlayCircle, Clock, Search, Shirt, ListChecks, ExternalLink, FileText, Plus, X, AlertTriangle, ClipboardList, RotateCcw, Ban } from 'lucide-react';
 import { toast } from 'sonner';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
 
 import {
   ESTADOS_PRODUCCION,
@@ -510,6 +511,30 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
   const totalPaginas = Math.max(1, Math.ceil(filtradas.length / POR_PAGINA));
   const visibles = filtradas.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
 
+  /** Exporta las producciones de la tabla (con la búsqueda y el filtro aplicados, todas las páginas). */
+  const descargarExcel = () => exportarExcel({
+    archivo: 'producciones', hoja: 'Producciones', titulo: 'Producciones',
+    subtitulo: subtituloExportacion(busqueda, filtradas.length) + (filtroEstado ? ` · Estado: ${filtroEstado}` : ''),
+    filas: filtradas,
+    columnas: [
+      { titulo: 'ID producción', valor: p => p.id_produccion },
+      { titulo: 'Remisión', valor: p => p.id_remision },
+      { titulo: 'Cliente', valor: p => p.cliente },
+      { titulo: 'Ficha técnica', valor: p => p.ficha_tecnica_nombre },
+      { titulo: 'Estado', valor: p => p.reproceso_activo ? `${p.estado} (en reproceso)` : p.estado },
+      { titulo: 'Fecha de inicio', valor: p => p.fecha_inicio, tipo: 'fecha' },
+      { titulo: 'Fecha de entrega', valor: p => p.fecha_entrega, tipo: 'fecha' },
+      { titulo: 'Total prendas', valor: p => p.total_prendas, tipo: 'numero' },
+      { titulo: 'Prendas terminadas', valor: p => p.prendas_terminadas, tipo: 'numero' },
+      { titulo: 'Unidades asignadas', valor: p => p.total_asignado, tipo: 'numero' },
+      { titulo: 'Unidades realizadas', valor: p => p.total_realizado, tipo: 'numero' },
+      { titulo: 'Defectuosas', valor: p => p.total_defectuoso, tipo: 'numero' },
+      { titulo: 'Pendientes', valor: p => p.total_pendiente, tipo: 'numero' },
+      { titulo: 'Avance (%)', valor: p => Math.round(p.porcentaje_avance * 10) / 10, tipo: 'numero' },
+      { titulo: 'Último cambio de estado', valor: p => fechaHora(p.fecha_estado) },
+    ],
+  });
+
   // ==========================================
   // RENDER
   // ==========================================
@@ -522,12 +547,15 @@ export const ProduccionView: React.FC<ProduccionViewProps> = ({ dark = false }) 
         onSearch={setBusqueda}
         dark={dark}
         extra={
-          <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value as '' | EstadoProduccion)}
-            style={estiloInput(dark, { width: 170, padding: '8px 10px' })}>
-            <option value="">Todos los estados</option>
-            {ESTADOS_PRODUCCION.map((e) => <option key={e} value={e}>{e}</option>)}
-          </select>
+          <>
+            <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value as '' | EstadoProduccion)}
+              style={estiloInput(dark, { width: 170, padding: '8px 10px' })}>
+              <option value="">Todos los estados</option>
+              {ESTADOS_PRODUCCION.map((e) => <option key={e} value={e}>{e}</option>)}
+            </select>
+          </>
         }
+        excel={{ onClick: descargarExcel, cantidad: filtradas.length }}
       />
 
       <TableShell headers={['ID producción', 'Remisión', 'Cliente', 'Prendas terminadas', 'Estado', 'Fecha de estado', 'Acciones']} dark={dark}>

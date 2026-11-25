@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Search, UploadCloud, Receipt, FileSignature, X, BadgeCheck, Loader2, Info, Lock, AlertTriangle
+  UploadCloud, Receipt, FileSignature, X, BadgeCheck, Loader2, Info, AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { mensajeError } from '../../../shared/utils/api';
 import { coincideBusqueda } from '../../../shared/utils/busqueda';
+import { ModuleHeader } from '../../produccion/components/ui';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
 import { ACEPTA_ARCHIVOS, errorArchivo, urlArchivo } from '../../../shared/utils/archivos';
 import { entregaService, type Entrega } from '../services/entregaService';
 import { produccionService, type PiezaDefectuosa } from '../../produccion/services/produccionService';
@@ -121,6 +123,10 @@ export function RemisionEntregaView({ dark = false }: RemisionEntregaProps) {
   setSubida({ ...elegirPara, archivo });
   };
 
+  /** ¿Ya hay un archivo de ese tipo? (entonces se va a reemplazar) */
+  const yaTiene = (s: { entrega: Entrega; tipo: TipoSoporte }) =>
+    Boolean(s.tipo === 'firma' ? s.entrega.remision_firmada_url : s.entrega.comprobante_pago_url);
+
   const confirmarSubida = async () => {
   if (!subida) return;
   setSubiendo(true);
@@ -163,6 +169,27 @@ export function RemisionEntregaView({ dark = false }: RemisionEntregaProps) {
   ]));
   }, [entregas, busqueda]);
 
+  /** Exporta las entregas de la tabla (con la búsqueda aplicada, todas las páginas). */
+  const descargarExcel = () => exportarExcel({
+    archivo: 'remisiones_de_entrega',
+    hoja: 'Remisiones de entrega',
+    titulo: 'Remisiones de entrega',
+    subtitulo: subtituloExportacion(busqueda, entregasFiltradas.length),
+    filas: entregasFiltradas,
+    columnas: [
+      { titulo: 'ID entrega', valor: e => e.id_entrega },
+      { titulo: 'ID remisión', valor: e => e.id_remision },
+      { titulo: 'Cliente', valor: e => e.cliente },
+      { titulo: 'NIT', valor: e => e.nit_cliente },
+      { titulo: 'Cantidad entregada', valor: e => e.cantidad_entregada, tipo: 'numero' },
+      { titulo: 'Precio total', valor: e => e.precio_total, tipo: 'pesos' },
+      { titulo: 'Fecha de entrega', valor: e => e.fecha_finalizacion, tipo: 'fecha' },
+      { titulo: 'Remisión firmada', valor: e => e.remision_firmada_url ? 'Adjunta' : 'No adjunta' },
+      { titulo: 'Factura / comprobante', valor: e => e.comprobante_pago_url ? 'Adjunta' : 'No adjunta' },
+      { titulo: 'Estado', valor: e => e.estado },
+    ],
+  });
+
   // Lógica para seccionar los datos por página
   const [currentPage, setCurrentPage] = useState(1);
   useEffect(() => { setCurrentPage(1); }, [busqueda]);
@@ -188,25 +215,21 @@ export function RemisionEntregaView({ dark = false }: RemisionEntregaProps) {
 
   return (
     <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif', position: 'relative' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: fg }}>Remisión de Entrega</h2>
-          <p style={{ fontSize: 13, color: subtle, margin: 0 }}>Gestiona las entregas finales, firmas y pagos del taller.</p>
-        </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
-            <input type="text" placeholder="Buscar en cualquier campo..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ padding: '8px 12px 8px 36px', borderRadius: 8, border: `1px solid ${borderNormal}`, background: cardBg, color: fg, fontSize: 13, outline: 'none', width: '220px' }} />
-          </div>
-        </div>
-      </div>
+      <ModuleHeader
+        title="Remisiones de entrega"
+        subtitle="Gestiona las entregas finales, firmas y pagos del taller."
+        search={busqueda}
+        onSearch={setBusqueda}
+        excel={{ onClick: descargarExcel, cantidad: entregasFiltradas.length }}
+        dark={dark}
+      />
 
       <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 12, color: subtle, background: `${INFO}10`, border: `1px solid ${INFO}30`, padding: '10px 12px', borderRadius: 10, marginBottom: 16 }}>
         <Info size={16} color={INFO} style={{ flexShrink: 0, marginTop: 1 }} />
         <span>
           Las entregas llegan desde <b>Remisiones</b> con el botón de camión cuando la producción queda <b>Terminada</b>.
           El precio (prendas × costo por prenda) y la fecha los pone el sistema y <b>no se pueden editar</b>.
-          La remisión firmada y la factura se suben una sola vez.
+          La remisión firmada y la factura se pueden subir y cambiar hasta marcar la entrega como <b>Pagada</b>; después quedan bloqueadas.
           {porEntregar > 0 && <> Hay <b>{porEntregar}</b> remisión(es) Terminada(s) esperando ser enviadas.</>}
         </span>
       </div>
@@ -244,8 +267,8 @@ export function RemisionEntregaView({ dark = false }: RemisionEntregaProps) {
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <ActionCircleBtn variant="danger" onClick={() => verDefectuosas(ent)} title="Ver piezas defectuosas de la producción"><AlertTriangle size={14} /></ActionCircleBtn>
-                      <ActionCircleBtn variant="blue" onClick={() => abrirSelector(ent, 'firma')} disabled={pagada || !!ent.remision_firmada_url} title={ent.remision_firmada_url ? 'La remisión firmada ya se subió (no se puede reemplazar)' : pagada ? 'Ya está pagada' : 'Subir remisión firmada'}><FileSignature size={14} /></ActionCircleBtn>
-                      <ActionCircleBtn variant="gold" onClick={() => abrirSelector(ent, 'factura')} disabled={pagada || !!ent.comprobante_pago_url} title={ent.comprobante_pago_url ? 'La factura ya se subió (no se puede reemplazar)' : pagada ? 'Ya está pagada' : 'Subir factura / comprobante de pago'}><Receipt size={14} /></ActionCircleBtn>
+                      <ActionCircleBtn variant="blue" onClick={() => abrirSelector(ent, 'firma')} disabled={pagada} title={pagada ? 'Ya está pagada: no se puede cambiar' : ent.remision_firmada_url ? 'Cambiar remisión firmada' : 'Subir remisión firmada'}><FileSignature size={14} /></ActionCircleBtn>
+                      <ActionCircleBtn variant="gold" onClick={() => abrirSelector(ent, 'factura')} disabled={pagada} title={pagada ? 'Ya está pagada: no se puede cambiar' : ent.comprobante_pago_url ? 'Cambiar factura / comprobante de pago' : 'Subir factura / comprobante de pago'}><Receipt size={14} /></ActionCircleBtn>
                       <ActionCircleBtn variant="success" onClick={() => setParaPagar(ent)} disabled={pagada || !ent.comprobante_pago_url} title={pagada ? 'Ya está pagada' : !ent.comprobante_pago_url ? 'Suba primero la factura' : 'Marcar como pagada'}><BadgeCheck size={14} /></ActionCircleBtn>
                     </div>
                   </td>
@@ -379,7 +402,7 @@ export function RemisionEntregaView({ dark = false }: RemisionEntregaProps) {
             </div>
             <h3 style={{ fontSize: 20, fontWeight: 800, color: fg, margin: '0 0 12px' }}>¿Confirmar pago de {paraPagar.id_entrega}?</h3>
             <p style={{ fontSize: 13, color: subtle, margin: '0 0 24px' }}>
-              {paraPagar.cliente} · {pesos(paraPagar.precio_total)}. Después de marcarla como pagada queda cerrada.
+              {paraPagar.cliente} · {pesos(paraPagar.precio_total)}. Después de marcarla como pagada ya no se podrán cambiar la remisión firmada ni la factura.
             </p>
             <div style={{ display: 'flex', gap: 12 }}>
               <button onClick={() => setParaPagar(null)} style={{ flex: 1, backgroundColor: inputBg, color: fg, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
@@ -406,16 +429,16 @@ export function RemisionEntregaView({ dark = false }: RemisionEntregaProps) {
               <UploadCloud size={32} />
             </div>
             <h3 style={{ fontSize: 20, fontWeight: 800, color: fg, margin: '0 0 12px' }}>
-              ¿Subir {subida.tipo === 'firma' ? 'la remisión firmada' : 'la factura'} de {subida.entrega.id_entrega}?
+              ¿{yaTiene(subida) ? 'Cambiar' : 'Subir'} {subida.tipo === 'firma' ? 'la remisión firmada' : 'la factura'} de {subida.entrega.id_entrega}?
             </h3>
             <p style={{ fontSize: 13, color: fg, fontWeight: 700, margin: '0 0 8px', wordBreak: 'break-all' }}>{subida.archivo.name}</p>
-            <p style={{ fontSize: 12, color: DANGER, margin: '0 0 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <Lock size={14} /> Una vez subido no se podrá reemplazar ni eliminar.
+            <p style={{ fontSize: 12, color: subtle, margin: '0 0 24px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Info size={14} /> {yaTiene(subida) ? 'Reemplaza el archivo actual. ' : ''}Podrás cambiarlo hasta marcar la entrega como Pagada.
             </p>
             <div style={{ display: 'flex', gap: 12 }}>
               <button onClick={() => setSubida(null)} disabled={subiendo} style={{ flex: 1, backgroundColor: inputBg, color: fg, border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>Cancelar</button>
               <button onClick={confirmarSubida} disabled={subiendo} style={{ flex: 1, backgroundColor: SUCCESS, color: '#FFF', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: subiendo ? 'wait' : 'pointer', opacity: subiendo ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                {subiendo && <Loader2 size={16} />} {subiendo ? 'Subiendo...' : 'Sí, subir'}
+                {subiendo && <Loader2 size={16} />} {subiendo ? 'Subiendo...' : yaTiene(subida) ? 'Sí, cambiar' : 'Sí, subir'}
               </button>
             </div>
           </div>

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, X, AlertTriangle, Pencil, Trash2, Eye, Phone, Mail, MapPin, ChevronDown, Lock } from 'lucide-react';
 import { toast } from 'sonner';
+import { BotonExcel } from '../../../shared/components/BotonExcel';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
 import { proveedorService, type Proveedor, type EstadoProveedor } from '../services/proveedorService';
 import { mensajeError } from '../../../shared/utils/api';
 import {
@@ -110,6 +112,23 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
           .some(valor => valor && normalizar(valor).includes(termino))
       )
     : data;
+
+  /** Exporta los proveedores de la tabla (con la búsqueda aplicada, todas las páginas). */
+  const descargarExcel = () => exportarExcel({
+    archivo: 'proveedores', hoja: 'Proveedores', titulo: 'Proveedores',
+    subtitulo: subtituloExportacion(busqueda, filtered.length),
+    filas: filtered,
+    columnas: [
+      { titulo: 'ID', valor: p => p.id },
+      { titulo: 'NIT', valor: p => p.nit },
+      { titulo: 'Nombre', valor: p => p.nombre },
+      { titulo: 'Contacto', valor: p => p.contacto },
+      { titulo: 'Teléfono', valor: p => p.telefono },
+      { titulo: 'Correo', valor: p => p.correo },
+      { titulo: 'Dirección', valor: p => p.direccion, ancho: 36 },
+      { titulo: 'Estado', valor: p => p.estado },
+    ],
+  });
 
   const buscar = (texto: string) => {
     setBusqueda(texto);
@@ -271,6 +290,8 @@ export default function ProveedoresCRUD({ dark = false }: Props) {
               </button>
             )}
           </div>
+
+          <BotonExcel onClick={descargarExcel} cantidad={filtered.length} dark={dark} />
 
           <button
             onClick={openAdd}

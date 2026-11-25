@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { UserCog, Eye, Pencil, Power, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
 
 import { mensajeError } from '../../../shared/utils/api';
 import { empleadoService, type Empleado, type EmpleadoDatos, type EstadoEmpleado } from '../services/empleadoService';
@@ -200,6 +201,24 @@ export default function EmpleadosModulo({ dark = false }: EmpleadosModuloProps) 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
   const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
   const esYo = (e: Empleado) => e.id === yo?.id;
+
+  /** Exporta los empleados de la tabla (con la búsqueda y el filtro aplicados, todas las páginas). */
+  const descargarExcel = () => exportarExcel({
+    archivo: 'empleados', hoja: 'Empleados', titulo: 'Empleados del taller',
+    subtitulo: subtituloExportacion(busqueda, filtrados.length) + (filtroEstado ? ` · Estado: ${filtroEstado}` : ''),
+    filas: filtrados,
+    columnas: [
+      { titulo: 'ID', valor: e => e.id },
+      { titulo: 'Nombre', valor: e => e.nombre },
+      { titulo: 'Identificación', valor: e => e.identificacion },
+      { titulo: 'Rol', valor: e => e.rol },
+      { titulo: 'Correo', valor: e => e.correo },
+      { titulo: 'Teléfono', valor: e => e.telefono },
+      { titulo: 'Dirección', valor: e => e.direccion, ancho: 36 },
+      { titulo: 'Estado', valor: e => e.estado },
+      { titulo: 'Contraseña', valor: e => e.debe_cambiar_contrasena ? 'Pendiente de crear' : 'Creada' },
+    ],
+  });
   const celda: React.CSSProperties = { padding: '12px 14px' };
 
   // Campo de texto del formulario
@@ -221,13 +240,16 @@ export default function EmpleadosModulo({ dark = false }: EmpleadosModuloProps) 
         addLabel="Nuevo empleado"
         dark={dark}
         extra={
-          <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value as '' | EstadoEmpleado)}
-            style={estiloInput(dark, { width: 160, padding: '8px 10px' })}>
-            <option value="">Todos los estados</option>
-            <option value="Activo">Activo</option>
-            <option value="Inactivo">Inactivo</option>
-          </select>
+          <>
+            <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value as '' | EstadoEmpleado)}
+              style={estiloInput(dark, { width: 160, padding: '8px 10px' })}>
+              <option value="">Todos los estados</option>
+              <option value="Activo">Activo</option>
+              <option value="Inactivo">Inactivo</option>
+            </select>
+          </>
         }
+        excel={{ onClick: descargarExcel, cantidad: filtrados.length }}
       />
 
       <TableShell headers={['ID', 'Empleado', 'Cédula', 'Correo', 'Teléfono', 'Rol', 'Acceso', 'Estado', 'Acciones']} dark={dark}>

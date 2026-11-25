@@ -13,6 +13,10 @@ class PeriodoRespuesta(BaseModel):
     hasta: date              # hoy
     anterior_desde: date     # con qué se compara
     anterior_hasta: date
+    anio: int
+    numero: int              # mes 1-12, trimestre 1-4, semestre 1-2 o 1 (año)
+    completo: bool           # False = periodo en curso (llega hasta hoy)
+    unidad_tramo: str        # "Semana" (si es un mes) o "Mes": qué es cada barra de las gráficas
 
 
 class Indicador(BaseModel):
@@ -150,6 +154,70 @@ class ClientesRespuesta(BaseModel):
 
 
 # ---------- Fila 5: movimientos ----------
+# ---------- Fila 5: empleados ----------
+class EmpleadosHoy(BaseModel):
+    activos: int
+    presentes: int
+    en_taller: int
+    con_tarea: int
+    con_novedad: int
+
+
+class AsistenciaPeriodo(BaseModel):
+    porcentaje: float | None
+    variacion: float | None   # puntos porcentuales frente al periodo anterior
+    presentes: int
+    faltas: int
+    novedades: int
+
+
+class CalidadPeriodo(BaseModel):
+    porcentaje: float | None
+    buenas: float
+    defectuosas: float
+
+
+class DesempenoEmpleado(BaseModel):
+    id_empleado: str
+    empleado: str
+    rol: str | None
+    unidades: float
+    defectuosas: float
+    calidad: float | None
+    dias_presente: int
+    faltas: int
+    asistencia: float | None
+    horas: float
+    unidades_por_dia: float | None
+    unidades_por_hora: float | None
+    proceso_principal: str | None
+
+
+class MejorEmpleado(BaseModel):
+    empleado: str
+    unidades: float
+    unidades_por_dia: float
+    calidad: float
+
+
+class MejorPorProceso(BaseModel):
+    proceso: str
+    empleados: int
+    unidades_proceso: float
+    mejor: MejorEmpleado
+
+
+class EmpleadosRespuesta(BaseModel):
+    periodo: PeriodoRespuesta
+    hoy: EmpleadosHoy
+    asistencia: AsistenciaPeriodo
+    horas_trabajadas: Indicador
+    calidad: CalidadPeriodo
+    grafica_asistencia: Grafica
+    desempeno: list[DesempenoEmpleado]
+    mejor_por_proceso: list[MejorPorProceso]
+
+
 class Movimiento(BaseModel):
     tipo: Literal["remision", "compra", "entrega"]
     referencia: str

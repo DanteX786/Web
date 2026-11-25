@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { LogIn, LogOut, UserCheck, CalendarX, Clock, AlertTriangle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
 
 import {
   asistenciaService, NOVEDADES,
@@ -217,6 +218,26 @@ export const AsistenciaView: React.FC<AsistenciaViewProps> = ({ dark = false }) 
 
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
   const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+
+  /** Exporta la asistencia del día elegido (con la búsqueda y el filtro aplicados). */
+  const descargarExcel = () => exportarExcel({
+    archivo: `asistencia_${dia}`, hoja: 'Asistencia', titulo: `Asistencia del ${dia.split('-').reverse().join('/')}`,
+    subtitulo: subtituloExportacion(busqueda, filtrados.length),
+    filas: filtrados,
+    columnas: [
+      { titulo: 'Fecha', valor: r => r.fecha, tipo: 'fecha' },
+      { titulo: 'ID empleado', valor: r => r.id_empleado },
+      { titulo: 'Empleado', valor: r => r.empleado },
+      { titulo: 'Identificación', valor: r => r.identificacion },
+      { titulo: 'Rol', valor: r => r.rol },
+      { titulo: 'Estado', valor: r => r.estado },
+      { titulo: 'Situación', valor: r => situacion(r, esHoy).texto },
+      { titulo: 'Entradas y salidas', valor: r => r.marcaciones.map(m => `${hhmm(m.hora_entrada)} – ${m.hora_salida ? hhmm(m.hora_salida) : 'sin salida'}${m.tipo_salida ? ` (${m.tipo_salida})` : ''}`).join('\n'), ancho: 32 },
+      { titulo: 'Horas trabajadas', valor: r => Math.round(r.minutos_trabajados / 6) / 10, tipo: 'numero' },
+      { titulo: 'Observación', valor: r => r.observacion, ancho: 32 },
+      { titulo: 'Registrado por', valor: r => r.registrado_por_nombre },
+    ],
+  });
   const enTaller = registros.filter((r) => r.en_taller).length;
   const vinieron = registros.filter((r) => r.estado === 'Presente').length;
   const conNovedad = registros.filter((r) => ['Permiso', 'Incapacidad', 'Vacaciones'].includes(r.estado)).length;
@@ -231,6 +252,7 @@ export const AsistenciaView: React.FC<AsistenciaViewProps> = ({ dark = false }) 
         search={busqueda}
         onSearch={setBusqueda}
         dark={dark}
+        excel={{ onClick: descargarExcel, cantidad: filtrados.length }}
         extra={
           <>
             <input type="date" value={dia} max={hoyLocal()} onChange={(e) => setDia(e.target.value || hoyLocal())}

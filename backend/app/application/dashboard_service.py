@@ -34,6 +34,7 @@ def _info_periodo(p: Periodo) -> dict:
     return {
         "tipo": p.tipo, "etiqueta": p.etiqueta, "desde": p.desde, "hasta": p.hasta,
         "anterior_desde": p.anterior_desde, "anterior_hasta": p.anterior_hasta,
+        "anio": p.anio, "numero": p.numero, "completo": p.completo, "unidad_tramo": p.unidad_tramo,
     }
 
 
@@ -43,9 +44,10 @@ class DashboardService:
     Cada fila se pide por separado, así cada una tiene su propio periodo
     (mensual, trimestral, semestral o anual) sin recargar las demás.
 
-    El periodo es el de calendario que contiene a hoy (este mes, este trimestre...)
-    y se compara con el periodo anterior cortado en el mismo punto: si hoy es 10 de
-    noviembre, se compara del 1 al 10 de noviembre contra el 1 al 10 de octubre.
+    El periodo es uno de calendario (mes, trimestre, semestre o año) que se elige con
+    `anio` y `numero`; por defecto, el que contiene a hoy. Se compara con el periodo anterior
+    del mismo tipo; si el elegido está en curso, el anterior se corta en el mismo punto: si hoy
+    es 10 de noviembre, se compara del 1 al 10 de noviembre contra el 1 al 10 de octubre.
     """
 
     def __init__(self, repo: IDashboardRepository):
@@ -90,8 +92,9 @@ class DashboardService:
         }
 
     # ------------------------------------------------------------------ fila 2
-    def dinero(self, tipo: TipoPeriodo, hoy: date | None = None) -> dict:
-        p = Periodo.calcular(tipo, hoy)
+    def dinero(self, tipo: TipoPeriodo, hoy: date | None = None,
+               anio: int | None = None, numero: int | None = None) -> dict:
+        p = Periodo.calcular(tipo, hoy, anio, numero)
         entregas = self.repo.entregas_por_dia(p.desde, p.hasta)
         compras = self.repo.compras_por_dia(p.desde, p.hasta)
         entregas_ant = self.repo.entregas_por_dia(p.anterior_desde, p.anterior_hasta)
@@ -118,8 +121,9 @@ class DashboardService:
         }
 
     # ------------------------------------------------------------------ fila 3
-    def produccion(self, tipo: TipoPeriodo, hoy: date | None = None) -> dict:
-        p = Periodo.calcular(tipo, hoy)
+    def produccion(self, tipo: TipoPeriodo, hoy: date | None = None,
+                   anio: int | None = None, numero: int | None = None) -> dict:
+        p = Periodo.calcular(tipo, hoy, anio, numero)
         unidades = self.repo.unidades_por_dia(p.desde, p.hasta)
         unidades_ant = self.repo.unidades_por_dia(p.anterior_desde, p.anterior_hasta)
         entregas = self.repo.entregas_por_dia(p.desde, p.hasta)
@@ -150,8 +154,9 @@ class DashboardService:
         }
 
     # ------------------------------------------------------------------ fila 4
-    def clientes(self, tipo: TipoPeriodo, hoy: date | None = None) -> dict:
-        p = Periodo.calcular(tipo, hoy)
+    def clientes(self, tipo: TipoPeriodo, hoy: date | None = None,
+                 anio: int | None = None, numero: int | None = None) -> dict:
+        p = Periodo.calcular(tipo, hoy, anio, numero)
         top = self.repo.top_clientes(p.desde, p.hasta, 5)
         total = sum(_num(c["facturado"]) for c in top) or 0
         estados = self.repo.remisiones_por_estado(p.desde, p.hasta)
@@ -170,7 +175,111 @@ class DashboardService:
             ],
         }
 
-    # ------------------------------------------------------------------ fila 5
+    # ------------------------------------------------------------------ fila 5: empleados
+    def empleados(self, tipo: TipoPeriodo, hoy: date | None = None,
+                  anio: int | None = None, numero: int | None = None) -> dict:
+        """Asistencia y desempeño de los empleados.
+
+        - Asistencia % = días "Presente" / días con registro de asistencia.
+        - Calidad % = unidades buenas / (buenas + defectuosas) del registro diario.
+        - Rendimiento = unidades buenas por día trabajado (y por hora si hay marcaciones).
+        - Mejor por proceso: en cada proceso, el empleado con más unidades buenas por día,
+          ajustado por su calidad (así no gana quien hace mucho pero con muchos defectos).
+        """
+        p = Periodo.calcular(tipo, hoy, anio, numero)
+        asis = self.repo.asistencia_por_dia(p.desde, p.hasta)
+        asis_ant = self.repo.asistencia_por_dia(p.anterior_desde, p.anterior_hasta)
+
+        def pct_asistencia(filas: list[dict]) -> float | None:
+            registros = _suma(filas, "registros")
+            return round(_suma(filas, "presentes") / registros * 100, 1) if registros else None
+
+        pct, pct_ant = pct_asistencia(asis), pct_asistencia(asis_ant)
+        horas, horas_ant = round(_suma(asis, "minutos") / 60, 1), round(_suma(asis_ant, "minutos") / 60, 1)
+
+        # Desempeño por empleado
+        desempeno = []
+        for f in self.repo.desempeno_empleados(p.desde, p.hasta):
+            buenas, malas = _num(f["unidades"]), _num(f["defectuosas"])
+            horas_emp = _num(f["minutos"]) / 60
+            dias = int(f["dias_presente"] or 0) or int(f["dias_produccion"] or 0)
+            registros = int(f["registros_asistencia"] or 0)
+            desempeno.append({
+                "id_empleado": f["id_empleado"],
+                "empleado": f["empleado"],
+                "rol": f["rol"],
+                "unidades": buenas,
+                "defectuosas": malas,
+                "calidad": round(buenas / (buenas + malas) * 100, 1) if buenas + malas else None,
+                "dias_presente": int(f["dias_presente"] or 0),
+                "faltas": int(f["faltas"] or 0),
+                "asistencia": round(int(f["dias_presente"] or 0) / registros * 100, 1) if registros else None,
+                "horas": round(horas_emp, 1),
+                "unidades_por_dia": round(buenas / dias, 1) if dias and buenas else None,
+                "unidades_por_hora": round(buenas / horas_emp, 1) if horas_emp >= 1 and buenas else None,
+                "proceso_principal": f["proceso_principal"],
+            })
+        # Primero quien más rinde (unidades buenas por día), luego por unidades totales
+        desempeno.sort(key=lambda d: (-(d["unidades_por_dia"] or 0), -d["unidades"], d["empleado"]))
+
+        # Mejor empleado por proceso
+        por_proceso: dict[str, list[dict]] = {}
+        for f in self.repo.produccion_por_proceso_empleado(p.desde, p.hasta):
+            buenas, malas, dias = _num(f["unidades"]), _num(f["defectuosas"]), int(f["dias"] or 0)
+            calidad = buenas / (buenas + malas) if buenas + malas else 0
+            por_proceso.setdefault(f["proceso"], []).append({
+                "empleado": f["empleado"],
+                "unidades": buenas,
+                "unidades_por_dia": round(buenas / dias, 1) if dias else 0,
+                "calidad": round(calidad * 100, 1),
+                "_puntaje": (buenas / dias if dias else 0) * calidad,
+            })
+        mejores = []
+        for proceso, emps in por_proceso.items():
+            emps.sort(key=lambda e: (-e["_puntaje"], -e["unidades"], e["empleado"]))
+            mejor = {k: v for k, v in emps[0].items() if k != "_puntaje"}
+            mejores.append({"proceso": proceso, "empleados": len(emps), "mejor": mejor,
+                            "unidades_proceso": sum(e["unidades"] for e in emps)})
+        mejores.sort(key=lambda m: (-m["unidades_proceso"], m["proceso"]))
+
+        buenas_total = sum(d["unidades"] for d in desempeno)
+        malas_total = sum(d["defectuosas"] for d in desempeno)
+        hoy_emp = self.repo.empleados_hoy()
+
+        return {
+            "periodo": _info_periodo(p),
+            "hoy": {k: int(v or 0) for k, v in hoy_emp.items()},
+            "asistencia": {
+                "porcentaje": pct,
+                "variacion": round(pct - pct_ant, 1) if pct is not None and pct_ant is not None else None,
+                "presentes": int(_suma(asis, "presentes")),
+                "faltas": int(_suma(asis, "faltas")),
+                "novedades": int(_suma(asis, "novedades")),
+            },
+            "horas_trabajadas": {"valor": horas, "variacion": _variacion(horas, horas_ant)},
+            "calidad": {
+                "porcentaje": round(buenas_total / (buenas_total + malas_total) * 100, 1) if buenas_total + malas_total else None,
+                "buenas": buenas_total,
+                "defectuosas": malas_total,
+            },
+            "grafica_asistencia": {
+                "etiquetas": [t.etiqueta for t in p.tramos],
+                "valores": [
+                    round(pres / reg * 100, 1) if reg else 0
+                    for pres, reg in zip(_por_tramos(p, asis, "presentes"), _por_tramos(p, asis, "registros"))
+                ],
+            },
+            "desempeno": desempeno,
+            "mejor_por_proceso": mejores,
+        }
+
+    # ------------------------------------------------------------------ años disponibles
+    def anios(self, hoy: date | None = None) -> list[int]:
+        """Años que tienen datos (para el selector de año). Siempre incluye el actual."""
+        hoy = hoy or date.today()
+        return sorted({hoy.year, *self.repo.anios_con_datos()}, reverse=True)
+
+    # ------------------------------------------------------------------ historial
     def movimientos(self, limite: int = 8) -> list[dict]:
         filas = self.repo.ultimos_movimientos(limite)
         for f in filas:

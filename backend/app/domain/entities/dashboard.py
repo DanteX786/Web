@@ -30,13 +30,20 @@ class Tramo:
     hasta: date
 
 
+# Cuántos periodos de cada tipo tiene un año (mes 1-12, trimestre 1-4, semestre 1-2, año 1)
+CANTIDAD_EN_ANIO = {"mes": 12, "trimestre": 4, "semestre": 2, "anio": 1}
+
+
 @dataclass(frozen=True)
 class Periodo:
-    """Periodo de calendario que contiene a `hoy` (este mes, este trimestre...).
+    """Un periodo de calendario: un mes, trimestre, semestre o año concreto.
 
-    actual    : desde el primer día del periodo hasta hoy.
-    anterior  : el periodo anterior, cortado en el mismo punto (mismo número de días),
-                para comparar parejo. Ej.: del 1 al 10 de noviembre vs. del 1 al 10 de octubre.
+    Se elige con `anio` y `numero` (ej. trimestre 3 de 2025). Si no se indican,
+    se usa el periodo que contiene a hoy.
+
+    actual    : del primer día del periodo hasta su último día (o hasta hoy, si está en curso).
+    anterior  : el periodo anterior del mismo tipo. Si el actual está en curso, se corta en el
+                mismo punto para comparar parejo (del 1 al 10 de nov. vs. del 1 al 10 de oct.).
     tramos    : las barras de la gráfica (semanas si es un mes; meses si es más largo).
     """
     tipo: TipoPeriodo
@@ -47,18 +54,39 @@ class Periodo:
     anterior_desde: date
     anterior_hasta: date
     tramos: tuple[Tramo, ...]
+    anio: int = 0
+    numero: int = 1
+    completo: bool = True  # False si es el periodo en curso (va hasta hoy)
+
+    @property
+    def unidad_tramo(self) -> str:
+        """Qué representa cada barra de las gráficas (para el eje X)."""
+        return "Semana" if self.tipo == "mes" else "Mes"
 
     @staticmethod
-    def calcular(tipo: TipoPeriodo, hoy: date | None = None) -> "Periodo":
+    def calcular(tipo: TipoPeriodo, hoy: date | None = None,
+                 anio: int | None = None, numero: int | None = None) -> "Periodo":
         hoy = hoy or date.today()
         n = _DURACION_MESES[tipo]
+        if anio is None:
+            anio = hoy.year
+        if numero is None:
+            # El que contiene a hoy (o el último, si se pidió un año anterior)
+            numero = (hoy.month - 1) // n + 1 if anio == hoy.year else CANTIDAD_EN_ANIO[tipo]
+        if not 1 <= numero <= CANTIDAD_EN_ANIO[tipo]:
+            raise ValueError(f"Para '{tipo}' el número debe estar entre 1 y {CANTIDAD_EN_ANIO[tipo]}.")
+
         # Mes de inicio del periodo: mes 1, 4, 7, 10 (trimestre); 1, 7 (semestre); 1 (año)
-        mes_inicio = ((hoy.month - 1) // n) * n + 1
-        desde = date(hoy.year, mes_inicio, 1)
+        mes_inicio = (numero - 1) * n + 1
+        desde = date(anio, mes_inicio, 1)
+        if desde > hoy:
+            raise ValueError("Ese periodo todavía no ha empezado.")
         fin_periodo = _sumar_meses(desde, n) - timedelta(days=1)
+        completo = fin_periodo < hoy
+        hasta = fin_periodo if completo else hoy
         anterior_desde = _sumar_meses(desde, -n)
         anterior_fin = desde - timedelta(days=1)
-        anterior_hasta = _mismo_dia(anterior_desde, (hoy - desde).days, anterior_fin)
+        anterior_hasta = anterior_fin if completo else _mismo_dia(anterior_desde, (hoy - desde).days, anterior_fin)
 
         if tipo == "mes":
             etiqueta = f"{MESES_LARGOS[desde.month - 1]} {desde.year}"
@@ -80,5 +108,7 @@ class Periodo:
                 tramos.append(Tramo(MESES[ini.month - 1], ini,
                                     date(ini.year, ini.month, monthrange(ini.year, ini.month)[1])))
 
-        return Periodo(tipo, etiqueta, desde, hoy, fin_periodo, anterior_desde, anterior_hasta,
-                       tuple(tramos))
+        # Si el periodo está en curso, las gráficas llegan hasta hoy (sin barras de meses futuros)
+        tramos = [t for t in tramos if t.desde <= hasta]
+        return Periodo(tipo, etiqueta, desde, hasta, fin_periodo, anterior_desde, anterior_hasta,
+                       tuple(tramos), anio, numero, completo)
