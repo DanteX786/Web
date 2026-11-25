@@ -23,6 +23,10 @@ class Produccion:
     ficha_tecnica_nombre: str
     # Prendas completas: las que ya pasaron por todos los procesos asignados de su talla
     prendas_terminadas: int = 0
+    total_defectuoso: int = 0         # piezas reportadas como defectuosas
+    total_pendiente: int = 0          # unidades asignadas que faltan por reportar
+    defectuosas_disponibles: int = 0  # defectuosas que todavía se pueden reprocesar
+    reproceso_activo: bool = False    # tiene un reproceso abierto (Por asignar / En curso)
 
 
 @dataclass
@@ -52,6 +56,8 @@ class Asignacion:
     proceso: str | None
     id_paso: str | None
     paso: str | None                  # ej. "Bordado — logo en el pecho"
+    cantidad_defectuosa: int = 0      # piezas que salieron defectuosas (cuentan como reportadas)
+    id_reproceso: str | None = None   # tarea de un reproceso (None = producción normal)
 
 
 @dataclass
@@ -87,7 +93,10 @@ class LineaRemision:
     cantidad: int
     total_asignado: int
     total_realizado: int
+    total_defectuoso: int = 0
     terminadas: int = 0   # prendas de esta talla que ya pasaron por todos sus procesos
+    recuperadas: int = 0  # de las terminadas, las que salieron de un reproceso
+    defectuosas_disponibles: int = 0   # defectuosas que todavía se pueden reprocesar
 
 
 @dataclass
@@ -96,6 +105,8 @@ class PasoProduccion:
 
     El mismo proceso puede ir varias veces con distinta descripción
     (ej. Bordado — logo en el pecho / Bordado — nombre en la manga).
+    veces = cuántas veces se hace el proceso a cada prenda: el tope del paso en una
+    talla es prendas × veces (la pieza no abre cupo nuevo).
     """
     id_paso: str
     id_proceso: str
@@ -103,6 +114,8 @@ class PasoProduccion:
     descripcion: str | None
     paso: str                                          # nombre que se muestra
     maquinas: list[str] = field(default_factory=list)  # máquinas que sirven (vacío = cualquiera)
+    id_reproceso: str | None = None                    # paso de un reproceso (None = producción normal)
+    veces: int = 1                                     # veces que se hace a cada prenda
 
 
 @dataclass
@@ -111,6 +124,7 @@ class NuevoPaso:
     id_proceso: str
     descripcion: str | None = None
     id_paso: str | None = None
+    veces: int = 1
 
 
 @dataclass
@@ -121,8 +135,87 @@ class FaltantePaso:
     talla: str
     id_paso: str
     paso: str
-    cantidad: int
+    cantidad: int                     # lo que se exige en el paso (sin las perdidas en otros pasos)
     asignado: int
+    defectuosas_otros_pasos: int = 0
+
+
+@dataclass
+class PiezaDefectuosa:
+    """Reporte diario con piezas defectuosas (para el control de la producción y la entrega)."""
+    id_registro_diario: str
+    fecha: datetime
+    id_produccion: str
+    id_remision: str
+    id_detalle_de_produccion: str
+    empleado: str
+    prenda: str
+    talla: str
+    paso: str | None
+    pieza: str
+    cantidad_defectuosa: int
+    motivo_defecto: str | None
+
+
+@dataclass
+class ReprocesoTalla:
+    """Piezas de una talla que entran al reproceso."""
+    id_detalle_de_remision: str
+    nombre_de_la_pieza: str
+    talla: str
+    cantidad: int
+
+
+@dataclass
+class InsumoReproceso:
+    """Insumo que el cliente envió para el reproceso (queda en la remisión, marcado)."""
+    id_insumo_enviado: str
+    nombre: str
+    cantidad: int
+    cantidad_disponible: int
+    unidad: str
+
+
+@dataclass
+class Reproceso:
+    """Reproceso de piezas defectuosas dentro de la misma producción.
+
+    situacion: Por asignar (sin tareas) | En curso | Terminado | Cancelado.
+    """
+    id_reproceso: str
+    id_produccion: str
+    numero: int
+    estado: str                       # Abierto | Cancelado (lo guardado)
+    situacion: str
+    observacion: str | None
+    creado_por: str | None
+    creado_por_nombre: str | None
+    fecha_creacion: datetime
+    fecha_estado: datetime
+    total_piezas: int
+    tareas: int
+    pendiente: int
+    sin_asignar: int
+    tallas: list[ReprocesoTalla] = field(default_factory=list)
+    pasos: list[PasoProduccion] = field(default_factory=list)
+    faltantes: list[FaltantePaso] = field(default_factory=list)
+    insumos: list[InsumoReproceso] = field(default_factory=list)
+
+
+@dataclass
+class NuevoInsumoReproceso:
+    nombre: str
+    cantidad: int
+    unidad: str
+
+
+@dataclass
+class NuevoReproceso:
+    """Lo que se elige al reprocesar: piezas por talla, procesos e insumos (opcionales)."""
+    tallas: dict[str, int]                         # id_detalle_de_remision -> piezas
+    pasos: list[NuevoPaso]
+    insumos: list[NuevoInsumoReproceso] = field(default_factory=list)
+    observacion: str | None = None
 
 
 @dataclass
@@ -146,8 +239,10 @@ class EmpleadoDisponibilidad:
     ocupado_en_tarea: str | None
     ocupado_en_produccion: str | None
     unidades_pendientes: int | None
-    disponible: bool                  # sin tareas pendientes Y presente hoy
-    presente_hoy: bool = True
+    disponible: bool                  # sin tareas pendientes Y en el taller ahora
+    presente_hoy: bool = True         # vino hoy (tiene entrada registrada)
+    en_taller: bool = True            # está en el taller ahora (entrada sin salida)
+    estado_asistencia: str = "Presente"   # No presente | Presente | Permiso | Incapacidad | Vacaciones
 
 
 @dataclass

@@ -34,21 +34,33 @@ def get_auth_service(db: Session = Depends(get_db)) -> AuthService:
     return AuthService(AuthRepository(db), _hasher, _tokens, _correo, _verificador, _config)
 
 
-def get_usuario_actual(credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer),
+# Con contraseña temporal solo se puede crear la contraseña propia (o salir)
+RUTAS_CON_CONTRASENA_TEMPORAL = {"/api/auth/me", "/api/auth/primer-cambio", "/api/auth/cerrar-sesiones"}
+
+
+def get_usuario_actual(request: Request,
+                       credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer),
                        service: AuthService = Depends(get_auth_service)) -> Usuario:
     """Usuario con sesión (empleado o cliente), a partir del token JWT."""
     if credenciales is None:
         raise TokenInvalidoError("Debes iniciar sesión.")
-    return service.usuario_desde_token(credenciales.credentials)
+    usuario = service.usuario_desde_token(credenciales.credentials)
+    if usuario.debe_cambiar_contrasena and request.url.path not in RUTAS_CON_CONTRASENA_TEMPORAL:
+        raise ForbiddenError("Debes crear tu propia contraseña antes de usar el sistema.")
+    return usuario
 
 
-def get_usuario_opcional(credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer),
+def get_usuario_opcional(request: Request,
+                         credenciales: HTTPAuthorizationCredentials | None = Depends(_bearer),
                          service: AuthService = Depends(get_auth_service)) -> Usuario | None:
     """Igual que get_usuario_actual, pero si no hay token devuelve None.
     Si llega un token inválido o de una sesión cerrada, sí responde 401."""
     if credenciales is None:
         return None
-    return service.usuario_desde_token(credenciales.credentials)
+    usuario = service.usuario_desde_token(credenciales.credentials)
+    if usuario.debe_cambiar_contrasena and request.url.path not in RUTAS_CON_CONTRASENA_TEMPORAL:
+        raise ForbiddenError("Debes crear tu propia contraseña antes de usar el sistema.")
+    return usuario
 
 
 def get_id_empleado_actual(usuario: Usuario = Depends(get_usuario_actual)) -> str:

@@ -42,20 +42,25 @@ class RegistroDiarioRepository(IRegistroDiarioRepository):
         ).mappings().first()
         return RegistroDiario(**fila) if fila else None
 
-    def crear(self, id_detalle_de_produccion: str, cantidad: int) -> str:
+    def crear(self, id_detalle_de_produccion: str, cantidad: int,
+              cantidad_defectuosa: int = 0, motivo_defecto: str | None = None) -> str:
         # La fecha/hora la pone la base de datos (CA_56_02)
-        m = RegistroDiarioModel(id_detalle_de_produccion=id_detalle_de_produccion, cantidad=cantidad)
+        m = RegistroDiarioModel(id_detalle_de_produccion=id_detalle_de_produccion, cantidad=cantidad,
+                                cantidad_defectuosa=cantidad_defectuosa, motivo_defecto=motivo_defecto)
         self.db.add(m)
         self.db.flush()
         nuevo_id = m.id_registro_diario
         self.db.commit()
         return nuevo_id
 
-    def actualizar_cantidad(self, id_registro: str, cantidad: int) -> None:
-        # El trigger de la BD valida que la producción siga En proceso
-        # y que el total reportado no supere lo asignado.
+    def actualizar_cantidad(self, id_registro: str, cantidad: int,
+                            cantidad_defectuosa: int = 0, motivo_defecto: str | None = None) -> None:
+        # El trigger de la BD valida que la producción siga En producción
+        # y que lo reportado (terminadas + defectuosas) no supere lo asignado.
         m = self.db.get(RegistroDiarioModel, id_registro)
         m.cantidad = cantidad
+        m.cantidad_defectuosa = cantidad_defectuosa
+        m.motivo_defecto = motivo_defecto
         self.db.commit()
 
     def eliminar(self, id_registro: str) -> None:

@@ -36,11 +36,12 @@ def obtener(id_registro: str, service: RegistroDiarioService = Depends(get_regis
 
 
 @router.post("", response_model=RegistroDiarioRespuesta, status_code=status.HTTP_201_CREATED,
-             summary="Registrar avance del día (HU_56); fecha y hora automáticas")
+             summary="Registrar avance (terminadas y defectuosas); fecha y hora automáticas")
 def registrar(datos: RegistroDiarioCrear,
               id_empleado: str = Depends(get_id_empleado_actual),
               service: RegistroDiarioService = Depends(get_registro_diario_service)):
-    return service.registrar(datos.id_detalle_de_produccion, datos.cantidad, id_empleado)
+    return service.registrar(datos.id_detalle_de_produccion, datos.cantidad, id_empleado,
+                             datos.cantidad_defectuosa, datos.motivo_defecto)
 
 
 @router.patch("/{id_registro}", response_model=RegistroDiarioRespuesta,
@@ -48,7 +49,8 @@ def registrar(datos: RegistroDiarioCrear,
 def corregir_cantidad(id_registro: str, datos: RegistroDiarioCantidad,
                       id_empleado: str = Depends(get_id_empleado_actual),
                       service: RegistroDiarioService = Depends(get_registro_diario_service)):
-    return service.corregir_cantidad(id_registro, datos.cantidad, id_empleado)
+    return service.corregir_cantidad(id_registro, datos.cantidad, id_empleado,
+                                     datos.cantidad_defectuosa, datos.motivo_defecto)
 
 
 @router.delete("/{id_registro}", status_code=status.HTTP_204_NO_CONTENT,

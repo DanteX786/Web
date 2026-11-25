@@ -17,3 +17,4 @@ class Empleado:
     id_rol: str | None
     rol: str | None  # descripción del rol (viene de un JOIN con roles)
     estado: str
+    debe_cambiar_contrasena: bool = False  # todavía no ha creado su contraseña (tiene la temporal)

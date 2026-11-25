@@ -11,7 +11,7 @@ COL_CONTRASENA = 'contrasena'
 # Nunca se selecciona la contraseña. El rol se trae con un JOIN para mostrar su descripción.
 SELECT_EMPLEADOS = """
     SELECT e.id_empleados AS id, e.nombre, e.identificacion, e.correo, e.telefono,
-           e.direccion, e.id_rol, r.descripcion_rol AS rol, e.estado
+           e.direccion, e.id_rol, r.descripcion_rol AS rol, e.estado, e.debe_cambiar_contrasena
       FROM empleados e
       LEFT JOIN roles r ON r.id_rol = e.id_rol
 """
@@ -26,6 +26,7 @@ CAMPOS_EDITABLES = {
     "id_rol": "id_rol",
     "estado": "estado",
     "contrasena_hash": COL_CONTRASENA,
+    "debe_cambiar_contrasena": "debe_cambiar_contrasena",
 }
 
 
@@ -73,11 +74,20 @@ class EmpleadoRepository(IEmpleadoRepository):
             {"id": id_rol},
         ).scalar())
 
-    def tiene_produccion(self, id_empleado: str) -> bool:
-        return bool(self.db.execute(
-            text("SELECT EXISTS (SELECT 1 FROM tb_detalle_de_produccion WHERE id_empleado = :id)"),
-            {"id": id_empleado},
-        ).scalar())
+    def descripcion_rol(self, id_rol: str) -> str | None:
+        return self.db.execute(
+            text("SELECT descripcion_rol FROM roles WHERE id_rol = :id"), {"id": id_rol}
+        ).scalar()
+
+    def asignar_contrasena_temporal(self, id_empleado: str, contrasena_hash: str) -> None:
+        self.db.execute(
+            text(f"""UPDATE empleados
+                        SET {COL_CONTRASENA} = :hash, debe_cambiar_contrasena = TRUE,
+                            version_token = version_token + 1
+                      WHERE id_empleados = :id"""),
+            {"hash": contrasena_hash, "id": id_empleado},
+        )
+        self.db.commit()
 
     def crear(self, datos: dict) -> Empleado:
         campos = [c for c in CAMPOS_EDITABLES if c in datos]
@@ -105,11 +115,3 @@ class EmpleadoRepository(IEmpleadoRepository):
         fila = self.db.execute(text(sql), params).first()
         self.db.commit()
         return self.obtener(id_empleado) if fila else None
-
-    def eliminar(self, id_empleado: str) -> bool:
-        fila = self.db.execute(
-            text("DELETE FROM empleados WHERE id_empleados = :id RETURNING id_empleados"),
-            {"id": id_empleado},
-        ).first()
-        self.db.commit()
-        return fila is not None

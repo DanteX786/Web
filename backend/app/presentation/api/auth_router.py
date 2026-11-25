@@ -7,7 +7,7 @@ from app.presentation.dependencies.auth_dependencies import get_auth_service, ge
 from app.presentation.schemas.auth_schema import (
     CambiarContrasenaEntrada, CodigoEnviadoRespuesta, ContrasenaActualEntrada,
     ContrasenaActualRespuesta, CorreoEntrada, LoginEntrada,
-    MensajeRespuesta, PerfilEntrada, RegistroClienteEntrada, RestablecerEntrada, SesionRespuesta,
+    MensajeRespuesta, PerfilEntrada, PrimerCambioEntrada, RegistroClienteEntrada, RestablecerEntrada, SesionRespuesta,
     TokenRestablecerRespuesta, UsuarioRespuesta, VerificarCodigoEntrada,
 )
 
@@ -98,12 +98,21 @@ def verificar_contrasena_actual(datos: ContrasenaActualEntrada,
 
 
 @router.post("/cambiar-contrasena", response_model=MensajeRespuesta,
-             summary="Cambiar contraseña desde Mi perfil (solo clientes); cierra TODAS las sesiones")
+             summary="Cambiar contraseña desde Mi perfil (clientes y empleados); cierra TODAS las sesiones")
 def cambiar_contrasena(datos: CambiarContrasenaEntrada,
                        usuario: Usuario = Depends(get_usuario_actual),
                        service: AuthService = Depends(get_auth_service)):
     service.cambiar_contrasena(usuario, datos.contrasena_actual, datos.nueva_contrasena, datos.confirmar_contrasena)
     return {"mensaje": MENSAJE_SESIONES_CERRADAS}
+
+
+@router.post("/primer-cambio", response_model=SesionRespuesta,
+             summary="Empleado con contraseña temporal: crea su propia contraseña (devuelve una sesión nueva)")
+def primer_cambio(datos: PrimerCambioEntrada,
+                  usuario: Usuario = Depends(get_usuario_actual),
+                  service: AuthService = Depends(get_auth_service)):
+    return _sesion(service.primer_cambio(usuario, datos.contrasena_actual, datos.nueva_contrasena,
+                                         datos.confirmar_contrasena))
 
 
 @router.post("/cerrar-sesiones", response_model=MensajeRespuesta, summary="Cerrar sesión en todos los dispositivos")

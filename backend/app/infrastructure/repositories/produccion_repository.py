@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities.produccion import (
     Asignacion, EmpleadoDisponibilidad, FaltantePaso, LineaRemision, MaquinaDisponibilidad, NuevaAsignacion,
-    NuevoPaso, PasoProduccion, Produccion, RemisionDisponible, SeguimientoProduccion,
+    InsumoReproceso, NuevoPaso, NuevoReproceso, PasoProduccion, PiezaDefectuosa, Produccion, RemisionDisponible,
+    Reproceso, ReprocesoTalla, SeguimientoProduccion,
 )
 from app.domain.interfaces.produccion_repository import IProduccionRepository
 from app.infrastructure.database.produccion_models import DetalleProduccionModel, ProduccionModel
@@ -18,39 +19,13 @@ _SQL_ASIGNACIONES = """
            d.id_detalle_de_remision, a.prenda, a.talla,
            d.id_insumos, d.id_insumos_enviados_x_cliente, d.cantidad_insumo,
            a.cantidad_asignada, a.cantidad_realizada, a.cantidad_pendiente, a.fecha_asignada,
-           a.id_proceso, a.proceso, a.id_paso, a.paso
+           a.id_proceso, a.proceso, a.id_paso, a.paso, a.cantidad_defectuosa, a.id_reproceso
       FROM vw_asignaciones a
       JOIN tb_detalle_de_produccion d USING (id_detalle_de_produccion)
 """
 
 
-# Prendas terminadas por talla: una prenda está completa cuando pasó por TODOS los
-# pasos de la producción. Se toma el menor avance entre esos pasos (un paso sin
-# tareas cuenta 0) sin pasar de las unidades pedidas de la talla.
-_SQL_TERMINADAS_POR_TALLA = """
-    WITH requeridos AS (      -- cada talla x cada paso de la producción
-        SELECT p.id_produccion, dr.id_detalle_de_remision, dr.cantidad, ps.id_paso
-          FROM tb_produccion p
-          JOIN tb_detalle_rem dr ON dr.id_remision = p.id_remision
-          JOIN tb_pasos_produccion ps ON ps.id_produccion = p.id_produccion
-    ), por_pieza AS (         -- lo hecho en cada paso y pieza de la talla
-        SELECT d.id_produccion, d.id_detalle_de_remision, d.id_paso, d.id_tipo_pieza,
-               sum(a.cantidad_realizada) AS realizado
-          FROM tb_detalle_de_produccion d
-          JOIN vw_asignaciones a USING (id_detalle_de_produccion)
-         WHERE d.id_paso IS NOT NULL
-         GROUP BY d.id_produccion, d.id_detalle_de_remision, d.id_paso, d.id_tipo_pieza
-    ), por_paso AS (          -- un paso va tan avanzado como su pieza más atrasada
-        SELECT id_produccion, id_detalle_de_remision, id_paso, min(realizado) AS realizado
-          FROM por_pieza
-         GROUP BY id_produccion, id_detalle_de_remision, id_paso
-    )
-    SELECT r.id_produccion, r.id_detalle_de_remision,
-           LEAST(min(COALESCE(pp.realizado, 0)), r.cantidad)::int AS terminadas
-      FROM requeridos r
-      LEFT JOIN por_paso pp USING (id_produccion, id_detalle_de_remision, id_paso)
-     GROUP BY r.id_produccion, r.id_detalle_de_remision, r.cantidad
-"""
+# Prendas terminadas por talla (producción normal + recuperadas en reprocesos): vista vw_terminadas_por_talla
 
 
 class ProduccionRepository(IProduccionRepository):
@@ -66,9 +41,7 @@ class ProduccionRepository(IProduccionRepository):
             params["estado"] = estado
         sql += " ORDER BY fecha_estado DESC, id_produccion DESC"
         producciones = [Produccion(**fila) for fila in self.db.execute(text(sql), params).mappings()]
-        terminadas = self._prendas_terminadas()
-        for p in producciones:
-            p.prendas_terminadas = terminadas.get(p.id_produccion, 0)
+        self._completar(producciones)
         return producciones
 
     def obtener(self, id_produccion: str) -> Produccion | None:
@@ -78,18 +51,27 @@ class ProduccionRepository(IProduccionRepository):
         if not fila:
             return None
         produccion = Produccion(**fila)
-        produccion.prendas_terminadas = self._prendas_terminadas(id_produccion).get(id_produccion, 0)
+        self._completar([produccion], id_produccion)
         return produccion
 
-    def _prendas_terminadas(self, id_produccion: str | None = None) -> dict[str, int]:
-        """Total de prendas completas por producción (suma de sus tallas)."""
-        sql = f"SELECT id_produccion, sum(terminadas)::int AS total FROM ({_SQL_TERMINADAS_POR_TALLA}) t"
-        params = {}
-        if id_produccion:
-            sql += " WHERE id_produccion = :id"
-            params["id"] = id_produccion
-        sql += " GROUP BY id_produccion"
-        return {f["id_produccion"]: f["total"] for f in self.db.execute(text(sql), params).mappings()}
+    def _completar(self, producciones: list[Produccion], id_produccion: str | None = None) -> None:
+        """Prendas terminadas, defectuosas por reprocesar y si tiene un reproceso abierto."""
+        filtro, params = ("WHERE id_produccion = :id", {"id": id_produccion}) if id_produccion else ("", {})
+        terminadas = {f["id_produccion"]: f["total"] for f in self.db.execute(text(
+            f"SELECT id_produccion, sum(terminadas)::int AS total FROM vw_terminadas_por_talla {filtro} GROUP BY id_produccion"
+        ), params).mappings()}
+        disponibles = {f["id_produccion"]: f["total"] for f in self.db.execute(text(
+            f"SELECT id_produccion, sum(GREATEST(defectuosas - en_reproceso, 0))::int AS total "
+            f"FROM vw_defectuosas_por_talla {filtro} GROUP BY id_produccion"
+        ), params).mappings()}
+        activos = {f["id_produccion"] for f in self.db.execute(text(
+            f"SELECT id_produccion FROM vw_reprocesos WHERE situacion IN ('Por asignar', 'En curso') "
+            f"{'AND id_produccion = :id' if id_produccion else ''}"
+        ), params).mappings()}
+        for p in producciones:
+            p.prendas_terminadas = terminadas.get(p.id_produccion, 0)
+            p.defectuosas_disponibles = disponibles.get(p.id_produccion, 0)
+            p.reproceso_activo = p.id_produccion in activos
 
     def remisiones_disponibles(self) -> list[RemisionDisponible]:
         sql = """
@@ -113,7 +95,8 @@ class ProduccionRepository(IProduccionRepository):
         sql = """
             SELECT dr.id_detalle_de_remision, dr.nombre_de_la_pieza, dr.talla, dr.cantidad,
                    COALESCE(sum(a.cantidad_asignada), 0)::int AS total_asignado,
-                   COALESCE(sum(a.cantidad_realizada), 0)::int AS total_realizado
+                   COALESCE(sum(a.cantidad_realizada), 0)::int AS total_realizado,
+                   COALESCE(sum(a.cantidad_defectuosa), 0)::int AS total_defectuoso
               FROM tb_produccion p
               JOIN tb_detalle_rem dr ON dr.id_remision = p.id_remision
               LEFT JOIN tb_detalle_de_produccion d
@@ -126,13 +109,22 @@ class ProduccionRepository(IProduccionRepository):
         """
         lineas = [LineaRemision(**f) for f in self.db.execute(text(sql), {"id": id_produccion}).mappings()]
         terminadas = {
-            f["id_detalle_de_remision"]: f["terminadas"]
+            f["id_detalle_de_remision"]: f
             for f in self.db.execute(
-                text(f"SELECT * FROM ({_SQL_TERMINADAS_POR_TALLA}) t WHERE id_produccion = :id"), {"id": id_produccion}
+                text("SELECT * FROM vw_terminadas_por_talla WHERE id_produccion = :id"), {"id": id_produccion}
+            ).mappings()
+        }
+        disponibles = {
+            f["id_detalle_de_remision"]: max(f["defectuosas"] - f["en_reproceso"], 0)
+            for f in self.db.execute(
+                text("SELECT * FROM vw_defectuosas_por_talla WHERE id_produccion = :id"), {"id": id_produccion}
             ).mappings()
         }
         for linea in lineas:
-            linea.terminadas = terminadas.get(linea.id_detalle_de_remision, 0)
+            t = terminadas.get(linea.id_detalle_de_remision)
+            linea.terminadas = t["terminadas"] if t else 0
+            linea.recuperadas = t["recuperadas"] if t else 0
+            linea.defectuosas_disponibles = disponibles.get(linea.id_detalle_de_remision, 0)
         return lineas
 
     def crear(self, id_remision: str, id_responsable: str) -> str:
@@ -165,40 +157,50 @@ class ProduccionRepository(IProduccionRepository):
         """
         return [SeguimientoProduccion(**f) for f in self.db.execute(text(sql), {"id": id_produccion}).mappings()]
 
-    def pasos(self, id_produccion: str) -> list[PasoProduccion]:
-        sql = """
-            SELECT ps.id_paso, ps.id_proceso, ps.proceso, ps.descripcion, ps.paso,
+    def pasos(self, id_produccion: str, id_reproceso: str | None = None,
+              todos: bool = False) -> list[PasoProduccion]:
+        """Pasos de la producción normal (por defecto), de un reproceso, o todos (todos=True)."""
+        if todos:
+            filtro, params = "", {"id": id_produccion}
+        elif id_reproceso:
+            filtro, params = "AND ps.id_reproceso = :rep", {"id": id_produccion, "rep": id_reproceso}
+        else:
+            filtro, params = "AND ps.id_reproceso IS NULL", {"id": id_produccion}
+        sql = f"""
+            SELECT ps.id_paso, ps.id_proceso, ps.proceso, ps.descripcion, ps.paso, ps.id_reproceso, ps.veces,
                    COALESCE(array_agg(pm.id_maquina ORDER BY pm.id_maquina)
-                            FILTER (WHERE pm.id_maquina IS NOT NULL), '{}') AS maquinas
+                            FILTER (WHERE pm.id_maquina IS NOT NULL), '{{}}') AS maquinas
               FROM vw_pasos_produccion ps
               LEFT JOIN tb_proceso_x_maquina pm ON pm.id_proceso = ps.id_proceso
-             WHERE ps.id_produccion = :id
-             GROUP BY ps.id_paso, ps.id_proceso, ps.proceso, ps.descripcion, ps.paso
+             WHERE ps.id_produccion = :id {filtro}
+             GROUP BY ps.id_paso, ps.id_proceso, ps.proceso, ps.descripcion, ps.paso, ps.id_reproceso, ps.veces
              ORDER BY ps.id_paso
         """
         return [PasoProduccion(**{**f, "maquinas": list(f["maquinas"])})
-                for f in self.db.execute(text(sql), {"id": id_produccion}).mappings()]
+                for f in self.db.execute(text(sql), params).mappings()]
 
     def guardar_pasos(self, id_produccion: str, pasos: list[NuevoPaso]) -> None:
         # Todo en una transacción: si un trigger rechaza (ej. quitar un paso con tareas), no cambia nada
         try:
             conservar = [p.id_paso for p in pasos if p.id_paso]
             self.db.execute(
-                text("DELETE FROM tb_pasos_produccion WHERE id_produccion = :id AND NOT (id_paso = ANY(:ids))"),
+                text("DELETE FROM tb_pasos_produccion "
+                     "WHERE id_produccion = :id AND id_reproceso IS NULL AND NOT (id_paso = ANY(:ids))"),
                 {"id": id_produccion, "ids": conservar},
             )
             for paso in pasos:
                 if paso.id_paso:
                     self.db.execute(
-                        text("UPDATE tb_pasos_produccion SET descripcion = :desc "
+                        text("UPDATE tb_pasos_produccion SET descripcion = :desc, veces = :veces "
                              "WHERE id_paso = :paso AND id_produccion = :id"),
-                        {"desc": paso.descripcion, "paso": paso.id_paso, "id": id_produccion},
+                        {"desc": paso.descripcion, "veces": paso.veces, "paso": paso.id_paso, "id": id_produccion},
                     )
                 else:
                     self.db.execute(
-                        text("INSERT INTO tb_pasos_produccion (id_produccion, id_proceso, descripcion) "
-                             "VALUES (:id, :proceso, :desc)"),
-                        {"id": id_produccion, "proceso": paso.id_proceso, "desc": paso.descripcion},
+                        text("INSERT INTO tb_pasos_produccion (id_produccion, id_proceso, descripcion, veces) "
+                             "VALUES (:id, :proceso, :desc, :veces)"),
+                        {"id": id_produccion, "proceso": paso.id_proceso, "desc": paso.descripcion,
+                         "veces": paso.veces},
                     )
             self.db.commit()
         except Exception:
@@ -207,12 +209,100 @@ class ProduccionRepository(IProduccionRepository):
 
     def faltantes(self, id_produccion: str) -> list[FaltantePaso]:
         sql = """
-            SELECT id_detalle_de_remision, nombre_de_la_pieza, talla, id_paso, paso, cantidad, asignado
+            SELECT id_detalle_de_remision, nombre_de_la_pieza, talla, id_paso, paso, cantidad, asignado,
+                   defectuosas_otros_pasos
               FROM vw_produccion_faltantes
              WHERE id_produccion = :id
              ORDER BY nombre_de_la_pieza, id_detalle_de_remision, id_paso
         """
         return [FaltantePaso(**f) for f in self.db.execute(text(sql), {"id": id_produccion}).mappings()]
+
+    def defectuosas(self, id_produccion: str | None = None,
+                    id_remision: str | None = None) -> list[PiezaDefectuosa]:
+        condiciones, params = ["cantidad_defectuosa > 0"], {}
+        if id_produccion:
+            condiciones.append("id_produccion = :id_produccion")
+            params["id_produccion"] = id_produccion
+        if id_remision:
+            condiciones.append("id_remision = :id_remision")
+            params["id_remision"] = id_remision
+        sql = f"""
+            SELECT id_registro_diario, fecha, id_produccion, id_remision, id_detalle_de_produccion,
+                   empleado, prenda, talla, paso, pieza, cantidad_defectuosa, motivo_defecto
+              FROM vw_historial_registro_diario
+             WHERE {' AND '.join(condiciones)}
+             ORDER BY fecha DESC, id_registro_diario DESC
+        """
+        return [PiezaDefectuosa(**f) for f in self.db.execute(text(sql), params).mappings()]
+
+    # ------------------------------------------------------------------ Reprocesos
+    def reprocesos(self, id_produccion: str) -> list[Reproceso]:
+        filas = self.db.execute(
+            text("SELECT * FROM vw_reprocesos WHERE id_produccion = :id ORDER BY numero"), {"id": id_produccion}
+        ).mappings().all()
+        lista = [Reproceso(**f) for f in filas]
+        for rep in lista:
+            p = {"rep": rep.id_reproceso}
+            rep.tallas = [ReprocesoTalla(**f) for f in self.db.execute(text("""
+                SELECT rt.id_detalle_de_remision, dr.nombre_de_la_pieza, dr.talla, rt.cantidad
+                  FROM tb_reproceso_talla rt JOIN tb_detalle_rem dr USING (id_detalle_de_remision)
+                 WHERE rt.id_reproceso = :rep ORDER BY dr.nombre_de_la_pieza, rt.id_detalle_de_remision"""), p).mappings()]
+            rep.pasos = self.pasos(id_produccion, id_reproceso=rep.id_reproceso)
+            rep.faltantes = [FaltantePaso(**f) for f in self.db.execute(text("""
+                SELECT id_detalle_de_remision, nombre_de_la_pieza, talla, id_paso, paso, cantidad, asignado,
+                       defectuosas_otros_pasos
+                  FROM vw_reproceso_faltantes WHERE id_reproceso = :rep
+                 ORDER BY nombre_de_la_pieza, id_detalle_de_remision, id_paso"""), p).mappings()]
+            rep.insumos = [InsumoReproceso(**f) for f in self.db.execute(text("""
+                SELECT id_insumo_enviado, nombre, cantidad, COALESCE(cantidad_disponible, cantidad) AS cantidad_disponible, unidad
+                  FROM tb_insumos_enviados_x_cliente WHERE id_reproceso = :rep ORDER BY id_insumo_enviado"""), p).mappings()]
+        return lista
+
+    def crear_reproceso(self, id_produccion: str, datos: NuevoReproceso, id_responsable: str) -> str:
+        # Todo en una transacción: si un trigger rechaza algo (ej. más piezas que las defectuosas), no queda nada
+        try:
+            id_rep = self.db.execute(
+                text("INSERT INTO tb_reproceso (id_produccion, observacion, creado_por) "
+                     "VALUES (:id, :obs, :resp) RETURNING id_reproceso"),
+                {"id": id_produccion, "obs": datos.observacion, "resp": id_responsable},
+            ).scalar()
+            for id_detalle, cantidad in datos.tallas.items():
+                self.db.execute(
+                    text("INSERT INTO tb_reproceso_talla (id_reproceso, id_detalle_de_remision, cantidad) "
+                         "VALUES (:rep, :det, :cant)"),
+                    {"rep": id_rep, "det": id_detalle, "cant": cantidad},
+                )
+            for paso in datos.pasos:
+                self.db.execute(
+                    text("INSERT INTO tb_pasos_produccion (id_produccion, id_proceso, descripcion, id_reproceso, veces) "
+                         "VALUES (:id, :proceso, :desc, :rep, :veces)"),
+                    {"id": id_produccion, "proceso": paso.id_proceso, "desc": paso.descripcion, "rep": id_rep,
+                     "veces": paso.veces},
+                )
+            for insumo in datos.insumos:
+                self.db.execute(
+                    text("""INSERT INTO tb_insumos_enviados_x_cliente (id_remision, nombre, cantidad, unidad, id_reproceso)
+                            SELECT id_remision, :nombre, :cant, :unidad, :rep FROM tb_produccion WHERE id_produccion = :id"""),
+                    {"id": id_produccion, "nombre": insumo.nombre, "cant": insumo.cantidad,
+                     "unidad": insumo.unidad, "rep": id_rep},
+                )
+            self.db.commit()
+            return id_rep
+        except Exception:
+            self.db.rollback()
+            raise
+
+    def reproceso_de(self, id_reproceso: str) -> tuple[str, str] | None:
+        """(id_produccion, estado) del reproceso."""
+        fila = self.db.execute(
+            text("SELECT id_produccion, estado FROM tb_reproceso WHERE id_reproceso = :id"), {"id": id_reproceso}
+        ).first()
+        return (fila[0], fila[1]) if fila else None
+
+    def cancelar_reproceso(self, id_reproceso: str) -> None:
+        # El trigger valida que no tenga tareas y quita sus pasos e insumos sin usar
+        self.db.execute(text("UPDATE tb_reproceso SET estado = 'Cancelado' WHERE id_reproceso = :id"), {"id": id_reproceso})
+        self.db.commit()
 
     def maquinas(self) -> list[MaquinaDisponibilidad]:
         sql = "SELECT * FROM vw_maquinas_disponibilidad WHERE estado = 'Activo' ORDER BY nombre"

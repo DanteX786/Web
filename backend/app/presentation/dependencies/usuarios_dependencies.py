@@ -8,6 +8,7 @@ from app.infrastructure.database.database import get_db
 from app.infrastructure.repositories.cliente_repository import ClienteRepository
 from app.infrastructure.repositories.empleado_repository import EmpleadoRepository
 from app.infrastructure.repositories.rol_repository import RolRepository
+from app.presentation.dependencies.auth_dependencies import _correo, _verificador
 
 
 def get_rol_service(db: Session = Depends(get_db)) -> RolService:
@@ -15,7 +16,7 @@ def get_rol_service(db: Session = Depends(get_db)) -> RolService:
 
 
 def get_empleado_service(db: Session = Depends(get_db)) -> EmpleadoService:
-    return EmpleadoService(EmpleadoRepository(db))
+    return EmpleadoService(EmpleadoRepository(db), _correo, _verificador)
 
 
 def get_cliente_service(db: Session = Depends(get_db)) -> ClienteService:

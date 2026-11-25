@@ -17,3 +17,7 @@ class RegistroDiario:
     id_produccion: str
     id_remision: str
     proceso: str | None = None   # las tareas antiguas no tienen proceso
+    cantidad_defectuosa: int = 0          # "cantidad" son las terminadas (buenas)
+    motivo_defecto: str | None = None
+    paso: str | None = None
+    id_detalle_de_produccion: str | None = None

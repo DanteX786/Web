@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Search, UploadCloud, Receipt, FileSignature, X, BadgeCheck, Loader2, Info, Lock
+  Search, UploadCloud, Receipt, FileSignature, X, BadgeCheck, Loader2, Info, Lock, AlertTriangle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { mensajeError } from '../../../shared/utils/api';
 import { coincideBusqueda } from '../../../shared/utils/busqueda';
 import { ACEPTA_ARCHIVOS, errorArchivo, urlArchivo } from '../../../shared/utils/archivos';
 import { entregaService, type Entrega } from '../services/entregaService';
+import { produccionService, type PiezaDefectuosa } from '../../produccion/services/produccionService';
 
 const GOLD         = "#C9A227";
 const DANGER       = "#DC3545";
@@ -58,6 +59,18 @@ export const ActionCircleBtn: React.FC<{
 export function RemisionEntregaView({ dark = false }: RemisionEntregaProps) {
   const [modalArchivo, setModalArchivo] = useState<{ url: string; titulo: string } | null>(null);
   const [paraPagar, setParaPagar] = useState<Entrega | null>(null);
+  // Piezas defectuosas que se reportaron en la producción de esta remisión (solo consulta)
+  const [defectuosas, setDefectuosas] = useState<{ entrega: Entrega; lista: PiezaDefectuosa[] | null } | null>(null);
+  const verDefectuosas = async (ent: Entrega) => {
+    setDefectuosas({ entrega: ent, lista: null });
+    try {
+      const lista = await produccionService.piezasDefectuosas({ id_remision: ent.id_remision });
+      setDefectuosas(actual => actual?.entrega.id_entrega === ent.id_entrega ? { entrega: ent, lista } : actual);
+    } catch (error) {
+      toast.error(mensajeError(error));
+      setDefectuosas(null);
+    }
+  };
 
   const bg = dark ? "#121212" : "#F8F9FA";
   const fg = dark ? "#F8F9FA" : "#121212";
@@ -230,6 +243,7 @@ export function RemisionEntregaView({ dark = false }: RemisionEntregaProps) {
                   </td>
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', gap: 8 }}>
+                      <ActionCircleBtn variant="danger" onClick={() => verDefectuosas(ent)} title="Ver piezas defectuosas de la producción"><AlertTriangle size={14} /></ActionCircleBtn>
                       <ActionCircleBtn variant="blue" onClick={() => abrirSelector(ent, 'firma')} disabled={pagada || !!ent.remision_firmada_url} title={ent.remision_firmada_url ? 'La remisión firmada ya se subió (no se puede reemplazar)' : pagada ? 'Ya está pagada' : 'Subir remisión firmada'}><FileSignature size={14} /></ActionCircleBtn>
                       <ActionCircleBtn variant="gold" onClick={() => abrirSelector(ent, 'factura')} disabled={pagada || !!ent.comprobante_pago_url} title={ent.comprobante_pago_url ? 'La factura ya se subió (no se puede reemplazar)' : pagada ? 'Ya está pagada' : 'Subir factura / comprobante de pago'}><Receipt size={14} /></ActionCircleBtn>
                       <ActionCircleBtn variant="success" onClick={() => setParaPagar(ent)} disabled={pagada || !ent.comprobante_pago_url} title={pagada ? 'Ya está pagada' : !ent.comprobante_pago_url ? 'Suba primero la factura' : 'Marcar como pagada'}><BadgeCheck size={14} /></ActionCircleBtn>
@@ -301,6 +315,56 @@ export function RemisionEntregaView({ dark = false }: RemisionEntregaProps) {
             <div style={{ padding: '12px 20px', borderTop: `1px solid ${borderNormal}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: dark ? '#181818' : '#F1F1F1' }}>
               <a href={modalArchivo.url} target="_blank" rel="noreferrer" style={{ color: INFO, fontSize: 13, fontWeight: 700 }}>Abrir en otra pestaña</a>
               <button onClick={() => setModalArchivo(null)} style={{ background: GOLD, color: '#121212', fontWeight: 700, fontSize: 13, border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer' }}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE PIEZAS DEFECTUOSAS (las reporta Producción en el registro diario) */}
+      {defectuosas && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 24 }}>
+          <div style={{ background: cardBg, borderRadius: 16, width: '100%', maxWidth: 820, overflow: 'hidden', border: `1px solid ${borderNormal}`, boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
+            <div style={{ padding: '16px 20px', borderBottom: `1px solid ${borderNormal}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <AlertTriangle size={18} color={DANGER} />
+              <span style={{ fontSize: 15, fontWeight: 700, color: fg }}>Piezas defectuosas · remisión {defectuosas.entrega.id_remision}</span>
+            </div>
+            <div style={{ padding: 20, maxHeight: '60vh', overflowY: 'auto' }}>
+              {defectuosas.lista === null ? (
+                <div style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13 }}><Loader2 size={16} style={{ verticalAlign: 'middle', marginRight: 8 }} />Cargando...</div>
+              ) : defectuosas.lista.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 24, color: subtle, fontSize: 13 }}>En la producción de esta remisión no se reportaron piezas defectuosas.</div>
+              ) : (
+                <>
+                  <div style={{ fontSize: 13, color: fg, marginBottom: 12 }}>
+                    Total: <b style={{ color: DANGER }}>{defectuosas.lista.reduce((s, d) => s + d.cantidad_defectuosa, 0)} piezas defectuosas</b>
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ borderBottom: `2px solid ${GOLD}` }}>
+                        {['FECHA', 'PRENDA / TALLA', 'PROCESO', 'PIEZA', 'EMPLEADO', 'CANTIDAD', 'MOTIVO'].map(h => (
+                          <th key={h} style={{ fontSize: 10, fontWeight: 700, color: GOLD, padding: '8px 10px' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {defectuosas.lista.map(d => (
+                        <tr key={d.id_registro_diario} style={{ borderBottom: `1px solid ${borderNormal}` }}>
+                          <td style={{ padding: '8px 10px', fontSize: 11, color: subtle, whiteSpace: 'nowrap' }}>{new Date(d.fecha).toLocaleString('es-CO')}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 12, color: fg }}>{d.prenda} · {d.talla}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 12, color: fg, fontWeight: 600 }}>{d.paso ?? '—'}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 12, color: fg }}>{d.pieza}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 12, color: fg }}>{d.empleado}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 13, fontWeight: 800, color: DANGER }}>{d.cantidad_defectuosa}</td>
+                          <td style={{ padding: '8px 10px', fontSize: 12, color: d.motivo_defecto ? fg : subtle }}>{d.motivo_defecto ?? 'Sin motivo'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              )}
+            </div>
+            <div style={{ padding: '12px 20px', borderTop: `1px solid ${borderNormal}`, display: 'flex', justifyContent: 'flex-end', background: dark ? '#181818' : '#F1F1F1' }}>
+              <button onClick={() => setDefectuosas(null)} style={{ background: GOLD, color: '#121212', fontWeight: 700, fontSize: 13, border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer' }}>Cerrar</button>
             </div>
           </div>
         </div>

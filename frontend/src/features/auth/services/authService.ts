@@ -37,6 +37,8 @@ export interface Usuario {
   tipo_documento: TipoDocumento | null;
   nombre_contacto?: string | null; // persona a contactar (clientes con NIT)
   tipo_telefono: TipoTelefono | null;
+  /** Empleado con contraseña temporal (la que le llegó al correo): debe crear la suya al entrar. */
+  debe_cambiar_contrasena?: boolean;
   permisos: string[];
 }
 
@@ -111,7 +113,15 @@ export const authService = {
     api.post<{ correcta: boolean }>("/auth/verificar-contrasena-actual", { contrasena_actual })
       .then((r) => r.data.correcta),
 
-  /** Cambia la contraseña (solo clientes) y cierra la sesión en TODOS los dispositivos, incluido este. */
+  /**
+   * Empleado que entró con la contraseña temporal: crea la suya. Se usa el token del login
+   * (todavía no se guarda la sesión) y devuelve una sesión nueva.
+   */
+  primerCambio: (token: string, contrasena_actual: string, nueva_contrasena: string, confirmar_contrasena: string) =>
+    api.post<Sesion>("/auth/primer-cambio", { contrasena_actual, nueva_contrasena, confirmar_contrasena },
+      { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.data),
+
+  /** Cambia la contraseña (clientes y empleados) y cierra la sesión en TODOS los dispositivos, incluido este. */
   cambiarContrasena: (contrasena_actual: string, nueva_contrasena: string, confirmar_contrasena: string) =>
     api.post<{ mensaje: string }>("/auth/cambiar-contrasena", { contrasena_actual, nueva_contrasena, confirmar_contrasena })
       .then((r) => {

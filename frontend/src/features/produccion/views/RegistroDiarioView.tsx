@@ -7,7 +7,7 @@ import { produccionService, type Produccion } from '../services/produccionServic
 import { empleadoService, type Empleado } from '../../usuarios/services/empleadoService';
 import { mensajeError } from '../../../shared/utils/api';
 import {
-  GOLD, FONT,
+  GOLD, DANGER, FONT,
   tema, estiloInput, fechaHora, coincide, useAutoRefresco,
   IdBadge, ActionCircleBtn, TableShell, FilaMensaje, Modal, Field, ModuleHeader, Paginacion, ConfirmDialog,
 } from '../components/ui';
@@ -41,6 +41,8 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
 
   const [editar, setEditar] = useState<RegistroDiario | null>(null);
   const [formCantidad, setFormCantidad] = useState<number | ''>('');
+  const [formDefectuosa, setFormDefectuosa] = useState<number | ''>('');
+  const [formMotivo, setFormMotivo] = useState('');
   const [eliminar, setEliminar] = useState<RegistroDiario | null>(null);
   const [procesando, setProcesando] = useState(false);
 
@@ -79,16 +81,21 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
   const abrirEditar = (r: RegistroDiario) => {
     setEditar(r);
     setFormCantidad(r.cantidad);
+    setFormDefectuosa(r.cantidad_defectuosa ?? 0);
+    setFormMotivo(r.motivo_defecto ?? '');
   };
 
   const guardarEdicion = async () => {
     if (!editar) return;
-    const n = Number(formCantidad);
-    if (!Number.isInteger(n) || n <= 0) { toast.error('Ingresa una cantidad entera mayor a 0.'); return; }
-    if (n === editar.cantidad) { setEditar(null); return; }
+    const n = Number(formCantidad || 0);
+    const d = Number(formDefectuosa || 0);
+    if (!Number.isInteger(n) || !Number.isInteger(d) || n < 0 || d < 0) { toast.error('Las cantidades deben ser números enteros (0 o más).'); return; }
+    if (n + d === 0) { toast.error('Ingresa la cantidad terminada o la defectuosa.'); return; }
+    const motivo = d > 0 ? formMotivo.trim() || null : null;
+    if (n === editar.cantidad && d === (editar.cantidad_defectuosa ?? 0) && motivo === (editar.motivo_defecto ?? null)) { setEditar(null); return; }
     setProcesando(true);
     try {
-      await registroDiarioService.actualizar(editar.id_registro_diario, n);
+      await registroDiarioService.actualizar(editar.id_registro_diario, { cantidad: n, cantidad_defectuosa: d, motivo_defecto: motivo });
       toast.success('Registro diario actualizado.');
       setEditar(null);
       await cargar();
@@ -98,6 +105,12 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
       setProcesando(false);
     }
   };
+
+  // Validación en tiempo real de la corrección
+  const errorEdicion = editar
+    ? (formCantidad === '' || formDefectuosa === '' ? 'Escribe las dos cantidades (puede ser 0).'
+      : Number(formCantidad) + Number(formDefectuosa) <= 0 ? 'Debe haber al menos una unidad terminada o defectuosa.' : null)
+    : null;
 
   // ---------- Eliminar ----------
   const confirmarEliminar = async () => {
@@ -118,7 +131,8 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
   // ---------- Búsqueda (en todas las columnas) y paginación ----------
   const filtrados = useMemo(() => registros.filter((r) => coincide(busqueda, [
     r.id_registro_diario, fechaHora(r.fecha), r.empleado, r.id_remision, r.id_produccion, r.prenda, r.talla,
-    `${r.prenda} · ${r.talla}`, r.proceso, r.pieza, r.maquina, r.cantidad, estadoProduccion(r.id_produccion),
+    `${r.prenda} · ${r.talla}`, r.paso ?? r.proceso, r.pieza, r.maquina, r.cantidad, r.cantidad_defectuosa, r.motivo_defecto,
+    estadoProduccion(r.id_produccion),
   ])), [registros, busqueda, producciones]);
 
   useEffect(() => { setPagina(1); }, [busqueda, fEmpleado, fProduccion, fDesde, fHasta]);
@@ -168,9 +182,9 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
       </div>
 
 
-      <TableShell headers={['ID registro', 'Fecha y hora', 'Empleado', 'Remisión', 'Prenda / talla', 'Proceso', 'Pieza', 'Máquina', 'Cantidad', 'Acciones']} dark={dark}>
+      <TableShell headers={['ID registro', 'Fecha y hora', 'Empleado', 'Remisión', 'Prenda / talla', 'Proceso', 'Pieza', 'Máquina', 'Cantidad terminada', 'Defectuosas', 'Acciones']} dark={dark}>
         {cargando || visibles.length === 0 ? (
-          <FilaMensaje colSpan={10} dark={dark} cargando={cargando}
+          <FilaMensaje colSpan={11} dark={dark} cargando={cargando}
             texto={hayFiltros ? 'No hay reportes con esos filtros.' : 'Todavía no hay reportes diarios.'} />
         ) : visibles.map((r) => (
           <tr key={r.id_registro_diario} style={{ borderBottom: `1px solid ${t.border}` }}>
@@ -179,14 +193,19 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
             <td style={{ padding: '12px 14px', fontSize: 13, fontWeight: 600 }}>{r.empleado}</td>
             <td style={{ padding: '12px 14px' }}><IdBadge id={r.id_remision} /></td>
             <td style={{ padding: '12px 14px', fontSize: 12 }}>{r.prenda} · {r.talla}</td>
-            <td style={{ padding: '12px 14px', fontSize: 12, fontWeight: 600 }}>{r.proceso ?? '—'}</td>
+            <td style={{ padding: '12px 14px', fontSize: 12, fontWeight: 600 }}>{r.paso ?? r.proceso ?? '—'}</td>
             <td style={{ padding: '12px 14px', fontSize: 12 }}>{r.pieza}</td>
             <td style={{ padding: '12px 14px', fontSize: 12, color: t.subtle }}>{r.maquina}</td>
             <td style={{ padding: '12px 14px', fontSize: 14, fontWeight: 800 }}>{r.cantidad}</td>
+            <td style={{ padding: '12px 14px', fontSize: 12 }} title={r.motivo_defecto ?? ''}>
+              {r.cantidad_defectuosa > 0
+                ? <><b style={{ color: DANGER, fontSize: 14 }}>{r.cantidad_defectuosa}</b>{r.motivo_defecto && <div style={{ fontSize: 11, color: t.subtle, maxWidth: 160 }}>{r.motivo_defecto}</div>}</>
+                : <span style={{ color: t.subtle }}>0</span>}
+            </td>
             <td style={{ padding: '12px 14px' }}>
               <div style={{ display: 'flex', gap: 8 }}>
                 <ActionCircleBtn variant="gold" disabled={!editable(r)} onClick={() => abrirEditar(r)}
-                  title={editable(r) ? 'Corregir cantidad' : 'La producción está finalizada'}>
+                  title={editable(r) ? 'Corregir cantidades' : 'La producción está finalizada'}>
                   <Pencil size={14} />
                 </ActionCircleBtn>
                 <ActionCircleBtn variant="danger" disabled={!editable(r)} onClick={() => setEliminar(r)}
@@ -208,19 +227,32 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
             <b style={{ color: t.fg }}>{editar.empleado}</b> — {editar.proceso ? `${editar.proceso} · ` : ''}{editar.pieza} ({editar.prenda} {editar.talla}) en {editar.maquina}<br />
             Reportado el {fechaHora(editar.fecha)}
           </div>
-          <Field label="Cantidad confeccionada" dark={dark}>
-            <input type="number" min={1} value={formCantidad} autoFocus
-              onChange={(e) => setFormCantidad(e.target.value === '' ? '' : Math.floor(Number(e.target.value)))}
-              style={estiloInput(dark)} />
-          </Field>
-          <div style={{ fontSize: 11, color: t.subtle }}>La fecha y la hora no se modifican. El total reportado no puede superar lo asignado.</div>
+          <div style={{ fontSize: 12, color: t.subtle }}>Los campos con <b style={{ color: DANGER }}>*</b> son obligatorios (puede ser 0, pero no los dos).</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="Cantidad terminada *" dark={dark} error={errorEdicion}>
+              <input type="number" min={0} value={formCantidad} autoFocus aria-invalid={Boolean(errorEdicion)}
+                onChange={(e) => setFormCantidad(e.target.value === '' ? '' : Math.max(0, Math.floor(Number(e.target.value))))}
+                style={estiloInput(dark)} />
+            </Field>
+            <Field label="Defectuosas *" dark={dark}>
+              <input type="number" min={0} value={formDefectuosa}
+                onChange={(e) => setFormDefectuosa(e.target.value === '' ? '' : Math.max(0, Math.floor(Number(e.target.value))))}
+                style={estiloInput(dark)} />
+            </Field>
+          </div>
+          {Number(formDefectuosa || 0) > 0 && (
+            <Field label="Motivo del defecto (opcional)" dark={dark}>
+              <input value={formMotivo} maxLength={200} placeholder="Ej. le faltaron 2 mm" onChange={(e) => setFormMotivo(e.target.value)} style={estiloInput(dark)} />
+            </Field>
+          )}
+          <div style={{ fontSize: 11, color: t.subtle }}>La fecha y la hora no se modifican. Terminadas + defectuosas no pueden superar lo asignado.</div>
         </Modal>
       )}
 
       {eliminar && (
         <ConfirmDialog
           titulo="¿Eliminar registro diario?"
-          mensaje={`Se borrará el reporte de ${eliminar.empleado}: ${eliminar.cantidad} und de ${eliminar.pieza} (${fechaHora(eliminar.fecha)}). El avance de la producción bajará.`}
+          mensaje={`Se borrará el reporte de ${eliminar.empleado}: ${eliminar.cantidad} terminadas${eliminar.cantidad_defectuosa ? ` y ${eliminar.cantidad_defectuosa} defectuosas` : ''} de ${eliminar.pieza} (${fechaHora(eliminar.fecha)}). El avance de la producción bajará.`}
           confirmarLabel="Sí, eliminar"
           procesando={procesando}
           onCancel={() => setEliminar(null)}
