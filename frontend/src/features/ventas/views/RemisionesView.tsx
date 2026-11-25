@@ -6,6 +6,7 @@ import {
 import { toast } from 'sonner';
 import { mensajeError } from '../../../shared/utils/api';
 import { coincideBusqueda } from '../../../shared/utils/busqueda';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
 import { ACEPTA_ARCHIVOS, errorArchivo, urlArchivo } from '../../../shared/utils/archivos';
 import {
   remisionService,
@@ -16,7 +17,7 @@ import { seguimientoService, type Seguimiento } from '../../produccion/services/
 import { clienteService, type Cliente } from '../../usuarios/services/clienteService';
 import { obtenerUsuario } from '../../auth/services/authService';
 import { puedeVer } from '../../auth/utils/permisos';
-import { ConfirmDialog, Modal as ModalUi, fechaHora } from '../../produccion/components/ui';
+import { ConfirmDialog, Modal as ModalUi, ModuleHeader, fechaHora } from '../../produccion/components/ui';
 import { entregaService } from '../services/entregaService';
 import {
   UNIDADES_INSUMO, cargarSugerenciasInsumos, problemaInsumo, requiereEspecificacion, separarNombre, unirNombre,
@@ -429,6 +430,32 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
     ]));
   }, [datosMostrar, busqueda]);
 
+  /** Exporta las remisiones de la tabla (con la búsqueda aplicada, todas las páginas). */
+  const descargarExcel = () => exportarExcel({
+    archivo: rolActivo === 'ADMIN' ? 'remisiones' : 'mis_remisiones',
+    hoja: 'Remisiones',
+    titulo: rolActivo === 'ADMIN' ? 'Remisiones' : 'Mis remisiones',
+    subtitulo: subtituloExportacion(busqueda, remisionesFiltradas.length),
+    filas: remisionesFiltradas,
+    columnas: [
+      { titulo: 'ID remisión', valor: r => r.id_remision },
+      ...(rolActivo === 'ADMIN' ? [
+        { titulo: 'Cliente', valor: (r: Remision) => r.cliente },
+        { titulo: 'NIT', valor: (r: Remision) => r.nit_cliente },
+      ] : []),
+      { titulo: 'Fecha de recibo', valor: r => r.fecha_recibo, tipo: 'fecha' },
+      { titulo: 'Fecha de entrega', valor: r => r.fecha_entrega, tipo: 'fecha' },
+      { titulo: 'Ficha técnica', valor: r => r.ficha_tecnica_nombre },
+      { titulo: 'Prendas (pieza · talla · cantidad)', valor: r => r.detalles.map(d => `${d.nombre_de_la_pieza} · ${d.talla} · ${d.cantidad}`).join('\n'), ancho: 40 },
+      { titulo: 'Total prendas', valor: r => r.total_prendas, tipo: 'numero' },
+      { titulo: 'Costo por prenda', valor: r => r.costo_prenda, tipo: 'pesos' },
+      { titulo: 'Costo total', valor: r => r.costo_total, tipo: 'pesos' },
+      { titulo: 'Insumos enviados', valor: r => r.insumos.length ? r.insumos.map(i => `${i.nombre}: ${i.cantidad} ${i.unidad}`).join('\n') : 'No', ancho: 36 },
+      { titulo: 'Estado', valor: r => r.estado },
+      { titulo: 'Observaciones', valor: r => r.observaciones, ancho: 40 },
+    ],
+  });
+
   const [currentPage, setCurrentPage] = useState(1);
   useEffect(() => { setCurrentPage(1); }, [busqueda, rolActivo, nitSesion]);
   const itemsPerPage = 5;
@@ -446,24 +473,17 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
     return (
       <div style={{ backgroundColor: bg, color: fg, minHeight: '100vh', padding: 24, fontFamily: 'Montserrat, sans-serif' }}>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
-          <div>
-            <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: fg }}>{rolActivo === 'ADMIN' ? 'Gestión de Remisiones (Admin)' : 'Mis Remisiones (Cliente)'}</h2>
-            <p style={{ fontSize: 13, color: subtle, margin: 0 }}>{rolActivo === 'ADMIN' ? 'Aprueba o rechaza las remisiones de todos los clientes.' : 'Consulta el estado de tus envíos y crea nuevas remisiones.'}</p>
-          </div>
-
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <Search size={14} color={subtle} style={{ position: 'absolute', left: 12 }} />
-              <input type="text" placeholder="Buscar en cualquier campo..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} style={{ padding: '8px 12px 8px 36px', borderRadius: 8, border: `1px solid ${borderNormal}`, background: cardBg, color: fg, fontSize: 13, outline: 'none' }} />
-            </div>
-
-            <button onClick={handleNuevaRemision} disabled={rolActivo === 'CLIENTE' && !nitSesion} style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212', fontWeight: 700, fontSize: 14, borderRadius: 10, padding: '8px 16px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: rolActivo === 'CLIENTE' && !nitSesion ? 0.5 : 1 }}>
-              <Plus size={14} /> Nueva Remisión
-            </button>
-          </div>
-        </div>
+        <ModuleHeader
+          title={rolActivo === 'ADMIN' ? 'Remisiones' : 'Mis remisiones'}
+          subtitle={rolActivo === 'ADMIN' ? 'Aprueba o rechaza las remisiones de todos los clientes.' : 'Consulta el estado de tus envíos y crea nuevas remisiones.'}
+          search={busqueda}
+          onSearch={setBusqueda}
+          excel={{ onClick: descargarExcel, cantidad: remisionesFiltradas.length }}
+          onAdd={handleNuevaRemision}
+          addLabel="Nueva remisión"
+          addDisabled={rolActivo === 'CLIENTE' && !nitSesion}
+          dark={dark}
+        />
 
         <div style={{ borderRadius: 12, overflow: 'auto', border: `1px solid ${borderNormal}`, background: cardBg }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>

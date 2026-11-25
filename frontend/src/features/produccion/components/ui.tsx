@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Search, Plus, AlertTriangle, Loader2 } from 'lucide-react';
+import { BotonExcel } from '../../../shared/components/BotonExcel';
 
 // ==========================================
 // PALETA DE COLORES - SISTEMA DE DISEÑO BASE
@@ -194,16 +195,26 @@ export const Field: React.FC<{ label: string; dark?: boolean; error?: string | n
   </div>
 );
 
+/**
+ * Encabezado común de los módulos (misma distribución en todos):
+ *   Título y descripción  ·  [filtros propios] [Buscar] [Descargar Excel] [+ Nuevo]
+ */
 export const ModuleHeader: React.FC<{
   title: string;
   subtitle: string;
   onAdd?: () => void;
   addLabel?: string;
+  /** Deshabilita el botón de agregar (con addTitle se explica por qué). */
+  addDisabled?: boolean;
+  addTitle?: string;
   search: string;
   onSearch: (val: string) => void;
+  /** Botón "Descargar Excel": qué hacer y cuántos registros se van a exportar. */
+  excel?: { onClick: () => void; cantidad: number };
   dark?: boolean;
+  /** Filtros propios del módulo (van antes del buscador). */
   extra?: React.ReactNode;
-}> = ({ title, subtitle, onAdd, addLabel, search, onSearch, dark = false, extra }) => {
+}> = ({ title, subtitle, onAdd, addLabel, addDisabled = false, addTitle, search, onSearch, excel, dark = false, extra }) => {
   const t = tema(dark);
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, gap: 16, flexWrap: 'wrap' }}>
@@ -211,19 +222,21 @@ export const ModuleHeader: React.FC<{
         <h2 style={{ fontSize: 24, fontWeight: 800, margin: '0 0 4px', color: t.fg, fontFamily: FONT }}>{title}</h2>
         <p style={{ fontSize: 13, color: t.subtle, margin: 0, fontFamily: FONT }}>{subtitle}</p>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginLeft: 'auto' }}>
         {extra}
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
           <Search size={14} color={t.subtle} style={{ position: 'absolute', left: 12 }} />
           <input
             type="text" placeholder="Buscar..." value={search} onChange={(e) => onSearch(e.target.value)}
-            style={{ padding: '8px 12px 8px 36px', borderRadius: 8, border: `1px solid ${t.border}`, background: t.surface, color: t.fg, fontSize: 13, outline: 'none', fontFamily: FONT }}
+            style={{ width: 220, padding: '8px 12px 8px 36px', borderRadius: 8, border: `1px solid ${t.border}`, background: t.surface, color: t.fg, fontSize: 13, outline: 'none', fontFamily: FONT, boxSizing: 'border-box' }}
           />
         </div>
+        {excel && <BotonExcel onClick={excel.onClick} cantidad={excel.cantidad} dark={dark} />}
         {onAdd && (
-          <button onClick={onAdd} style={{
+          <button onClick={onAdd} disabled={addDisabled} title={addTitle} style={{
             background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212', fontWeight: 700, fontSize: 14,
-            borderRadius: 10, padding: '8px 16px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontFamily: FONT,
+            borderRadius: 10, padding: '8px 16px', border: 'none', cursor: addDisabled ? 'not-allowed' : 'pointer', opacity: addDisabled ? 0.5 : 1,
+            display: 'flex', alignItems: 'center', gap: 6, fontFamily: FONT,
           }}>
             <Plus size={14} /> {addLabel}
           </button>

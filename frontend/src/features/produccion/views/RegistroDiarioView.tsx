@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ClipboardList, Pencil, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { exportarExcel, subtituloExportacion } from '../../../shared/utils/excel';
 
 import { registroDiarioService, type RegistroDiario } from '../services/registroDiarioService';
 import { produccionService, type Produccion } from '../services/produccionService';
@@ -140,6 +141,30 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
   const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
   const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
 
+  /** Exporta los reportes de la tabla (con la búsqueda y los filtros aplicados, todas las páginas). */
+  const descargarExcel = () => exportarExcel({
+    archivo: 'registro_diario', hoja: 'Registro diario', titulo: 'Registro diario de producción',
+    subtitulo: subtituloExportacion(busqueda, filtrados.length)
+      + (fDesde || fHasta ? ` · Fechas: ${fDesde || '…'} a ${fHasta || '…'}` : ''),
+    filas: filtrados,
+    columnas: [
+      { titulo: 'ID registro', valor: r => r.id_registro_diario },
+      { titulo: 'Fecha y hora', valor: r => fechaHora(r.fecha) },
+      { titulo: 'Empleado', valor: r => r.empleado },
+      { titulo: 'Producción', valor: r => r.id_produccion },
+      { titulo: 'Remisión', valor: r => r.id_remision },
+      { titulo: 'Prenda', valor: r => r.prenda },
+      { titulo: 'Talla', valor: r => r.talla },
+      { titulo: 'Proceso', valor: r => r.paso ?? r.proceso },
+      { titulo: 'Pieza', valor: r => r.pieza },
+      { titulo: 'Máquina', valor: r => r.maquina },
+      { titulo: 'Terminadas', valor: r => r.cantidad, tipo: 'numero' },
+      { titulo: 'Defectuosas', valor: r => r.cantidad_defectuosa, tipo: 'numero' },
+      { titulo: 'Motivo del defecto', valor: r => r.motivo_defecto, ancho: 32 },
+      { titulo: 'Estado de la producción', valor: r => estadoProduccion(r.id_produccion) },
+    ],
+  });
+
   const limpiarFiltros = () => { setFEmpleado(''); setFProduccion(''); setFDesde(''); setFHasta(''); setBusqueda(''); };
   const hayFiltros = Boolean(fEmpleado || fProduccion || fDesde || fHasta || busqueda);
 
@@ -151,6 +176,7 @@ export const RegistroDiarioView: React.FC<RegistroDiarioViewProps> = ({ dark = f
         search={busqueda}
         onSearch={setBusqueda}
         dark={dark}
+        excel={{ onClick: descargarExcel, cantidad: filtrados.length }}
       />
 
       {/* Filtros */}

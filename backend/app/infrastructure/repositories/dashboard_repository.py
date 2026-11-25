@@ -99,6 +99,102 @@ class DashboardRepository(IDashboardRepository):
              LIMIT :limite
         """, {"desde": desde, "hasta": hasta, "limite": limite})
 
+    # ------------------------------------------------------------------ empleados
+    def empleados_hoy(self) -> dict:
+        """Foto de hoy de los empleados activos (vista de disponibilidad del módulo de asistencia)."""
+        fila = self.db.execute(text("""
+            SELECT COUNT(*)                                                     AS activos,
+                   COUNT(*) FILTER (WHERE presente_hoy)                         AS presentes,
+                   COUNT(*) FILTER (WHERE en_taller)                            AS en_taller,
+                   COUNT(*) FILTER (WHERE ocupado_en_tarea IS NOT NULL)         AS con_tarea,
+                   COUNT(*) FILTER (WHERE estado_asistencia IN ('Permiso', 'Incapacidad', 'Vacaciones')) AS con_novedad
+              FROM vw_empleados_disponibilidad
+        """)).mappings().one()
+        return dict(fila)
+
+    def asistencia_por_dia(self, desde: date, hasta: date) -> list[dict]:
+        return self._filas("""
+            SELECT fecha,
+                   COUNT(*)                                                     AS registros,
+                   COUNT(*) FILTER (WHERE estado = 'Presente')                  AS presentes,
+                   COUNT(*) FILTER (WHERE estado = 'No presente')               AS faltas,
+                   COUNT(*) FILTER (WHERE estado IN ('Permiso', 'Incapacidad', 'Vacaciones')) AS novedades,
+                   COALESCE(SUM(minutos_trabajados), 0)                         AS minutos
+              FROM vw_asistencia
+             WHERE fecha BETWEEN :desde AND :hasta
+             GROUP BY fecha
+        """, {"desde": desde, "hasta": hasta})
+
+    def desempeno_empleados(self, desde: date, hasta: date) -> list[dict]:
+        """Por empleado activo: lo que produjo (buenas / defectuosas), su asistencia y horas,
+        y el proceso en el que más unidades hizo. Solo salen los que tienen datos en el periodo."""
+        return self._filas("""
+            WITH prod AS (
+                SELECT id_empleado,
+                       SUM(cantidad)                 AS unidades,
+                       SUM(cantidad_defectuosa)      AS defectuosas,
+                       COUNT(DISTINCT fecha::date)   AS dias_produccion
+                  FROM vw_historial_registro_diario
+                 WHERE fecha::date BETWEEN :desde AND :hasta
+                 GROUP BY id_empleado
+            ), asis AS (
+                SELECT id_empleado,
+                       COUNT(*)                                        AS registros,
+                       COUNT(*) FILTER (WHERE estado = 'Presente')     AS dias_presente,
+                       COUNT(*) FILTER (WHERE estado = 'No presente')  AS faltas,
+                       COALESCE(SUM(minutos_trabajados), 0)            AS minutos
+                  FROM vw_asistencia
+                 WHERE fecha BETWEEN :desde AND :hasta
+                 GROUP BY id_empleado
+            ), proceso_principal AS (
+                SELECT DISTINCT ON (id_empleado) id_empleado, proceso
+                  FROM (SELECT id_empleado, COALESCE(proceso, 'Sin proceso') AS proceso, SUM(cantidad) AS u
+                          FROM vw_historial_registro_diario
+                         WHERE fecha::date BETWEEN :desde AND :hasta
+                         GROUP BY id_empleado, COALESCE(proceso, 'Sin proceso')) x
+                 ORDER BY id_empleado, u DESC, proceso
+            )
+            SELECT e.id_empleados AS id_empleado, e.nombre AS empleado, r.descripcion_rol AS rol,
+                   COALESCE(p.unidades, 0)        AS unidades,
+                   COALESCE(p.defectuosas, 0)     AS defectuosas,
+                   COALESCE(p.dias_produccion, 0) AS dias_produccion,
+                   COALESCE(a.registros, 0)       AS registros_asistencia,
+                   COALESCE(a.dias_presente, 0)   AS dias_presente,
+                   COALESCE(a.faltas, 0)          AS faltas,
+                   COALESCE(a.minutos, 0)         AS minutos,
+                   pp.proceso                     AS proceso_principal
+              FROM empleados e
+              LEFT JOIN roles r ON r.id_rol = e.id_rol
+              LEFT JOIN prod p ON p.id_empleado = e.id_empleados
+              LEFT JOIN asis a ON a.id_empleado = e.id_empleados
+              LEFT JOIN proceso_principal pp ON pp.id_empleado = e.id_empleados
+             WHERE e.estado = 'Activo' AND (p.id_empleado IS NOT NULL OR a.id_empleado IS NOT NULL)
+        """, {"desde": desde, "hasta": hasta})
+
+    def produccion_por_proceso_empleado(self, desde: date, hasta: date) -> list[dict]:
+        return self._filas("""
+            SELECT COALESCE(proceso, 'Sin proceso')  AS proceso,
+                   id_empleado, empleado,
+                   SUM(cantidad)                     AS unidades,
+                   SUM(cantidad_defectuosa)          AS defectuosas,
+                   COUNT(DISTINCT fecha::date)       AS dias
+              FROM vw_historial_registro_diario
+             WHERE fecha::date BETWEEN :desde AND :hasta
+             GROUP BY COALESCE(proceso, 'Sin proceso'), id_empleado, empleado
+        """, {"desde": desde, "hasta": hasta})
+
+    def anios_con_datos(self) -> list[int]:
+        filas = self.db.execute(text("""
+            SELECT DISTINCT EXTRACT(YEAR FROM f)::int AS anio FROM (
+                SELECT fecha_recibo AS f FROM tb_remision
+                UNION ALL SELECT fecha_finalizacion FROM tb_remision_entrega
+                UNION ALL SELECT fecha_compra FROM tb_compras
+                UNION ALL SELECT fecha::date FROM tb_registro_diario
+                UNION ALL SELECT fecha FROM tb_asistencia
+            ) x WHERE f IS NOT NULL
+        """)).scalars().all()
+        return [int(a) for a in filas]
+
     def cumplimiento_entregas(self, desde: date, hasta: date) -> dict:
         fila = self.db.execute(text("""
             SELECT COUNT(*) FILTER (WHERE r.fecha_entrega IS NOT NULL

@@ -2,13 +2,24 @@ import { api } from "../../../shared/utils/api";
 
 export type TipoPeriodo = "mes" | "trimestre" | "semestre" | "anio";
 
+/** Periodo a consultar: tipo + año + número (mes 1-12, trimestre 1-4, semestre 1-2; 1 si es año). */
+export interface FiltroPeriodo {
+  tipo: TipoPeriodo;
+  anio: number;
+  numero: number;
+}
+
 export interface Periodo {
   tipo: TipoPeriodo;
   etiqueta: string; // ej. "Noviembre 2026", "Trimestre 4 de 2026"
   desde: string;
-  hasta: string; // hoy
-  anterior_desde: string; // con qué se compara (mismo corte del periodo anterior)
+  hasta: string; // fin del periodo, o hoy si está en curso
+  anterior_desde: string; // con qué se compara
   anterior_hasta: string;
+  anio: number;
+  numero: number;
+  completo: boolean; // false = periodo en curso
+  unidad_tramo: "Semana" | "Mes"; // qué es cada barra de las gráficas
 }
 
 export interface Indicador {
@@ -83,6 +94,41 @@ export interface Clientes {
   remisiones_por_estado: { estado: string; cantidad: number; prendas: number }[];
 }
 
+// ---------- Empleados: asistencia y desempeño ----------
+export interface DesempenoEmpleado {
+  id_empleado: string;
+  empleado: string;
+  rol: string | null;
+  unidades: number;          // unidades buenas del registro diario
+  defectuosas: number;
+  calidad: number | null;    // % buenas / (buenas + defectuosas)
+  dias_presente: number;
+  faltas: number;
+  asistencia: number | null; // % días presente / días con registro
+  horas: number;             // horas trabajadas (marcaciones de entrada y salida)
+  unidades_por_dia: number | null;
+  unidades_por_hora: number | null;
+  proceso_principal: string | null;
+}
+
+export interface MejorPorProceso {
+  proceso: string;
+  empleados: number;
+  unidades_proceso: number;
+  mejor: { empleado: string; unidades: number; unidades_por_dia: number; calidad: number };
+}
+
+export interface Empleados {
+  periodo: Periodo;
+  hoy: { activos: number; presentes: number; en_taller: number; con_tarea: number; con_novedad: number };
+  asistencia: { porcentaje: number | null; variacion: number | null; presentes: number; faltas: number; novedades: number };
+  horas_trabajadas: Indicador;
+  calidad: { porcentaje: number | null; buenas: number; defectuosas: number };
+  grafica_asistencia: { etiquetas: string[]; valores: number[] };
+  desempeno: DesempenoEmpleado[];
+  mejor_por_proceso: MejorPorProceso[];
+}
+
 // ---------- Fila 5 ----------
 export interface Movimiento {
   tipo: "remision" | "compra" | "entrega";
@@ -94,13 +140,19 @@ export interface Movimiento {
   valor: number | null; // prendas (remisión) o pesos (compra / entrega)
 }
 
+const parametros = (f: FiltroPeriodo) => ({ periodo: f.tipo, anio: f.anio, numero: f.numero });
+
 export const dashboardService = {
   atencion: () => api.get<Atencion>("/dashboard/atencion").then((r) => r.data),
-  dinero: (periodo: TipoPeriodo) => api.get<Dinero>("/dashboard/dinero", { params: { periodo } }).then((r) => r.data),
-  produccion: (periodo: TipoPeriodo) =>
-    api.get<Produccion>("/dashboard/produccion", { params: { periodo } }).then((r) => r.data),
-  clientes: (periodo: TipoPeriodo) =>
-    api.get<Clientes>("/dashboard/clientes", { params: { periodo } }).then((r) => r.data),
+  dinero: (f: FiltroPeriodo) => api.get<Dinero>("/dashboard/dinero", { params: parametros(f) }).then((r) => r.data),
+  produccion: (f: FiltroPeriodo) =>
+    api.get<Produccion>("/dashboard/produccion", { params: parametros(f) }).then((r) => r.data),
+  empleados: (f: FiltroPeriodo) =>
+    api.get<Empleados>("/dashboard/empleados", { params: parametros(f) }).then((r) => r.data),
+  clientes: (f: FiltroPeriodo) =>
+    api.get<Clientes>("/dashboard/clientes", { params: parametros(f) }).then((r) => r.data),
+  /** Años que tienen datos (siempre incluye el actual), del más reciente al más antiguo. */
+  anios: () => api.get<number[]>("/dashboard/anios").then((r) => r.data),
   movimientos: (limite = 8) =>
     api.get<Movimiento[]>("/dashboard/movimientos", { params: { limite } }).then((r) => r.data),
 };

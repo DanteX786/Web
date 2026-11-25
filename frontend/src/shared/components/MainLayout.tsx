@@ -95,7 +95,7 @@ export default function MainLayout({
     });
   };
 
-  const renderNavBtn = (id: string, label: string, Icon: any, isSub = false) => {
+  const renderNavBtn = (id: string, label: string, Icon: any) => {
     if (!puedeVer(id)) return null; // sin permiso: no aparece en el menú
     const isActive = currentView === id;
     return (
@@ -118,8 +118,13 @@ export default function MainLayout({
           display: 'flex',
           alignItems: 'center',
           gap: 10,
-          padding: isActive ? '10px 12px 10px 9px' : '10px 12px',
-          paddingLeft: isSub ? (collapsed ? 12 : 36) : (isActive ? 9 : 12),
+          // Siempre con propiedades separadas (no mezclar "padding" con "paddingLeft"): si se mezclan,
+          // al cambiar de opción el navegador pisa el paddingLeft y las opciones "se corren".
+          // El borde izquierdo mide siempre 3px (dorado o transparente), así nada se mueve al seleccionar.
+          paddingTop: 10,
+          paddingBottom: 10,
+          paddingRight: 12,
+          paddingLeft: 9,
           borderRadius: 10,
           background: isActive ? `linear-gradient(135deg, ${GOLD}20, ${GOLD}12)` : 'transparent',
           border: 'none',
@@ -187,7 +192,7 @@ export default function MainLayout({
                     {sub.seccion}
                   </div>
                 )}
-                {renderNavBtn(sub.id, sub.label, sub.icon, true)}
+                {renderNavBtn(sub.id, sub.label, sub.icon)}
               </React.Fragment>
             ))}
           </div>
