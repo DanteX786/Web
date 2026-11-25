@@ -23,6 +23,7 @@ class Usuario:
     tipo_documento: str | None = None     # NIT | CC | CE | PA | PPT (solo clientes)
     nombre_contacto: str | None = None    # persona a contactar cuando el cliente es empresa (NIT)
     tipo_telefono: str | None = None      # Empresarial | Personal (solo clientes)
+    debe_cambiar_contrasena: bool = False # empleado con contraseña temporal: debe crear la suya
     permisos: list[str] = field(default_factory=list)
 
     @property

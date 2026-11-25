@@ -2,7 +2,8 @@ from abc import ABC, abstractmethod
 
 from app.domain.entities.produccion import (
     Asignacion, EmpleadoDisponibilidad, FaltantePaso, LineaRemision, MaquinaDisponibilidad, NuevaAsignacion,
-    NuevoPaso, PasoProduccion, Produccion, RemisionDisponible, SeguimientoProduccion,
+    NuevoPaso, NuevoReproceso, PasoProduccion, PiezaDefectuosa, Produccion, RemisionDisponible, Reproceso,
+    SeguimientoProduccion,
 )
 
 
@@ -34,7 +35,9 @@ class IProduccionRepository(ABC):
     def seguimiento(self, id_produccion: str) -> list[SeguimientoProduccion]: ...
 
     @abstractmethod
-    def pasos(self, id_produccion: str) -> list[PasoProduccion]: ...
+    def pasos(self, id_produccion: str, id_reproceso: str | None = None,
+              todos: bool = False) -> list[PasoProduccion]:
+        """Pasos de la producción normal (por defecto), de un reproceso, o todos."""
 
     @abstractmethod
     def guardar_pasos(self, id_produccion: str, pasos: list[NuevoPaso]) -> None:
@@ -42,6 +45,25 @@ class IProduccionRepository(ABC):
 
     @abstractmethod
     def faltantes(self, id_produccion: str) -> list[FaltantePaso]: ...
+
+    @abstractmethod
+    def defectuosas(self, id_produccion: str | None = None,
+                    id_remision: str | None = None) -> list[PiezaDefectuosa]:
+        """Reportes con piezas defectuosas (de una producción o de una remisión)."""
+
+    # ----- Reprocesos -----
+    @abstractmethod
+    def reprocesos(self, id_produccion: str) -> list[Reproceso]: ...
+
+    @abstractmethod
+    def crear_reproceso(self, id_produccion: str, datos: NuevoReproceso, id_responsable: str) -> str: ...
+
+    @abstractmethod
+    def reproceso_de(self, id_reproceso: str) -> tuple[str, str] | None:
+        """(id_produccion, estado) del reproceso, o None si no existe."""
+
+    @abstractmethod
+    def cancelar_reproceso(self, id_reproceso: str) -> None: ...
 
     @abstractmethod
     def maquinas(self) -> list[MaquinaDisponibilidad]: ...

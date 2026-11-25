@@ -27,14 +27,14 @@ TEXTOS = ("nombre", "identificacion", "correo", "telefono", "direccion", "id_rol
 
 
 class EmpleadoCrear(BaseModel):
+    """La contraseña NO se envía: el sistema genera una temporal y la manda al correo del empleado."""
     nombre: str = Field(max_length=100)
     identificacion: str = Field(max_length=30)
     correo: str = Field(max_length=100)
-    telefono: str | None = Field(default=None, max_length=20)
+    telefono: str = Field(max_length=20)
     direccion: str | None = Field(default=None, max_length=150)
     id_rol: str = Field(max_length=10)
     estado: EstadoEmpleado = "Activo"
-    contrasena: str = Field(min_length=6, max_length=72)
 
     _limpiar_textos = field_validator(*TEXTOS, mode="before")(lambda cls, v: _limpiar(v))
     _correo = field_validator("correo")(lambda cls, v: _validar_correo(v))
@@ -42,7 +42,7 @@ class EmpleadoCrear(BaseModel):
 
 class EmpleadoActualizar(BaseModel):
     """Todos los campos son opcionales: solo se cambian los que se envían.
-    Si no se envía contraseña, se conserva la actual."""
+    La contraseña no se edita aquí (el empleado la crea; el administrador puede "reenviar acceso")."""
     nombre: str | None = Field(default=None, max_length=100)
     identificacion: str | None = Field(default=None, max_length=30)
     correo: str | None = Field(default=None, max_length=100)
@@ -50,7 +50,6 @@ class EmpleadoActualizar(BaseModel):
     direccion: str | None = Field(default=None, max_length=150)
     id_rol: str | None = Field(default=None, max_length=10)
     estado: EstadoEmpleado | None = None
-    contrasena: str | None = Field(default=None, min_length=6, max_length=72)
 
     _limpiar_textos = field_validator(*TEXTOS, mode="before")(lambda cls, v: _limpiar(v))
     _correo = field_validator("correo")(lambda cls, v: _validar_correo(v))
@@ -80,3 +79,4 @@ class EmpleadoRespuesta(BaseModel):
     id_rol: str | None
     rol: str | None
     estado: str
+    debe_cambiar_contrasena: bool = False   # todavía no ha creado su contraseña

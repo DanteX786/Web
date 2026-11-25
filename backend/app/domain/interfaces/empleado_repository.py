@@ -20,13 +20,15 @@ class IEmpleadoRepository(ABC):
     def existe_rol(self, id_rol: str) -> bool: ...
 
     @abstractmethod
-    def tiene_produccion(self, id_empleado: str) -> bool: ...
+    def descripcion_rol(self, id_rol: str) -> str | None:
+        """Nombre del rol, o None si no existe."""
+
+    @abstractmethod
+    def asignar_contrasena_temporal(self, id_empleado: str, contrasena_hash: str) -> None:
+        """Guarda la contraseña temporal, obliga a cambiarla y cierra las sesiones abiertas."""
 
     @abstractmethod
     def crear(self, datos: dict) -> Empleado: ...
 
     @abstractmethod
     def actualizar(self, id_empleado: str, datos: dict) -> Empleado | None: ...
-
-    @abstractmethod
-    def eliminar(self, id_empleado: str) -> bool: ...

@@ -68,7 +68,7 @@ const Tarjeta = ({ t, titulo, icono, children, accion }: { t: Tema; titulo: stri
 /**
  * Mi perfil.
  * - Cliente: consulta y EDITA sus datos y cambia su contraseña.
- * - Empleado: solo CONSULTA (sus datos y su contraseña los administra el taller).
+ * - Empleado: consulta sus datos (los administra el taller) y puede cambiar su contraseña.
  * - Administrador: no tiene Mi perfil (gestiona las cuentas desde Usuarios).
  */
 export default function MiPerfil({ dark }: { dark: boolean }) {
@@ -99,7 +99,7 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
   const [errores, setErrores] = useState<Partial<Record<CampoPerfil, string | null>>>({});
   const [guardando, setGuardando] = useState(false);
 
-  // --- Contraseña (solo cliente) ---
+  // --- Contraseña (clientes y empleados) ---
   const [pass, setPass] = useState({ actual: "", nueva: "", confirmar: "" });
   const [ver, setVer] = useState({ actual: false, nueva: false, confirmar: false });
   const [cambiando, setCambiando] = useState(false);
@@ -109,7 +109,6 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
 
   // Verifica la contraseña actual mientras se escribe (espera 600 ms después de la última tecla)
   useEffect(() => {
-    if (!esCliente) return;
     const numero = ++consultaActual.current;
     if (!pass.actual) { setEstadoActual("vacio"); setAvisoActual(""); return; }
     setEstadoActual("verificando");
@@ -127,7 +126,7 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
         });
     }, 600);
     return () => window.clearTimeout(espera);
-  }, [pass.actual, esCliente]);
+  }, [pass.actual]);
 
   const validar = (campo: CampoPerfil, f: FormPerfil = form): string | null => {
     switch (campo) {
@@ -311,9 +310,8 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
             </div>
           </div>
 
-          {/* ----- Contraseña: solo cliente ----- */}
-          {esCliente ? (
-            <Tarjeta t={tema} titulo="Seguridad" icono={<Key size={15} color={GOLD} />}>
+          {/* ----- Contraseña: clientes y empleados ----- */}
+          <Tarjeta t={tema} titulo="Seguridad" icono={<Key size={15} color={GOLD} />}>
               <style>{"@keyframes spin { to { transform: rotate(360deg); } }"}</style>
               {campoPass("actual", "Contraseña actual", avisoActualUI, bordeActual)}
               {campoPass("nueva", "Nueva contraseña", avisoNuevaUI)}
@@ -336,12 +334,12 @@ export default function MiPerfil({ dark }: { dark: boolean }) {
                 <Key size={14} /> {cambiando ? "Actualizando..." : "Actualizar contraseña"}
               </button>
             </Tarjeta>
-          ) : (
+          {!esCliente && (
             <div style={{ background: `${INFO}12`, border: `1px solid ${INFO}40`, borderRadius: 12, padding: 16, display: "flex", gap: 10 }}>
               <Info size={18} color={INFO} style={{ flexShrink: 0 }} />
               <div style={{ fontSize: 13, color: fg, lineHeight: 1.5 }}>
-                Tus datos y tu contraseña los administra el taller porque son información de la empresa.
-                Si algo está mal o necesitas una nueva contraseña, comunícate con el administrador.
+                Tus datos los administra el taller porque son información de la empresa.
+                Si algo está mal, comunícate con el administrador. Tu contraseña sí la puedes cambiar aquí.
               </div>
             </div>
           )}

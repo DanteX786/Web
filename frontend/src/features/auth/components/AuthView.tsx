@@ -11,7 +11,7 @@ import logo_negro from '../../../../public/images/logo negro.png';
 
 import {
   authService, guardarSesion, TIPOS_DOCUMENTO,
-  type Usuario, type TipoDocumento, type TipoTelefono,
+  type Sesion, type Usuario, type TipoDocumento, type TipoTelefono,
 } from '../services/authService';
 import {
   REGLAS_CONTRASENA, limpiarDocumento, soloDigitos, validarConfirmacion, validarContacto, validarContrasenaNueva,
@@ -34,7 +34,7 @@ interface AuthViewProps {
   onVolver?: () => void;
 }
 
-type Vista = 'login' | 'register' | 'recover';
+type Vista = 'login' | 'register' | 'recover' | 'primer';
 type PasoRecuperar = 'correo' | 'codigo' | 'nueva';
 type CampoRegistro = 'documento' | 'nombre' | 'contacto' | 'correo' | 'telefono' | 'direccion' | 'contrasena' | 'confirmar';
 
@@ -53,6 +53,14 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
   const [errorMsg, setErrorMsg] = useState('');
   const [erroresLogin, setErroresLogin] = useState<{ correo?: string | null; contrasena?: string | null }>({});
   const [bloqMayus, setBloqMayus] = useState(false);
+
+  // ---------- Primer ingreso de un empleado (contraseña temporal) ----------
+  const [sesionTemporal, setSesionTemporal] = useState<Sesion | null>(null);
+  const [primerNueva, setPrimerNueva] = useState('');
+  const [primerConfirmar, setPrimerConfirmar] = useState('');
+  const [showPrimerNueva, setShowPrimerNueva] = useState(false);
+  const [showPrimerConfirmar, setShowPrimerConfirmar] = useState(false);
+  const [errorPrimer, setErrorPrimer] = useState('');
 
   // ---------- Registro ----------
   const [regTipoDoc, setRegTipoDoc] = useState<TipoDocumento>('NIT');
@@ -105,6 +113,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
     setView(v);
     setErrorMsg('');
     setErrorRec('');
+    if (v === 'login') { setSesionTemporal(null); setPrimerNueva(''); setPrimerConfirmar(''); setErrorPrimer(''); }
     if (v === 'recover') { setPaso('correo'); setCodigo(''); setRecEmail(email); }
   };
 
@@ -184,12 +193,46 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
     setErrorMsg('');
     try {
       const sesion = await authService.login(email.trim().toLowerCase(), password);
+      if (sesion.usuario.debe_cambiar_contrasena) {
+        // Entró con la contraseña temporal del correo: primero crea la suya (la sesión aún no se guarda)
+        setSesionTemporal(sesion);
+        setPrimerNueva('');
+        setPrimerConfirmar('');
+        setErrorPrimer('');
+        setView('primer');
+        return;
+      }
       guardarSesion(sesion);
       toast.success(`¡Bienvenido, ${sesion.usuario.nombre}!`);
       onLoginSuccess(sesion.usuario);
     } catch (err) {
       setErrorMsg(mensajeError(err));
       setPassword('');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  // ==========================================
+  // PRIMER INGRESO DE UN EMPLEADO: crea su contraseña
+  // ==========================================
+  const guardarPrimera = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sesionTemporal) { irA('login'); return; }
+    const problema = validarContrasenaNueva(primerNueva) ?? validarConfirmacion(primerNueva, primerConfirmar);
+    if (problema) { setErrorPrimer(problema); return; }
+    if (primerNueva === password) { setErrorPrimer('La nueva contraseña debe ser diferente a la temporal.'); return; }
+    setCargando(true);
+    setErrorPrimer('');
+    try {
+      const sesion = await authService.primerCambio(sesionTemporal.access_token, password, primerNueva, primerConfirmar);
+      guardarSesion(sesion);
+      setSesionTemporal(null);
+      setPassword('');
+      toast.success(`¡Listo, ${sesion.usuario.nombre}! Tu contraseña quedó creada.`);
+      onLoginSuccess(sesion.usuario);
+    } catch (err) {
+      setErrorPrimer(mensajeError(err));
     } finally {
       setCargando(false);
     }
@@ -567,6 +610,49 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
           )}
 
           {/* ================= RECUPERAR CONTRASEÑA ================= */}
+          {/* ================= PRIMER INGRESO: CREAR CONTRASEÑA ================= */}
+          {view === 'primer' && sesionTemporal && (
+            <div style={{ padding: 32 }}>
+              <Volver />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <ShieldCheck size={20} color={GOLD} />
+                <h1 style={{ fontSize: 22, fontWeight: 800, color: fg, margin: 0 }}>Crea tu contraseña</h1>
+              </div>
+              <p style={{ fontSize: 13, color: subtle, margin: '0 0 18px' }}>
+                Hola {sesionTemporal.usuario.nombre}. Entraste con la contraseña temporal que te llegó al correo.
+                Por seguridad, crea ahora tu propia contraseña para usar el sistema.
+              </p>
+              {errorPrimer && <Banner tipo="error" texto={errorPrimer} />}
+              <form onSubmit={guardarPrimera} noValidate style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <label style={labelStyle}>Nueva contraseña *</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Lock size={15} color={subtle} style={{ position: 'absolute', left: 10 }} />
+                    <input type={showPrimerNueva ? 'text' : 'password'} autoComplete="new-password" autoFocus maxLength={64} placeholder="••••••••" value={primerNueva}
+                      onChange={(e) => { setPrimerNueva(e.target.value); setErrorPrimer(''); }}
+                      style={inputStyle(primerNueva && validarContrasenaNueva(primerNueva), true, true)} />
+                    <BotonOjo visible={showPrimerNueva} onClick={() => setShowPrimerNueva(!showPrimerNueva)} />
+                  </div>
+                  <Reglas valor={primerNueva} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Confirmar contraseña *</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Lock size={15} color={subtle} style={{ position: 'absolute', left: 10 }} />
+                    <input type={showPrimerConfirmar ? 'text' : 'password'} autoComplete="new-password" maxLength={64} placeholder="••••••••" value={primerConfirmar}
+                      onChange={(e) => { setPrimerConfirmar(e.target.value); setErrorPrimer(''); }} onPaste={(e) => e.preventDefault()}
+                      style={inputStyle(primerConfirmar && validarConfirmacion(primerNueva, primerConfirmar), true, true)} />
+                    <BotonOjo visible={showPrimerConfirmar} onClick={() => setShowPrimerConfirmar(!showPrimerConfirmar)} />
+                  </div>
+                  {primerConfirmar && <ErrorTxt msg={validarConfirmacion(primerNueva, primerConfirmar)} />}
+                </div>
+                <BotonPrincipal deshabilitado={Boolean(validarContrasenaNueva(primerNueva) || validarConfirmacion(primerNueva, primerConfirmar))}>
+                  <KeyRound size={15} /> Guardar mi contraseña y entrar
+                </BotonPrincipal>
+              </form>
+            </div>
+          )}
+
           {view === 'recover' && (
             <div style={{ padding: 32 }}>
               <Volver />

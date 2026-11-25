@@ -13,13 +13,13 @@ _SQL_USUARIOS = """
                e.contrasena AS contrasena_hash, e.estado, e.id_rol,
                r.descripcion_rol AS rol, e.version_token, e.telefono, e.direccion,
                e.identificacion AS documento, NULL AS tipo_documento, NULL AS nombre_contacto,
-               NULL AS tipo_telefono
+               NULL AS tipo_telefono, e.debe_cambiar_contrasena
           FROM empleados e LEFT JOIN roles r ON r.id_rol = e.id_rol
         UNION ALL
         SELECT c.nit, 'Cliente', c.nombre, c.correo,
                c.contrasena, c.estado, c.id_rol,
                COALESCE(r.descripcion_rol, 'Cliente'), c.version_token, c.telefono, c.direccion,
-               c.nit, c.tipo_documento, c.nombre_contacto, c.tipo_telefono
+               c.nit, c.tipo_documento, c.nombre_contacto, c.tipo_telefono, FALSE
           FROM tb_clientes c LEFT JOIN roles r ON r.id_rol = c.id_rol
     ) u
 """
@@ -113,9 +113,11 @@ class AuthRepository(IAuthRepository):
 
     def cambiar_contrasena(self, tipo: TipoUsuario, id_usuario: str, contrasena_hash: str) -> int:
         tabla, columna = _TABLAS[tipo]
+        # Al cambiarla, el empleado deja de tener una contraseña temporal
+        extra = ", debe_cambiar_contrasena = FALSE" if tipo == "Empleado" else ""
         version = self.db.execute(
             text(f"""UPDATE {tabla}
-                        SET contrasena = :hash, version_token = version_token + 1
+                        SET contrasena = :hash, version_token = version_token + 1{extra}
                       WHERE {columna} = :id
                   RETURNING version_token"""),
             {"hash": contrasena_hash, "id": id_usuario},

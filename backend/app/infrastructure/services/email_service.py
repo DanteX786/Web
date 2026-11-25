@@ -27,6 +27,12 @@ class SmtpEmailService(IEmailService):
 
     # ------------------------------------------------------------------ envío
     def enviar_codigo_recuperacion(self, correo: str, nombre: str, codigo: str, minutos: int) -> None:
+        self._enviar(self._mensaje(correo, nombre, codigo, minutos), correo, "Código de recuperación")
+
+    def enviar_acceso_empleado(self, correo: str, nombre: str, contrasena_temporal: str, es_nuevo: bool) -> None:
+        self._enviar(self._mensaje_acceso(correo, nombre, contrasena_temporal, es_nuevo), correo, "Acceso de empleado")
+
+    def _enviar(self, mensaje: EmailMessage, correo: str, que: str) -> None:
         if not self.usuario or not self.contrasena:
             log.error("[CORREO] Falta SMTP_USUARIO o SMTP_CONTRASENA en backend/.env (reinicia uvicorn después de editarlo).")
             raise ServicioNoDisponibleError(
@@ -35,12 +41,11 @@ class SmtpEmailService(IEmailService):
             log.warning("[CORREO] SMTP_CONTRASENA tiene %s caracteres; una contraseña de aplicación de Google tiene 16.",
                         len(self.contrasena))
 
-        mensaje = self._mensaje(correo, nombre, codigo, minutos)
         errores = []
         for intento in (self._enviar_starttls, self._enviar_ssl):
             try:
                 intento(mensaje)
-                log.info("[CORREO] Código de recuperación enviado a %s", correo)
+                log.info("[CORREO] %s enviado a %s", que, correo)
                 return
             except smtplib.SMTPAuthenticationError as e:
                 log.error("[CORREO] Gmail rechazó el usuario o la contraseña de aplicación: %s", e)
@@ -101,6 +106,50 @@ class SmtpEmailService(IEmailService):
                   background:#C9A2271F;border:1px solid #C9A22766;border-radius:10px;padding:16px;margin:0 0 24px">{codigo}</p>
         <p style="margin:0 0 8px;color:#6B6B6B">Vence en <b>{minutos} minutos</b>. Si pides otro código, este deja de funcionar.</p>
         <p style="margin:0;color:#9A9A9A;font-size:13px">Si no solicitaste este cambio, ignora este correo.</p>
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
+        <p style="margin:0;color:#9A9A9A;font-size:12px">Taller y Confecciones CDS · Eslabón</p>
+      </td></tr>
+    </table>
+  </body>
+</html>"""
+
+    # ------------------------------------------------------------------ acceso de empleados
+    def _mensaje_acceso(self, correo: str, nombre: str, temporal: str, es_nuevo: bool) -> EmailMessage:
+        mensaje = EmailMessage()
+        mensaje["Subject"] = ("Bienvenido a Eslabón: tu acceso" if es_nuevo
+                              else "Eslabón: tu nueva contraseña temporal")
+        mensaje["From"] = formataddr((self.remitente, self.usuario))
+        mensaje["To"] = correo
+        intro = ("El taller te registró como empleado en Eslabón." if es_nuevo
+                 else "El administrador del taller te generó una nueva contraseña temporal.")
+        mensaje.set_content(
+            f"Hola {nombre},\n\n{intro}\n\n"
+            f"Correo: {correo}\nContraseña temporal: {temporal}\n\n"
+            "Al entrar por primera vez el sistema te pedirá crear tu propia contraseña.\n"
+            "No compartas esta contraseña con nadie.\n\n"
+            "Taller y Confecciones CDS"
+        )
+        mensaje.add_alternative(self._html_acceso(nombre, correo, temporal, intro), subtype="html")
+        return mensaje
+
+    @staticmethod
+    def _html_acceso(nombre: str, correo: str, temporal: str, intro: str) -> str:
+        return f"""\
+<!doctype html>
+<html lang="es">
+  <body style="margin:0;padding:24px;background:#f4f4f5;font-family:Montserrat,Arial,Helvetica,sans-serif;color:#121212">
+    <table role="presentation" width="100%" style="max-width:480px;margin:auto;background:#ffffff;border-radius:16px;overflow:hidden">
+      <tr><td style="height:4px;background:linear-gradient(90deg,#C9A227,#E6B84A)"></td></tr>
+      <tr><td style="padding:32px">
+        <h2 style="margin:0 0 8px">Tu acceso a Eslabón</h2>
+        <p style="margin:0 0 20px;color:#6B6B6B">Hola {nombre}, {intro[0].lower() + intro[1:]}</p>
+        <p style="margin:0 0 4px;color:#6B6B6B;font-size:13px">Correo</p>
+        <p style="margin:0 0 16px;font-weight:700">{correo}</p>
+        <p style="margin:0 0 4px;color:#6B6B6B;font-size:13px">Contraseña temporal</p>
+        <p style="font-size:24px;letter-spacing:3px;font-weight:800;text-align:center;color:#121212;font-family:monospace;
+                  background:#C9A2271F;border:1px solid #C9A22766;border-radius:10px;padding:14px;margin:0 0 20px">{temporal}</p>
+        <p style="margin:0 0 8px;color:#6B6B6B">Al entrar por primera vez el sistema te pedirá <b>crear tu propia contraseña</b>.</p>
+        <p style="margin:0;color:#9A9A9A;font-size:13px">No compartas esta contraseña con nadie.</p>
         <hr style="border:none;border-top:1px solid #eee;margin:24px 0">
         <p style="margin:0;color:#9A9A9A;font-size:12px">Taller y Confecciones CDS · Eslabón</p>
       </td></tr>

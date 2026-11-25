@@ -3,14 +3,16 @@ from dataclasses import asdict
 from fastapi import APIRouter, Depends, Query, status
 
 from app.application.produccion_service import ProduccionService
-from app.domain.entities.produccion import NuevaAsignacion, NuevoPaso
+from app.domain.entities.produccion import (
+    NuevaAsignacion, NuevoInsumoReproceso, NuevoPaso, NuevoReproceso,
+)
 from app.presentation.dependencies.auth_dependencies import get_id_empleado_actual
 from app.presentation.dependencies.produccion_dependencies import get_produccion_service
 from app.presentation.schemas.produccion_schema import (
     AsignacionCrear, AsignacionRespuesta, EmpleadoDisponibilidadRespuesta, EnviarAProducir,
     GuardarPasos, PasoRespuesta, LineaRemisionRespuesta,
-    MaquinaDisponibilidadRespuesta, ProduccionDetalleRespuesta, ProduccionRespuesta,
-    RemisionDisponibleRespuesta, SeguimientoProduccionRespuesta,
+    MaquinaDisponibilidadRespuesta, PiezaDefectuosaRespuesta, ProduccionDetalleRespuesta, ProduccionRespuesta,
+    RemisionDisponibleRespuesta, ReprocesoCrear, ReprocesoRespuesta, SeguimientoProduccionRespuesta,
 )
 
 router = APIRouter(prefix="/api/producciones", tags=["Producción"])
@@ -59,7 +61,33 @@ def obtener(id_produccion: str, service: ProduccionService = Depends(get_producc
             "pasos": [asdict(p) for p in service.pasos(id_produccion)],
             "faltantes": [asdict(f) for f in service.faltantes(id_produccion)],
             "lineas": [asdict(linea) for linea in lineas],
-            "asignaciones": [asdict(a) for a in asignaciones]}
+            "asignaciones": [asdict(a) for a in asignaciones],
+            "defectuosas": [asdict(d) for d in service.defectuosas(id_produccion=id_produccion)],
+            "reprocesos": [asdict(r) for r in service.reprocesos(id_produccion)]}
+
+
+@router.post("/{id_produccion}/reprocesos", response_model=list[ReprocesoRespuesta],
+             status_code=status.HTTP_201_CREATED,
+             summary="Reprocesar piezas defectuosas (tallas, procesos e insumos opcionales). Uno a la vez")
+def crear_reproceso(id_produccion: str, datos: ReprocesoCrear,
+                    id_empleado: str = Depends(get_id_empleado_actual),
+                    service: ProduccionService = Depends(get_produccion_service)):
+    tallas: dict[str, int] = {}
+    for t in datos.tallas:
+        tallas[t.id_detalle_de_remision] = tallas.get(t.id_detalle_de_remision, 0) + t.cantidad
+    nuevo = NuevoReproceso(
+        tallas=tallas,
+        pasos=[NuevoPaso(id_proceso=p.id_proceso, descripcion=p.descripcion, veces=p.veces) for p in datos.pasos],
+        insumos=[NuevoInsumoReproceso(nombre=i.nombre, cantidad=i.cantidad, unidad=i.unidad) for i in datos.insumos],
+        observacion=datos.observacion,
+    )
+    return service.crear_reproceso(id_produccion, nuevo, id_empleado)
+
+
+@router.patch("/reprocesos/{id_reproceso}/cancelar", response_model=list[ReprocesoRespuesta],
+              summary="Cancelar un reproceso abierto por error (solo si no tiene tareas)")
+def cancelar_reproceso(id_reproceso: str, service: ProduccionService = Depends(get_produccion_service)):
+    return service.cancelar_reproceso(id_reproceso)
 
 
 @router.get("/{id_produccion}/pasos", response_model=list[PasoRespuesta],
@@ -152,3 +180,18 @@ def actualizar_asignacion(id_detalle: str, datos: AsignacionCrear,
                             summary="Eliminar tarea (devuelve el insumo al inventario)")
 def eliminar_asignacion(id_detalle: str, service: ProduccionService = Depends(get_produccion_service)):
     service.eliminar_asignacion(id_detalle)
+
+
+# ---------------------------------------------------------------------------
+# Piezas defectuosas: solo lectura. Lo usa Producción y también Remisión de
+# entrega (para ver qué piezas salieron defectuosas antes de entregar).
+# ---------------------------------------------------------------------------
+defectuosas_router = APIRouter(prefix="/api/piezas-defectuosas", tags=["Producción"])
+
+
+@defectuosas_router.get("", response_model=list[PiezaDefectuosaRespuesta],
+                        summary="Piezas defectuosas reportadas (por producción o por remisión)")
+def piezas_defectuosas(id_produccion: str | None = None,
+                       id_remision: str | None = None,
+                       service: ProduccionService = Depends(get_produccion_service)):
+    return service.defectuosas(id_produccion, id_remision)

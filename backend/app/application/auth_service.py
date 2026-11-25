@@ -152,10 +152,6 @@ class AuthService:
         usuario = self.repo.buscar_por_correo(correo)
         if usuario is None or not usuario.activo:
             return  # respuesta genérica: no se revela si el correo existe
-        if usuario.tipo == "Empleado" and not usuario.es_administrador:
-            # Las cuentas de los operarios las administra el taller
-            raise ForbiddenError("Las cuentas de empleados las administra el taller. "
-                                 "Pide al administrador que te asigne una nueva contraseña.")
 
         ultimo = self.repo.ultimo_codigo(correo)
         if ultimo is not None:
@@ -226,8 +222,6 @@ class AuthService:
 
         Tiene límite de consultas por usuario para que no sirva para adivinar contraseñas.
         """
-        if usuario.tipo != "Cliente":
-            raise ForbiddenError("Tu contraseña la administra el taller. Pide al administrador que la cambie.")
         clave = f"{usuario.tipo}:{usuario.id}"
         ahora = time.monotonic()
         with _candado_verificaciones:
@@ -241,9 +235,7 @@ class AuthService:
         return self.hasher.verificar(actual or "", usuario.contrasena_hash)
 
     def cambiar_contrasena(self, usuario: Usuario, actual: str, nueva: str, confirmar: str) -> None:
-        """Cambio desde Mi perfil (solo clientes). Cierra TODAS las sesiones, incluida la actual (PBI-21)."""
-        if usuario.tipo != "Cliente":
-            raise ForbiddenError("Tu contraseña la administra el taller. Pide al administrador que la cambie.")
+        """Cambio desde Mi perfil (clientes y empleados). Cierra TODAS las sesiones, incluida la actual (PBI-21)."""
         if not self.hasher.verificar(actual or "", usuario.contrasena_hash):
             raise ValidacionError("La contraseña actual no es correcta.")
         self._validar_contrasena(nueva)
@@ -252,6 +244,22 @@ class AuthService:
         if actual == nueva:
             raise ValidacionError("La nueva contraseña debe ser diferente a la actual.")
         self.repo.cambiar_contrasena(usuario.tipo, usuario.id, self.hasher.hashear(nueva))
+
+    def primer_cambio(self, usuario: Usuario, temporal: str, nueva: str, confirmar: str) -> Sesion:
+        """El empleado entra con la contraseña temporal que le llegó al correo y crea la suya.
+        Devuelve una sesión nueva (la anterior se cierra porque la contraseña cambió)."""
+        if not usuario.debe_cambiar_contrasena:
+            raise ValidacionError("Tu contraseña ya fue creada. Para cambiarla usa Mi perfil.")
+        if not self.hasher.verificar(temporal or "", usuario.contrasena_hash):
+            raise ValidacionError("La contraseña temporal no es correcta. Usa la que te llegó al correo.")
+        self._validar_contrasena(nueva)
+        if nueva != confirmar:
+            raise ValidacionError("Las contraseñas no coinciden.")
+        if nueva == temporal:
+            raise ValidacionError("La nueva contraseña debe ser diferente a la temporal.")
+        self.repo.cambiar_contrasena(usuario.tipo, usuario.id, self.hasher.hashear(nueva))
+        actualizado = self.repo.buscar_por_id(usuario.tipo, usuario.id)
+        return Sesion(self._token_sesion(actualizado), actualizado)
 
     def actualizar_perfil(self, usuario: Usuario, nombre: str, correo: str, tipo_telefono: str,
                           telefono: str, direccion: str | None, nombre_contacto: str | None = None) -> Usuario:

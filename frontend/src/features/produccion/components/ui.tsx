@@ -183,10 +183,11 @@ export const Modal: React.FC<{
   );
 };
 
-export const Field: React.FC<{ label: string; dark?: boolean; error?: string; children: React.ReactNode }> = ({ label, dark = false, error, children }) => (
+/** Campo con etiqueta. Si la etiqueta termina en " *" el asterisco se pinta en rojo (campo obligatorio). */
+export const Field: React.FC<{ label: string; dark?: boolean; error?: string | null; children: React.ReactNode }> = ({ label, dark = false, error, children }) => (
   <div style={{ width: '100%' }}>
     <label style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: tema(dark).subtle, display: 'block', marginBottom: 6 }}>
-      {label}
+      {label.endsWith(' *') ? <>{label.slice(0, -2)} <span style={{ color: DANGER }}>*</span></> : label}
     </label>
     {children}
     {error && <div style={{ color: DANGER, fontSize: 11, marginTop: 4, fontWeight: 600 }}>{error}</div>}

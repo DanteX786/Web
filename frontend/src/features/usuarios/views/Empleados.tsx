@@ -1,1161 +1,380 @@
-
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { UserCog, Eye, Pencil, Power, KeyRound, Mail, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  Box,
-  Typography,
-  TextField,
-  Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  InputAdornment,
-  Select,
-  MenuItem,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Link,
-  Switch,
-  FormControlLabel,
-  Chip,
-} from '@mui/material';
-
-import SearchIcon from '@mui/icons-material/Search';
-import AddIcon from '@mui/icons-material/Add';
-import EditIcon from '@mui/icons-material/Edit';
-import DeleteIcon from '@mui/icons-material/Delete';
-import CloseIcon from '@mui/icons-material/Close';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
 
 import { mensajeError } from '../../../shared/utils/api';
-import { empleadoService, type Empleado, type EmpleadoDatos } from '../services/empleadoService';
+import { empleadoService, type Empleado, type EmpleadoDatos, type EstadoEmpleado } from '../services/empleadoService';
 import { rolService, type Rol } from '../../configuracion/services/rolService';
-
-interface Employee {
-  id: string;
-  nombre: string;
-  telefono: string;
-  direccion: string;
-  correo: string;
-  codRol: string;
-  rol: string;
-  identificacion: string;
-  estado: string;
-  password?: string;
-}
+import { obtenerUsuario } from '../../auth/services/authService';
+import { soloDigitos, validarCorreo, validarDireccion, validarTelefono } from '../../auth/utils/validaciones';
+import {
+  GOLD, SUCCESS, SUCCESS_BG, DANGER, DANGER_BG, WARNING, WARNING_BG, INFO, FONT,
+  tema, estiloInput, coincide, useAutoRefresco,
+  IdBadge, Pill, ActionCircleBtn, TableShell, FilaMensaje, Modal, Field, ModuleHeader, Paginacion, ConfirmDialog,
+} from '../../produccion/components/ui';
 
 interface EmpleadosModuloProps {
   dark?: boolean;
 }
 
-/** Convierte un empleado de la API al formato que usa esta vista. */
-const aEmployee = (e: Empleado): Employee => ({
-  id: e.id,
-  nombre: e.nombre,
-  telefono: e.telefono ?? '',
-  direccion: e.direccion ?? '',
-  correo: e.correo ?? '',
-  codRol: e.id_rol ?? '',
-  rol: e.rol ?? '',
-  identificacion: e.identificacion,
-  estado: e.estado === 'Activo' ? 'ACTIVO' : 'INACTIVO',
+const POR_PAGINA = 8;
+
+// ==========================================
+// FORMULARIO Y VALIDACIONES (las mismas reglas del backend)
+// ==========================================
+type Campo = 'nombre' | 'identificacion' | 'correo' | 'telefono' | 'direccion' | 'id_rol';
+
+interface Formulario {
+  nombre: string;
+  identificacion: string;
+  correo: string;
+  telefono: string;
+  direccion: string;
+  id_rol: string;
+}
+
+const formularioVacio = (idRol = ''): Formulario => ({
+  nombre: '', identificacion: '', correo: '', telefono: '', direccion: '', id_rol: idRol,
 });
 
-const PATRON_CORREO = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-
-const styles = {
-  goldText: {
-    color: '#d6a848',
-    fontWeight: 'bold',
-    fontSize: '0.85rem',
-  },
-  badgeGold: {
-    backgroundColor: '#fcf8eb',
-    color: '#d6a848',
-    padding: '4px 8px',
-    borderRadius: '4px',
-    fontWeight: 'bold',
-    fontSize: '0.8rem',
-    display: 'inline-block',
-  },
-  btnGold: {
-    backgroundColor: '#dfb754',
-    color: '#000',
-    textTransform: 'none',
-    fontWeight: 'bold',
-    '&:hover': {
-      backgroundColor: '#cda542',
-    },
-  },
-  tableHeader: {
-    borderBottom: '2px solid #dfb754',
-  },
-  modalInput: {
-    backgroundColor: '#f4f5f7',
-    borderRadius: '8px',
-    mt: 0.5,
-    '& .MuiOutlinedInput-root': {
-      '& fieldset': {
-        border: 'none',
-      },
-    },
-    '& .MuiInputBase-input': {
-      padding: '10px 14px',
-    },
-  },
-  modalLabel: {
-    fontWeight: 'bold',
-    color: '#888',
-    fontSize: '0.75rem',
-    letterSpacing: '0.5px',
-    textTransform: 'uppercase',
-  },
+const validarNombrePersona = (v: string): string | null => {
+  const valor = v.trim().replace(/\s+/g, ' ');
+  if (!valor) return 'Escribe el nombre completo.';
+  if (valor.length > 100) return 'Máximo 100 caracteres.';
+  if (!/^[A-Za-zÁÉÍÓÚáéíóúÑñÜü .'-]+$/.test(valor)) return 'Solo letras y espacios.';
+  if (valor.split(' ').filter((p) => p.length >= 2).length < 2) return 'Escribe nombre y apellido.';
+  return null;
 };
 
-export default function EmpleadosModulo({
-  dark = false,
-}: EmpleadosModuloProps) {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [roles, setRoles] = useState<Rol[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+const validarCedula = (v: string): string | null => {
+  if (!v) return 'Escribe la cédula.';
+  return /^\d{6,10}$/.test(v) ? null : 'La cédula tiene entre 6 y 10 dígitos, sin puntos.';
+};
 
-  const cargarDatos = async () => {
-    setLoading(true);
+const validarCampo = (campo: Campo, f: Formulario): string | null => {
+  switch (campo) {
+    case 'nombre': return validarNombrePersona(f.nombre);
+    case 'identificacion': return validarCedula(f.identificacion);
+    case 'correo': return validarCorreo(f.correo);
+    case 'telefono': return validarTelefono('Personal', f.telefono);
+    case 'direccion': return validarDireccion(f.direccion);
+    case 'id_rol': return f.id_rol ? null : 'Elige el rol.';
+  }
+};
+
+const CAMPOS: Campo[] = ['nombre', 'identificacion', 'correo', 'telefono', 'direccion', 'id_rol'];
+
+/**
+ * Empleados del taller.
+ * El administrador registra los datos del empleado; la CONTRASEÑA NO se escribe aquí:
+ * el sistema genera una contraseña temporal y la envía al correo del empleado, que debe
+ * crear la suya la primera vez que entra. "Reenviar acceso" le manda otra temporal.
+ */
+export default function EmpleadosModulo({ dark = false }: EmpleadosModuloProps) {
+  const t = tema(dark);
+  const yo = obtenerUsuario();
+
+  const [empleados, setEmpleados] = useState<Empleado[]>([]);
+  const [roles, setRoles] = useState<Rol[]>([]);
+  const [cargando, setCargando] = useState(true);
+
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState<'' | EstadoEmpleado>('');
+  const [pagina, setPagina] = useState(1);
+
+  // Formulario (crear / editar)
+  const [modal, setModal] = useState<{ empleado: Empleado | null } | null>(null);
+  const [form, setForm] = useState<Formulario>(formularioVacio());
+  const [tocados, setTocados] = useState<Partial<Record<Campo, boolean>>>({});
+  const [guardando, setGuardando] = useState(false);
+
+  // Otras ventanas
+  const [detalle, setDetalle] = useState<Empleado | null>(null);
+  const [confirmEstado, setConfirmEstado] = useState<Empleado | null>(null);
+  const [confirmAcceso, setConfirmAcceso] = useState<Empleado | null>(null);
+  const [procesando, setProcesando] = useState(false);
+
+  const cargar = useCallback(async (silencioso = false) => {
+    if (!silencioso) setCargando(true);
     try {
-      const [empleados, listaRoles] = await Promise.all([
-        empleadoService.listar(),
-        rolService.listar(),
-      ]);
-      setEmployees(empleados.map(aEmployee));
+      const [lista, listaRoles] = await Promise.all([empleadoService.listar(), rolService.listar()]);
+      setEmpleados(lista);
       setRoles(listaRoles);
     } catch (e) {
-      toast.error(mensajeError(e));
+      if (!silencioso) toast.error(mensajeError(e));
     } finally {
-      setLoading(false);
+      if (!silencioso) setCargando(false);
     }
-  };
-
-  useEffect(() => {
-    cargarDatos();
   }, []);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  useEffect(() => { cargar(); }, [cargar]);
+  useAutoRefresco(() => { if (!modal) cargar(true); });
 
-  const [openModal, setOpenModal] = useState(false);
-  const [modalMode, setModalMode] =
-    useState<'ADD' | 'EDIT'>('ADD');
+  // Roles que se pueden dar a un empleado (no "Cliente")
+  const rolesEmpleado = roles.filter((r) => r.estado === 'Activo' && r.descripcion !== 'Cliente');
+  const rolPorDefecto = rolesEmpleado.find((r) => r.descripcion === 'Empleado')?.id ?? rolesEmpleado[0]?.id ?? '';
 
-  const [formData, setFormData] = useState<
-    Partial<Employee> & { confirmPassword?: string }
-  >({});
+  // ---------- Validación en tiempo real ----------
+  const errores = useMemo(() => {
+    const e: Partial<Record<Campo, string | null>> = {};
+    CAMPOS.forEach((c) => { e[c] = validarCampo(c, form); });
+    return e;
+  }, [form]);
+  const errorVisible = (c: Campo) => (tocados[c] ? errores[c] : null);
+  const cambiar = (c: Campo, valor: string) => {
+    setForm((f) => ({ ...f, [c]: valor }));
+    setTocados((x) => ({ ...x, [c]: true }));   // se valida mientras escribe
+  };
+  const salir = (c: Campo) => setTocados((x) => ({ ...x, [c]: true }));
 
-  const [errorMessage, setErrorMessage] = useState('');
-
-  const [openDeleteModal, setOpenDeleteModal] = useState(false);
-  const [employeeToDelete, setEmployeeToDelete] =
-    useState<Employee | null>(null);
-
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 5;
-
-  const filteredEmployees = employees.filter(
-    (emp) =>
-      emp.nombre.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      emp.identificacion.includes(searchQuery) ||
-      emp.correo.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const totalPages = Math.ceil(
-    filteredEmployees.length / itemsPerPage
-  );
-
-  const safePage = Math.min(
-    currentPage,
-    Math.max(totalPages, 1)
-  );
-
-  const indexOfLastItem = safePage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-
-  const currentEmployees = filteredEmployees.slice(
-    indexOfFirstItem,
-    indexOfLastItem
-  );
-
-  const handleToggleStatus = async (id: string) => {
-    const emp = employees.find((e) => e.id === id);
-    if (!emp) return;
-    try {
-      const actualizado = await empleadoService.cambiarEstado(
-        id,
-        emp.estado === 'ACTIVO' ? 'Inactivo' : 'Activo'
-      );
-      setEmployees((prev) =>
-        prev.map((e) => (e.id === id ? aEmployee(actualizado) : e))
-      );
-      toast.success(`Empleado ${actualizado.estado.toLowerCase()}`);
-    } catch (e) {
-      toast.error(mensajeError(e));
-    }
+  const abrirNuevo = () => {
+    setForm(formularioVacio(rolPorDefecto));
+    setTocados({});
+    setModal({ empleado: null });
   };
 
-  const handleOpenDeleteDialog = (employee: Employee) => {
-    setEmployeeToDelete(employee);
-    setOpenDeleteModal(true);
+  const abrirEditar = (e: Empleado) => {
+    setForm({
+      nombre: e.nombre, identificacion: e.identificacion, correo: e.correo ?? '', telefono: e.telefono ?? '',
+      direccion: e.direccion ?? '', id_rol: e.id_rol ?? '',
+    });
+    setTocados({});
+    setModal({ empleado: e });
   };
 
-  const handleConfirmDelete = async () => {
-    if (!employeeToDelete) return;
-    try {
-      await empleadoService.eliminar(employeeToDelete.id);
-      setEmployees((prev) =>
-        prev.filter((emp) => emp.id !== employeeToDelete.id)
-      );
-      toast.success('Empleado eliminado');
-    } catch (e) {
-      toast.error(mensajeError(e));
-    } finally {
-      setOpenDeleteModal(false);
-      setEmployeeToDelete(null);
-    }
-  };
-
-  const rolesActivos = roles.filter((r) => r.estado === 'Activo');
-
-  const handleOpenModal = (
-    mode: 'ADD' | 'EDIT',
-    employee: Employee | null = null
-  ) => {
-    setModalMode(mode);
-    setErrorMessage('');
-
-    setFormData(
-      employee
-        ? {
-            ...employee,
-            password: '',
-            confirmPassword: '',
-          }
-        : {
-            id: '',
-            nombre: '',
-            telefono: '',
-            direccion: '',
-            correo: '',
-            codRol: rolesActivos[0]?.id ?? '',
-            rol: rolesActivos[0]?.descripcion ?? '',
-            identificacion: '',
-            estado: 'ACTIVO',
-            password: '',
-            confirmPassword: '',
-          }
-    );
-
-    setOpenModal(true);
-  };
-
-  const handleSave = async () => {
-    const {
-      nombre,
-      telefono,
-      direccion,
-      correo,
-      identificacion,
-      codRol,
-      password,
-      confirmPassword,
-    } = formData;
-
-    if (
-      !nombre?.trim() ||
-      !telefono?.trim() ||
-      !direccion?.trim() ||
-      !correo?.trim() ||
-      !identificacion?.trim()
-    ) {
-      setErrorMessage(
-        'Por favor, completa todos los campos obligatorios.'
-      );
-      return;
-    }
-
-    if (!PATRON_CORREO.test((correo ?? '').trim())) {
-      setErrorMessage('El correo no tiene un formato válido.');
-      return;
-    }
-
-    if (!codRol) {
-      setErrorMessage('Selecciona un rol.');
-      return;
-    }
-
-    if (
-      modalMode === 'ADD' &&
-      (!password || !confirmPassword)
-    ) {
-      setErrorMessage(
-        'Por favor, ingresa y confirma la contraseña.'
-      );
-      return;
-    }
-
-    if (password && password.length < 6) {
-      setErrorMessage('La contraseña debe tener al menos 6 caracteres.');
-      return;
-    }
-
-    if (password && password !== confirmPassword) {
-      setErrorMessage('Las contraseñas no coinciden.');
-      return;
-    }
-
-    setErrorMessage('');
-
+  const guardar = async () => {
+    if (!modal) return;
+    setTocados(Object.fromEntries(CAMPOS.map((c) => [c, true])));
+    const primero = CAMPOS.find((c) => errores[c]);
+    if (primero) { toast.error(errores[primero] ?? 'Revisa los campos marcados en rojo.'); return; }
     const datos: EmpleadoDatos = {
-      nombre: (nombre ?? '').trim(),
-      telefono: (telefono ?? '').trim(),
-      direccion: (direccion ?? '').trim(),
-      correo: (correo ?? '').trim(),
-      identificacion: (identificacion ?? '').trim(),
-      id_rol: codRol,
-      estado: formData.estado === 'ACTIVO' ? 'Activo' : 'Inactivo',
+      nombre: form.nombre.trim().replace(/\s+/g, ' '),
+      identificacion: form.identificacion,
+      correo: form.correo.trim().toLowerCase(),
+      telefono: form.telefono,
+      direccion: form.direccion.trim() || null,
+      id_rol: form.id_rol,
     };
-    // Al editar, si la contraseña queda vacía se conserva la actual
-    if (password) datos.contrasena = password;
-
-    setSaving(true);
+    setGuardando(true);
     try {
-      if (modalMode === 'ADD') {
+      if (modal.empleado) {
+        await empleadoService.actualizar(modal.empleado.id, datos);
+        toast.success('Empleado actualizado.');
+      } else {
         const nuevo = await empleadoService.crear(datos);
-        setEmployees((prev) => [...prev, aEmployee(nuevo)]);
-        setCurrentPage(
-          Math.ceil((employees.length + 1) / itemsPerPage)
-        );
-        toast.success('Empleado creado correctamente');
-      } else if (formData.id) {
-        const actualizado = await empleadoService.actualizar(formData.id, datos);
-        setEmployees((prev) =>
-          prev.map((emp) =>
-            emp.id === formData.id ? aEmployee(actualizado) : emp
-          )
-        );
-        toast.success('Empleado actualizado correctamente');
+        toast.success(`Empleado ${nuevo.id} registrado. Le enviamos la contraseña temporal a ${nuevo.correo}.`, { duration: 7000 });
       }
-      setOpenModal(false);
+      setModal(null);
+      await cargar(true);
     } catch (e) {
-      setErrorMessage(mensajeError(e));
+      toast.error(mensajeError(e), { duration: 8000 });
     } finally {
-      setSaving(false);
+      setGuardando(false);
     }
   };
+
+  // ---------- Acciones ----------
+  const ejecutar = async (accion: () => Promise<unknown>, ok: string, cerrar: () => void) => {
+    setProcesando(true);
+    try {
+      await accion();
+      toast.success(ok, { duration: 6000 });
+      cerrar();
+      await cargar(true);
+    } catch (e) {
+      toast.error(mensajeError(e), { duration: 8000 });
+    } finally {
+      setProcesando(false);
+    }
+  };
+
+  // ---------- Búsqueda, filtro y paginación ----------
+  const filtrados = useMemo(() => empleados
+    .filter((e) => !filtroEstado || e.estado === filtroEstado)
+    .filter((e) => coincide(busqueda, [
+      e.id, e.nombre, e.identificacion, e.correo, e.telefono, e.direccion, e.rol, e.estado,
+      e.debe_cambiar_contrasena ? 'Pendiente' : 'Activo',
+    ])), [empleados, busqueda, filtroEstado]);
+
+  useEffect(() => { setPagina(1); }, [busqueda, filtroEstado]);
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  const visibles = filtrados.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+  const esYo = (e: Empleado) => e.id === yo?.id;
+  const celda: React.CSSProperties = { padding: '12px 14px' };
+
+  // Campo de texto del formulario
+  const entrada = (c: Campo, props: React.InputHTMLAttributes<HTMLInputElement>, transformar?: (v: string) => string) => (
+    <input {...props} value={form[c]}
+      onChange={(ev) => cambiar(c, transformar ? transformar(ev.target.value) : ev.target.value)}
+      onBlur={() => salir(c)}
+      style={estiloInput(dark, { border: `1px solid ${errorVisible(c) ? DANGER : tocados[c] && !errores[c] && form[c] ? SUCCESS : t.border}` })} />
+  );
 
   return (
-    <Box
-      sx={{
-        p: 4,
-        backgroundColor: dark ? '#121212' : '#f8f9fa',
-        minHeight: '100vh',
-      }}
-    >
-      {/* CABECERA */}
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 3,
-          gap: 2,
-          flexWrap: 'wrap',
-        }}
-      >
-        <Box>
-          <Typography
-            variant="h4"
-            sx={{
-              fontWeight: 'bold',
-              color: dark ? '#fff' : '#1a1a1a',
-            }}
-          >
-            Empleados
-          </Typography>
+    <div style={{ backgroundColor: t.bg, color: t.fg, minHeight: '100vh', padding: 24, fontFamily: FONT }}>
+      <ModuleHeader
+        title="Empleados"
+        subtitle="Registra al personal del taller. La contraseña le llega a cada empleado a su correo."
+        search={busqueda}
+        onSearch={setBusqueda}
+        onAdd={abrirNuevo}
+        addLabel="Nuevo empleado"
+        dark={dark}
+        extra={
+          <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value as '' | EstadoEmpleado)}
+            style={estiloInput(dark, { width: 160, padding: '8px 10px' })}>
+            <option value="">Todos los estados</option>
+            <option value="Activo">Activo</option>
+            <option value="Inactivo">Inactivo</option>
+          </select>
+        }
+      />
 
-          <Typography variant="body1" sx={{ color: '#888' }}>
-            Personal registrado en el taller
-          </Typography>
-        </Box>
+      <TableShell headers={['ID', 'Empleado', 'Cédula', 'Correo', 'Teléfono', 'Rol', 'Acceso', 'Estado', 'Acciones']} dark={dark}>
+        {cargando || visibles.length === 0 ? (
+          <FilaMensaje colSpan={9} dark={dark} cargando={cargando}
+            texto={empleados.length === 0 ? 'Todavía no hay empleados registrados.' : 'No se encontraron empleados con ese filtro.'} />
+        ) : visibles.map((e) => (
+          <tr key={e.id} style={{ borderBottom: `1px solid ${t.border}` }}>
+            <td style={celda}><IdBadge id={e.id} /></td>
+            <td style={{ ...celda, fontSize: 13, fontWeight: 700 }}>{e.nombre}{esYo(e) && <span style={{ fontSize: 11, color: t.subtle, fontWeight: 500 }}> (tú)</span>}</td>
+            <td style={{ ...celda, fontSize: 12, fontFamily: 'monospace', color: t.subtle }}>{e.identificacion}</td>
+            <td style={{ ...celda, fontSize: 12 }}>{e.correo ?? '—'}</td>
+            <td style={{ ...celda, fontSize: 12 }}>{e.telefono ?? '—'}</td>
+            <td style={celda}><Pill texto={e.rol ?? '—'} color={GOLD} bg={`${GOLD}1F`} /></td>
+            <td style={celda}>
+              {e.debe_cambiar_contrasena
+                ? <Pill texto="Pendiente" color={WARNING} bg={WARNING_BG} />
+                : <Pill texto="Contraseña creada" color={SUCCESS} bg={SUCCESS_BG} />}
+            </td>
+            <td style={celda}>
+              {e.estado === 'Activo'
+                ? <Pill texto="Activo" color={SUCCESS} bg={SUCCESS_BG} />
+                : <Pill texto="Inactivo" color={DANGER} bg={DANGER_BG} />}
+            </td>
+            <td style={celda}>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <ActionCircleBtn variant="blue" onClick={() => setDetalle(e)} title="Ver detalle"><Eye size={14} /></ActionCircleBtn>
+                <ActionCircleBtn variant="gold" onClick={() => abrirEditar(e)} title="Editar"><Pencil size={14} /></ActionCircleBtn>
+                <ActionCircleBtn variant="gold" disabled={e.estado !== 'Activo'} onClick={() => setConfirmAcceso(e)}
+                  title={e.estado !== 'Activo' ? 'Actívalo para enviarle el acceso' : 'Reenviar acceso (nueva contraseña temporal al correo)'}>
+                  <KeyRound size={14} />
+                </ActionCircleBtn>
+                <ActionCircleBtn variant={e.estado === 'Activo' ? 'danger' : 'success'} disabled={esYo(e)} onClick={() => setConfirmEstado(e)}
+                  title={esYo(e) ? 'No puedes inactivar tu propia cuenta' : e.estado === 'Activo' ? 'Inactivar' : 'Activar'}>
+                  <Power size={14} />
+                </ActionCircleBtn>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </TableShell>
 
-        <Box
-          sx={{
-            display: 'flex',
-            gap: 2,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
-          {/* BUSCADOR CON EL MISMO DISEÑO DE LA IMAGEN */}
-          <TextField
-            placeholder="Buscar empleados..."
-            variant="outlined"
-            size="small"
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1);
-            }}
-            sx={{
-              width: '270px',
-              backgroundColor: dark ? '#1E1E1E' : '#F9F9F9',
-              borderRadius: '10px',
+      <Paginacion pagina={pagina} total={totalPaginas} registros={filtrados.length} porPagina={POR_PAGINA} onCambiar={setPagina} dark={dark} />
 
-              '& .MuiOutlinedInput-root': {
-                height: '34px',
-                borderRadius: '10px',
-                paddingLeft: '10px',
-                fontSize: '13px',
-                fontFamily: 'Arial, sans-serif',
-
-                '& fieldset': {
-                  borderColor: dark ? '#383838' : '#E1E1E1',
-                  borderWidth: '1px',
-                },
-
-                '&:hover fieldset': {
-                  borderColor: dark ? '#555555' : '#D5D5D5',
-                },
-
-                '&.Mui-focused fieldset': {
-                  borderColor: dark ? '#777777' : '#D1D1D1',
-                  borderWidth: '1px',
-                },
-              },
-
-              '& .MuiInputBase-input': {
-                padding: '7px 0',
-                color: dark ? '#E0E0E0' : '#555555',
-                fontSize: '13px',
-
-                '&::placeholder': {
-                  color: dark ? '#999999' : '#777777',
-                  opacity: 1,
-                },
-              },
-            }}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment
-                    position="start"
-                    sx={{ marginRight: '8px' }}
-                  >
-                    <SearchIcon
-                      sx={{
-                        fontSize: '16px',
-                        color: dark ? '#999999' : '#777777',
-                      }}
-                    />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            sx={{
-              ...styles.btnGold,
-              borderRadius: '8px',
-            }}
-            onClick={() => handleOpenModal('ADD')}
-          >
-            Nuevo empleado
-          </Button>
-        </Box>
-      </Box>
-
-      {/* TABLA DE EMPLEADOS */}
-      <TableContainer
-        component={Paper}
-        sx={{
-          borderRadius: '12px',
-          boxShadow: '0 2px 10px rgba(0,0,0,0.05)',
-          backgroundColor: dark ? '#1e1e1e' : '#fff',
-        }}
-      >
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>
-                ID EMPLEADO
-              </TableCell>
-              <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>
-                NOMBRE
-              </TableCell>
-              <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>
-                TELÉFONO
-              </TableCell>
-              <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>
-                DIRECCIÓN
-              </TableCell>
-              <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>
-                CORREO
-              </TableCell>
-              <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>
-                ROL
-              </TableCell>
-              <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>
-                IDENTIFICACIÓN
-              </TableCell>
-              <TableCell sx={{ ...styles.goldText, ...styles.tableHeader }}>
-                ESTADO
-              </TableCell>
-              <TableCell
-                sx={{ ...styles.goldText, ...styles.tableHeader }}
-                align="center"
-              >
-                ACCIONES
-              </TableCell>
-            </TableRow>
-          </TableHead>
-
-          <TableBody>
-            {currentEmployees.map((row) => {
-              const isActive = row.estado === 'ACTIVO';
-
-              return (
-                <TableRow
-                  key={row.id}
-                  sx={{
-                    '&:last-child td, &:last-child th': {
-                      border: 0,
-                    },
-                    backgroundColor: dark ? '#1e1e1e' : '#fafafa',
-                  }}
-                >
-                  <TableCell>
-                    <Box sx={styles.badgeGold}>{row.id}</Box>
-                  </TableCell>
-
-                  <TableCell
-                    sx={{
-                      fontWeight: 'bold',
-                      color: dark ? '#ddd' : 'inherit',
-                    }}
-                  >
-                    {row.nombre}
-                  </TableCell>
-
-                  <TableCell sx={{ color: dark ? '#bbb' : '#666' }}>
-                    {row.telefono}
-                  </TableCell>
-
-                  <TableCell sx={{ color: dark ? '#bbb' : '#666' }}>
-                    {row.direccion}
-                  </TableCell>
-
-                  <TableCell>
-                    <Link
-                      href={`mailto:${row.correo}`}
-                      sx={{
-                        color: '#4da6ff',
-                        textDecoration: 'none',
-                      }}
-                    >
-                      {row.correo}
-                    </Link>
-                  </TableCell>
-
-                  <TableCell>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1,
-                      }}
-                    >
-                      <Box sx={styles.badgeGold}>{row.codRol}</Box>
-
-                      <Typography
-                        variant="body2"
-                        sx={{ color: dark ? '#bbb' : '#666' }}
-                      >
-                        {row.rol}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-
-                  <TableCell
-                    sx={{
-                      fontWeight: 500,
-                      color: dark ? '#ddd' : 'inherit',
-                    }}
-                  >
-                    {row.identificacion}
-                  </TableCell>
-
-                  <TableCell>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 1.5,
-                      }}
-                    >
-                      <Switch
-                        size="small"
-                        checked={isActive}
-                        onChange={() => handleToggleStatus(row.id)}
-                        sx={{
-                          '& .MuiSwitch-switchBase.Mui-checked': {
-                            color: '#137333',
-                            '&:hover': {
-                              backgroundColor:
-                                'rgba(19, 115, 51, 0.08)',
-                            },
-                          },
-                          '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track':
-                            {
-                              backgroundColor: '#137333',
-                            },
-                        }}
-                      />
-
-                      <Chip
-                        label={row.estado}
-                        size="small"
-                        sx={{
-                          backgroundColor: isActive
-                            ? dark
-                              ? '#0A2E1A'
-                              : '#E6F4EA'
-                            : dark
-                              ? '#3C1414'
-                              : '#FCE8E6',
-                          color: isActive ? '#137333' : '#C5221F',
-                          fontWeight: 'bold',
-                          borderRadius: '20px',
-                          fontSize: '0.75rem',
-                          height: '24px',
-                          px: 0.5,
-                        }}
-                      />
-                    </Box>
-                  </TableCell>
-
-                  <TableCell align="center">
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        gap: 1,
-                      }}
-                    >
-                      <IconButton
-                        onClick={() => handleOpenModal('EDIT', row)}
-                        size="small"
-                        sx={{ color: '#dfb754' }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-
-                      <IconButton
-                        onClick={() => handleOpenDeleteDialog(row)}
-                        size="small"
-                        sx={{ color: '#d93025' }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-
-            {currentEmployees.length === 0 && (
-              <TableRow>
-                <TableCell
-                  colSpan={9}
-                  align="center"
-                  sx={{ py: 4, color: dark ? '#bbb' : '#888' }}
-                >
-                  {loading ? 'Cargando empleados...' : 'No se encontraron empleados.'}
-                </TableCell>
-              </TableRow>
+      {/* ============ CREAR / EDITAR ============ */}
+      {modal && (
+        <Modal title={modal.empleado ? `Editar empleado ${modal.empleado.id}` : 'Nuevo empleado'} icon={<UserCog size={16} color={GOLD} />}
+          onClose={() => setModal(null)} onSave={guardar} saveLabel={modal.empleado ? 'Guardar cambios' : 'Registrar y enviar acceso'}
+          saving={guardando} dark={dark} maxWidth="640px">
+          <div style={{ fontSize: 12, color: t.subtle }}>Los campos con <b style={{ color: DANGER }}>*</b> son obligatorios.</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <div style={{ gridColumn: 'span 2' }}>
+              <Field label="Nombre completo *" dark={dark} error={errorVisible('nombre') ?? undefined}>
+                {entrada('nombre', { maxLength: 100, placeholder: 'Ej. Gloria Inés Arango Vélez', autoFocus: true })}
+              </Field>
+            </div>
+            <Field label="Cédula *" dark={dark} error={errorVisible('identificacion') ?? undefined}>
+              {entrada('identificacion', { maxLength: 10, inputMode: 'numeric', placeholder: 'Ej. 1017184532' }, (v) => soloDigitos(v).slice(0, 10))}
+            </Field>
+            <Field label="Teléfono celular *" dark={dark} error={errorVisible('telefono') ?? undefined}>
+              {entrada('telefono', { maxLength: 10, inputMode: 'numeric', placeholder: 'Ej. 3001234567' }, (v) => soloDigitos(v).slice(0, 10))}
+            </Field>
+            <div style={{ gridColumn: 'span 2' }}>
+              <Field label="Correo electrónico *" dark={dark} error={errorVisible('correo') ?? undefined}>
+                {entrada('correo', { type: 'email', maxLength: 100, placeholder: 'Ej. nombre@gmail.com' })}
+              </Field>
+            </div>
+            <div style={{ gridColumn: 'span 2' }}>
+              <Field label="Dirección (opcional)" dark={dark} error={errorVisible('direccion') ?? undefined}>
+                {entrada('direccion', { maxLength: 150, placeholder: 'Ej. Cra 65 #97-14, Medellín' })}
+              </Field>
+            </div>
+            <Field label="Rol *" dark={dark} error={errorVisible('id_rol') ?? undefined}>
+              <select value={form.id_rol} onChange={(ev) => cambiar('id_rol', ev.target.value)} onBlur={() => salir('id_rol')}
+                style={estiloInput(dark, { border: `1px solid ${errorVisible('id_rol') ? DANGER : t.border}` })}>
+                <option value="">Seleccionar...</option>
+                {rolesEmpleado.map((r) => <option key={r.id} value={r.id}>{r.descripcion}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div style={{ display: 'flex', gap: 10, background: `${INFO}12`, border: `1px solid ${INFO}40`, borderRadius: 10, padding: '12px 14px', fontSize: 12, lineHeight: 1.6 }}>
+            <Mail size={18} color={INFO} style={{ flexShrink: 0, marginTop: 2 }} />
+            {modal.empleado ? (
+              <span>La contraseña no se edita aquí. Si el empleado la olvidó o cambiaste su correo, usa <b>Reenviar acceso</b> (<KeyRound size={11} style={{ verticalAlign: 'middle' }} />): le llega una contraseña temporal nueva.</span>
+            ) : (
+              <span>No escribas contraseña: al registrar, el sistema genera una <b>contraseña temporal</b> y la envía al correo del empleado.
+                La primera vez que entre tendrá que <b>crear su propia contraseña</b>. Revisa bien el correo antes de guardar.</span>
             )}
-          </TableBody>
-        </Table>
+          </div>
+        </Modal>
+      )}
 
-        {/* PAGINACIÓN */}
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 2,
-            flexWrap: 'wrap',
-            p: 2,
-            backgroundColor: dark ? '#1e1e1e' : '#fcfcfc',
-            borderTop: '1px solid #eee',
-          }}
-        >
-          <Typography variant="body2" sx={{ color: '#888' }}>
-            Mostrando de{' '}
-            {filteredEmployees.length === 0
-              ? 0
-              : indexOfFirstItem + 1}{' '}
-            a{' '}
-            {Math.min(indexOfLastItem, filteredEmployees.length)} de{' '}
-            {filteredEmployees.length} registros
-          </Typography>
+      {/* ============ VER DETALLE ============ */}
+      {detalle && (
+        <Modal title={`Empleado ${detalle.id}`} icon={<Eye size={16} color={GOLD} />} onClose={() => setDetalle(null)} dark={dark} maxWidth="560px">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            {([
+              ['Nombre', detalle.nombre],
+              ['Cédula', detalle.identificacion],
+              ['Correo', detalle.correo ?? '—'],
+              ['Teléfono', detalle.telefono ?? '—'],
+              ['Dirección', detalle.direccion ?? '—'],
+              ['Rol', detalle.rol ?? '—'],
+              ['Estado', detalle.estado],
+              ['Acceso', detalle.debe_cambiar_contrasena ? 'Pendiente: todavía no ha creado su contraseña' : 'Ya creó su contraseña'],
+            ] as [string, string][]).map(([label, valor]) => (
+              <div key={label} style={{ background: t.surface, borderRadius: 8, padding: '10px 14px', minWidth: 0 }}>
+                <div style={{ fontSize: 10, letterSpacing: '0.05em', color: t.subtle, marginBottom: 4, textTransform: 'uppercase' }}>{label}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, overflowWrap: 'anywhere' }}>{valor}</div>
+              </div>
+            ))}
+          </div>
+        </Modal>
+      )}
 
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            <Button
-              onClick={() =>
-                setCurrentPage((prev) => Math.max(prev - 1, 1))
-              }
-              disabled={safePage === 1}
-              variant="outlined"
-              size="small"
-              sx={{
-                textTransform: 'none',
-                color: dark ? '#ddd' : '#333',
-                borderColor: '#ccc',
-              }}
-            >
-              Anterior
-            </Button>
-
-            <Typography
-              variant="body2"
-              sx={{
-                fontWeight: 'bold',
-                px: 1,
-                color: dark ? '#ddd' : '#333',
-              }}
-            >
-              Página {safePage} de {totalPages || 1}
-            </Typography>
-
-            <Button
-              onClick={() =>
-                setCurrentPage((prev) =>
-                  Math.min(prev + 1, totalPages)
-                )
-              }
-              disabled={safePage >= totalPages || totalPages === 0}
-              variant="outlined"
-              size="small"
-              sx={{
-                textTransform: 'none',
-                color: dark ? '#ddd' : '#333',
-                borderColor: '#ccc',
-              }}
-            >
-              Siguiente
-            </Button>
-          </Box>
-        </Box>
-      </TableContainer>
-
-      {/* MODAL CREAR / EDITAR */}
-      <Dialog
-        open={openModal}
-        onClose={() => setOpenModal(false)}
-        maxWidth="sm"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: {
-              borderRadius: '12px',
-              borderTop: '4px solid #dfb754',
-            },
-          },
-        }}
-      >
-        <DialogTitle
-          sx={{
-            fontWeight: 'bold',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            pb: 1,
-          }}
-        >
-          {modalMode === 'ADD' ? 'Nuevo Empleado' : 'Editar Empleado'}
-
-          <IconButton
-            onClick={() => setOpenModal(false)}
-            size="small"
-            sx={{ color: '#aaa' }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-
-        <DialogContent
-          dividers
-          sx={{ borderBottom: 'none', px: 4, py: 3 }}
-        >
-          {errorMessage && (
-            <Box
-              sx={{
-                backgroundColor: '#fde8e8',
-                color: '#c5221f',
-                p: '10px 14px',
-                borderRadius: '8px',
-                mb: 2.5,
-                fontWeight: 500,
-                fontSize: '0.85rem',
-                border: '1px solid #fad2d1',
-              }}
-            >
-              {errorMessage}
-            </Box>
-          )}
-
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: {
-                xs: '1fr',
-                sm: '1fr 1fr',
-              },
-              gap: 2.5,
-            }}
-          >
-            <Box>
-              <Typography sx={styles.modalLabel}>ID (AUTO)</Typography>
-              <TextField
-                fullWidth
-                disabled
-                value={modalMode === 'ADD' ? 'Se genera al guardar' : formData.id}
-                sx={styles.modalInput}
-              />
-            </Box>
-
-            <Box>
-              <Typography sx={styles.modalLabel}>NOMBRE</Typography>
-              <TextField
-                fullWidth
-                placeholder="Nombre completo"
-                value={formData.nombre || ''}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    nombre: e.target.value,
-                  })
-                }
-                sx={styles.modalInput}
-              />
-            </Box>
-
-            <Box>
-              <Typography sx={styles.modalLabel}>TELÉFONO</Typography>
-              <TextField
-                fullWidth
-                placeholder="300 000 0000"
-                value={formData.telefono || ''}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    telefono: e.target.value,
-                  })
-                }
-                sx={styles.modalInput}
-              />
-            </Box>
-
-            <Box>
-              <Typography sx={styles.modalLabel}>
-                IDENTIFICACIÓN
-              </Typography>
-              <TextField
-                fullWidth
-                placeholder="Ej: 10293120"
-                value={formData.identificacion || ''}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    identificacion: e.target.value,
-                  })
-                }
-                sx={styles.modalInput}
-              />
-            </Box>
-
-            <Box sx={{ gridColumn: '1 / -1' }}>
-              <Typography sx={styles.modalLabel}>CORREO</Typography>
-              <TextField
-                fullWidth
-                placeholder="correo@ejemplo.com"
-                value={formData.correo || ''}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    correo: e.target.value,
-                  })
-                }
-                sx={styles.modalInput}
-              />
-            </Box>
-
-            <Box sx={{ gridColumn: '1 / -1' }}>
-              <Typography sx={styles.modalLabel}>DIRECCIÓN</Typography>
-              <TextField
-                fullWidth
-                placeholder="Ej: Cra 45 #099"
-                value={formData.direccion || ''}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    direccion: e.target.value,
-                  })
-                }
-                sx={styles.modalInput}
-              />
-            </Box>
-
-            <Box>
-              <Typography sx={styles.modalLabel}>ROL</Typography>
-              <Select
-                value={formData.codRol || ''}
-                displayEmpty
-                onChange={(e) => {
-                  const cod = e.target.value as string;
-                  const rolElegido = roles.find((r) => r.id === cod);
-
-                  setFormData({
-                    ...formData,
-                    codRol: cod,
-                    rol: rolElegido?.descripcion ?? '',
-                  });
-                }}
-                fullWidth
-                sx={styles.modalInput}
-              >
-                <MenuItem value="" disabled>
-                  Selecciona un rol
-                </MenuItem>
-                {roles
-                  .filter((r) => r.estado === 'Activo' || r.id === formData.codRol)
-                  .map((r) => (
-                    <MenuItem key={r.id} value={r.id}>
-                      {r.id} — {r.descripcion}
-                    </MenuItem>
-                  ))}
-              </Select>
-            </Box>
-
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center',
-              }}
-            >
-              <Typography sx={styles.modalLabel}>ESTADO</Typography>
-
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.estado === 'ACTIVO'}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        estado: e.target.checked
-                          ? 'ACTIVO'
-                          : 'INACTIVO',
-                      })
-                    }
-                  />
-                }
-                label={
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      fontWeight: 'bold',
-                      color:
-                        formData.estado === 'ACTIVO'
-                          ? '#137333'
-                          : '#C5221F',
-                    }}
-                  >
-                    {formData.estado === 'ACTIVO'
-                      ? 'ACTIVO'
-                      : 'INACTIVO'}
-                  </Typography>
-                }
-              />
-            </Box>
-
-            <Box>
-              <Typography sx={styles.modalLabel}>CONTRASEÑA</Typography>
-              <TextField
-                fullWidth
-                type="password"
-                placeholder={modalMode === 'EDIT' ? 'Vacía = no cambiar' : '........'}
-                value={formData.password || ''}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    password: e.target.value,
-                  })
-                }
-                sx={styles.modalInput}
-              />
-            </Box>
-
-            <Box>
-              <Typography sx={styles.modalLabel}>
-                CONFIRMAR CONTRASEÑA
-              </Typography>
-              <TextField
-                fullWidth
-                type="password"
-                placeholder="........"
-                value={formData.confirmPassword || ''}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    confirmPassword: e.target.value,
-                  })
-                }
-                sx={styles.modalInput}
-              />
-            </Box>
-          </Box>
-        </DialogContent>
-
-        <DialogActions sx={{ px: 4, pb: 3, pt: 0, gap: 1 }}>
-          <Button
-            onClick={() => setOpenModal(false)}
-            sx={{
-              backgroundColor: '#e2e8f0',
-              color: '#1a1a1a',
-              fontWeight: 'bold',
-              textTransform: 'none',
-              px: 3,
-            }}
-          >
-            Cancelar
-          </Button>
-
-          <Button
-            onClick={handleSave}
-            variant="contained"
-            disabled={saving}
-            sx={{ ...styles.btnGold, px: 4 }}
-          >
-            {saving ? 'Guardando...' : 'Guardar'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* MODAL DE ELIMINACIÓN */}
-      <Dialog
-        open={openDeleteModal}
-        onClose={() => setOpenDeleteModal(false)}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{
-          paper: {
-            sx: {
-              borderRadius: '16px',
-              p: 1,
-              textAlign: 'center',
-              borderTop: '4px solid #d93025',
-            },
-          },
-        }}
-      >
-        <DialogTitle sx={{ pb: 1, pt: 3 }}>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 1.5,
-            }}
-          >
-            <Box
-              sx={{
-                backgroundColor: '#fce8e8',
-                color: '#d93025',
-                borderRadius: '50%',
-                p: 1.5,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <WarningAmberIcon sx={{ fontSize: '32px' }} />
-            </Box>
-
-            <Typography
-              variant="h6"
-              sx={{ fontWeight: 'bold', color: '#1a1a1a' }}
-            >
-              ¿Seguro deseas eliminar este empleado?
-            </Typography>
-          </Box>
-        </DialogTitle>
-
-        <DialogContent sx={{ pb: 2 }}>
-          <Typography variant="body2" sx={{ color: '#666' }}>
-            Esta acción eliminará a{' '}
-            <strong>{employeeToDelete?.nombre}</strong> (
-            {employeeToDelete?.id}) permanentemente del sistema.
-          </Typography>
-        </DialogContent>
-
-        <DialogActions
-          sx={{
-            justifyContent: 'center',
-            pb: 3,
-            gap: 1.5,
-          }}
-        >
-          <Button
-            onClick={() => setOpenDeleteModal(false)}
-            sx={{
-              backgroundColor: '#e2e8f0',
-              color: '#1a1a1a',
-              fontWeight: 'bold',
-              textTransform: 'none',
-              px: 3,
-              borderRadius: '8px',
-            }}
-          >
-            Cancelar
-          </Button>
-
-          <Button
-            onClick={handleConfirmDelete}
-            variant="contained"
-            sx={{
-              backgroundColor: '#d93025',
-              color: '#fff',
-              fontWeight: 'bold',
-              textTransform: 'none',
-              px: 3,
-              borderRadius: '8px',
-              '&:hover': {
-                backgroundColor: '#b31412',
-              },
-            }}
-          >
-            Sí, eliminar
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+      {/* ============ CONFIRMACIONES ============ */}
+      {confirmAcceso && (
+        <ConfirmDialog
+          titulo={`¿Reenviar acceso a ${confirmAcceso.nombre}?`}
+          mensaje={`Se genera una contraseña temporal nueva y se envía a ${confirmAcceso.correo}. La anterior deja de servir, se cierran sus sesiones abiertas y al entrar deberá crear su propia contraseña.`}
+          confirmarLabel="Sí, enviar"
+          variante="success"
+          icono={<ShieldCheck size={28} color={SUCCESS} />}
+          procesando={procesando}
+          onCancel={() => setConfirmAcceso(null)}
+          onConfirm={() => ejecutar(() => empleadoService.reenviarAcceso(confirmAcceso.id),
+            `Listo: le enviamos una contraseña temporal nueva a ${confirmAcceso.correo}.`, () => setConfirmAcceso(null))}
+          dark={dark}
+        />
+      )}
+      {confirmEstado && (
+        <ConfirmDialog
+          titulo={confirmEstado.estado === 'Activo' ? `¿Inactivar a ${confirmEstado.nombre}?` : `¿Activar a ${confirmEstado.nombre}?`}
+          mensaje={confirmEstado.estado === 'Activo'
+            ? 'No podrá iniciar sesión ni recibir tareas mientras esté inactivo. Sus registros se conservan.'
+            : 'Podrá volver a iniciar sesión y recibir tareas.'}
+          confirmarLabel={confirmEstado.estado === 'Activo' ? 'Sí, inactivar' : 'Sí, activar'}
+          variante={confirmEstado.estado === 'Activo' ? 'danger' : 'success'}
+          icono={<Power size={28} color={confirmEstado.estado === 'Activo' ? DANGER : SUCCESS} />}
+          procesando={procesando}
+          onCancel={() => setConfirmEstado(null)}
+          onConfirm={() => ejecutar(
+            () => empleadoService.cambiarEstado(confirmEstado.id, confirmEstado.estado === 'Activo' ? 'Inactivo' : 'Activo'),
+            `Empleado ${confirmEstado.estado === 'Activo' ? 'inactivado' : 'activado'}.`, () => setConfirmEstado(null))}
+          dark={dark}
+        />
+      )}
+    </div>
   );
 }

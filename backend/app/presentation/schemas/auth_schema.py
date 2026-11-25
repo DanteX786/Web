@@ -77,6 +77,7 @@ class UsuarioRespuesta(BaseModel):
     tipo_documento: str | None
     nombre_contacto: str | None = None
     tipo_telefono: str | None
+    debe_cambiar_contrasena: bool = False
     permisos: list[str]
 
 
@@ -98,3 +99,10 @@ class CodigoEnviadoRespuesta(MensajeRespuesta):
 class TokenRestablecerRespuesta(BaseModel):
     token_restablecer: str
     minutos_vigencia: int
+
+
+class PrimerCambioEntrada(BaseModel):
+    """Empleado con contraseña temporal: crea su propia contraseña."""
+    contrasena_actual: str = Field(max_length=72, description="La contraseña temporal que llegó al correo")
+    nueva_contrasena: str = Field(max_length=72)
+    confirmar_contrasena: str = Field(max_length=72)

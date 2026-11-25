@@ -18,7 +18,7 @@ from app.domain.exceptions.errors import (
 from app.presentation.api.auth_router import router as auth_router
 from app.presentation.api.proceso_router import router as proceso_router
 from app.presentation.api.asistencia_router import router as asistencia_router
-from app.presentation.api.produccion_router import asignaciones_router, router as produccion_router
+from app.presentation.api.produccion_router import asignaciones_router, defectuosas_router, router as produccion_router
 from app.presentation.api.registro_diario_router import router as registro_diario_router
 from app.presentation.api.seguimiento_router import router as seguimiento_router
 # ---- Aquí cada compañero agrega el import de sus routers ----
@@ -136,6 +136,7 @@ app.include_router(auth_router)  # login, registro y recuperación son públicos
 # Producción (Camilo)
 app.include_router(produccion_router, dependencies=_p([P_PRODUCCION], [P_PRODUCCION]))
 app.include_router(asignaciones_router, dependencies=_p([P_PRODUCCION, P_AVANCE], [P_PRODUCCION]))
+app.include_router(defectuosas_router, dependencies=_p([P_PRODUCCION, P_ENTREGAS], [P_PRODUCCION]))  # solo lectura
 app.include_router(registro_diario_router, dependencies=_p([P_PRODUCCION, P_AVANCE], [P_PRODUCCION, P_AVANCE]))
 app.include_router(seguimiento_router, dependencies=_p(
     [P_REMISIONES, P_REMISION_CLIENTE, P_PRODUCCION, P_ENTREGAS], [], solo_personal=False))

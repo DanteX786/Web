@@ -150,3 +150,46 @@ def problema_direccion(direccion: str | None) -> str | None:
     if direccion and len(direccion.strip()) < 5:
         return "La dirección es muy corta."
     return None
+
+
+# ---------------------------------------------------------------- Empleados
+def problema_nombre_persona(nombre: str) -> str | None:
+    """Nombre y apellido de una persona (empleados): solo letras, mínimo dos palabras."""
+    valor = " ".join((nombre or "").split())
+    if not valor:
+        return "Ingrese el nombre completo."
+    if len(valor) > 100:
+        return "El nombre puede tener máximo 100 caracteres."
+    if not re.fullmatch(r"[A-Za-zÁÉÍÓÚáéíóúÑñÜü .'\-]+", valor):
+        return "El nombre solo puede tener letras y espacios."
+    if len([p for p in valor.split(" ") if len(p) >= 2]) < 2:
+        return "Escriba nombre y apellido."
+    return None
+
+
+def problema_identificacion(identificacion: str) -> str | None:
+    """Cédula del empleado: entre 6 y 10 dígitos, sin puntos."""
+    valor = (identificacion or "").strip()
+    if not valor:
+        return "Ingrese la cédula."
+    if not re.fullmatch(r"\d{6,10}", valor):
+        return "La cédula tiene entre 6 y 10 dígitos, sin puntos ni espacios."
+    return None
+
+
+def generar_contrasena_temporal(longitud: int = 12) -> str:
+    """Contraseña aleatoria que cumple todas las reglas (mayúscula, minúscula, número y especial).
+    Se usa como contraseña temporal del empleado: él la cambia al entrar por primera vez."""
+    import secrets
+    mayus = "ABCDEFGHJKLMNPQRSTUVWXYZ"          # sin letras que se confunden (I, O)
+    minus = "abcdefghijkmnpqrstuvwxyz"          # sin l, o
+    numeros = "23456789"                         # sin 0 ni 1
+    especiales = "*#@!$%&?"
+    todos = mayus + minus + numeros + especiales
+    letras = [secrets.choice(mayus), secrets.choice(minus), secrets.choice(numeros), secrets.choice(especiales)]
+    letras += [secrets.choice(todos) for _ in range(max(longitud, LONGITUD_MINIMA) - len(letras))]
+    secrets.SystemRandom().shuffle(letras)
+    contrasena = "".join(letras)
+    if problemas_contrasena(contrasena):        # no debería pasar; por si acaso se genera otra
+        return generar_contrasena_temporal(longitud)
+    return contrasena

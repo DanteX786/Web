@@ -26,6 +26,10 @@ class IEmailService(ABC):
     def enviar_codigo_recuperacion(self, correo: str, nombre: str, codigo: str, minutos: int) -> None:
         """Envía el correo. Lanza ServicioNoDisponibleError si no se pudo enviar."""
 
+    @abstractmethod
+    def enviar_acceso_empleado(self, correo: str, nombre: str, contrasena_temporal: str, es_nuevo: bool) -> None:
+        """Envía al empleado su contraseña temporal. Lanza ServicioNoDisponibleError si no se pudo."""
+
 
 class IVerificadorCorreo(ABC):
     @abstractmethod

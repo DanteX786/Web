@@ -16,7 +16,6 @@ import { seguimientoService, type Seguimiento } from '../../produccion/services/
 import { clienteService, type Cliente } from '../../usuarios/services/clienteService';
 import { obtenerUsuario } from '../../auth/services/authService';
 import { puedeVer } from '../../auth/utils/permisos';
-import { produccionService } from '../../produccion/services/produccionService';
 import { ConfirmDialog, Modal as ModalUi, fechaHora } from '../../produccion/components/ui';
 import { entregaService } from '../services/entregaService';
 import {
@@ -157,10 +156,9 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
   // Modales de confirmación
   const [idParaEliminar, setIdParaEliminar] = useState<string | null>(null);
   const [rechazo, setRechazo] = useState<{ id: string; motivo: string } | null>(null);
-  const [enviarProducir, setEnviarProducir] = useState<Remision | null>(null);
+  // Aprobar = enviar a producción: al confirmar, la producción se crea sola en "Por asignar"
+  const [confirmAprobar, setConfirmAprobar] = useState<Remision | null>(null);
   const [enviando, setEnviando] = useState(false);
-  // "Enviar a producir" lo usa quien gestiona la producción (ya no se crea desde el módulo de Producción)
-  const puedeProducir = !esCliente && puedeVer(usuarioSesion, 'produccion');
   // "Enviar a remisión de entrega": cuando producción la deja Terminada
   const [enviarEntrega, setEnviarEntrega] = useState<Remision | null>(null);
   const puedeEntregar = !esCliente && puedeVer(usuarioSesion, 'remisionEntrega');
@@ -339,24 +337,19 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
   };
 
   // ---------- Acciones del administrador ----------
-  const aprobar = async (id: string) => {
-    try {
-      reemplazarEnLista(await remisionService.aprobar(id));
-      toast.success(`Remisión ${id} aprobada. Ya puede pasar a producción.`);
-    } catch (error) {
-      toast.error(mensajeError(error));
-    }
-  };
-
-  /** Crea la producción "Por asignar" con las tallas de la remisión; la remisión pasa a "En producción". */
-  const confirmarEnviarProducir = async () => {
-    if (!enviarProducir) return;
+  /**
+   * Aprobar la remisión la envía directo a producción: la base de datos crea la producción
+   * "Por asignar" con sus tallas y la remisión queda "En producción".
+   */
+  const aprobar = async () => {
+    if (!confirmAprobar) return;
+    const id = confirmAprobar.id_remision;
     setEnviando(true);
     try {
-      const prod = await produccionService.enviarAProducir(enviarProducir.id_remision);
-      reemplazarEnLista(await remisionService.obtener(enviarProducir.id_remision));
-      toast.success(`Remisión ${prod.id_remision} enviada a producir: producción ${prod.id_produccion} creada (Por asignar).`);
-      setEnviarProducir(null);
+      await remisionService.aprobar(id);
+      reemplazarEnLista(await remisionService.obtener(id));
+      toast.success(`Remisión ${id} aprobada y enviada a producción: ya está lista para asignar (Por asignar).`);
+      setConfirmAprobar(null);
     } catch (error) {
       toast.error(mensajeError(error));
     } finally {
@@ -514,10 +507,7 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
                         <ActionCircleBtn variant="gold" onClick={() => handleEditarRemision(rem)} title="Editar (solo Pendiente)" disabled={rem.estado !== 'Pendiente'}><Pencil size={14} /></ActionCircleBtn>
                         {rolActivo === 'ADMIN' && (
                           <>
-                            <ActionCircleBtn variant="blue" onClick={() => aprobar(rem.id_remision)} title="Aprobar" disabled={rem.estado !== 'Pendiente'}><CheckCircle2 size={14} /></ActionCircleBtn>
-                            {puedeProducir && (
-                              <ActionCircleBtn variant="success" onClick={() => setEnviarProducir(rem)} title="Enviar a producir (solo Aprobada)" disabled={rem.estado !== 'Aprobada'}><Factory size={14} /></ActionCircleBtn>
-                            )}
+                            <ActionCircleBtn variant="blue" onClick={() => setConfirmAprobar(rem)} title="Aprobar y enviar a producción" disabled={rem.estado !== 'Pendiente'}><CheckCircle2 size={14} /></ActionCircleBtn>
                             {puedeEntregar && (
                               <ActionCircleBtn variant="success" onClick={() => setEnviarEntrega(rem)} title={rem.estado === 'Entregada' ? 'Ya se envió a remisión de entrega' : 'Enviar a remisión de entrega (solo Terminada)'} disabled={rem.estado !== 'Terminada'}><Truck size={14} /></ActionCircleBtn>
                             )}
@@ -702,16 +692,16 @@ export const RemisionesView: React.FC<RemisionProps> = ({ dark = false, rolInici
             )}
           </Modal>
         )}
-      {enviarProducir && (
+      {confirmAprobar && (
         <ConfirmDialog
-          titulo={`¿Enviar ${enviarProducir.id_remision} a producir?`}
-          mensaje={`Se creará la producción en estado "Por asignar" con las ${enviarProducir.total_prendas} prendas de la remisión (sus tallas pasan automáticamente). La remisión quedará "En producción".`}
-          confirmarLabel="Sí, enviar a producir"
+          titulo={`¿Seguro que quieres aprobar ${confirmAprobar.id_remision}?`}
+          mensaje={`Al aprobarla se envía automáticamente a producción: se crea la producción en "Por asignar" con las ${confirmAprobar.total_prendas} prendas de la remisión (sus tallas pasan solas) y la remisión queda "En producción".`}
+          confirmarLabel="Sí, aprobar y enviar"
           variante="success"
           icono={<Factory size={28} color="#28A745" />}
           procesando={enviando}
-          onCancel={() => setEnviarProducir(null)}
-          onConfirm={confirmarEnviarProducir}
+          onCancel={() => setConfirmAprobar(null)}
+          onConfirm={aprobar}
           dark={dark}
         />
       )}

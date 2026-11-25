@@ -46,5 +46,7 @@ class RegistroDiarioModel(Base):
 
     id_registro_diario: Mapped[str] = mapped_column(String(10), primary_key=True, server_default=FetchedValue())
     id_detalle_de_produccion: Mapped[str] = mapped_column(String(10))
-    cantidad: Mapped[int] = mapped_column(Integer)
+    cantidad: Mapped[int] = mapped_column(Integer)                  # terminadas (buenas)
+    cantidad_defectuosa: Mapped[int] = mapped_column(Integer, default=0)
+    motivo_defecto: Mapped[str | None] = mapped_column(String(200), nullable=True)
     fecha: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=FetchedValue())
