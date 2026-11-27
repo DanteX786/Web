@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Toaster } from 'sonner';
 import MainLayout from './shared/components/MainLayout';
 import { AuthView } from './features/auth/components/AuthView';
+import { ActivarCuentaView } from './features/auth/components/ActivarCuentaView';
 import LandingPage from './shared/components/LandingPage';
 import LicenciasView from './shared/components/LicenciasView';
 import { EVENTO_SESION_CERRADA } from './shared/utils/api';
@@ -32,6 +33,7 @@ import TiposPieza from './features/parametros/views/TiposPieza';
 import TiposMaquinaria from './features/parametros/views/TiposMaquinaria';
 import Procesos from './features/parametros/views/Procesos';
 import EmpleadosView from './features/usuarios/views/Empleados';
+import UsuariosView from './features/usuarios/views/UsuariosView';
 import Roles from './features/configuracion/views/Roles';
 
 // MÓDULO PRINCIPAL Y AUTH
@@ -48,6 +50,13 @@ export default function App() {
   });
   const [dark, setDark] = useState<boolean>(false);
   const [mensajeLogin, setMensajeLogin] = useState<string>('');
+  // Enlace del correo de invitación: http://.../?activar=<token> (cliente registrado por el taller)
+  const [tokenActivacion, setTokenActivacion] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get('activar'));
+  const quitarTokenDeLaUrl = () => {
+    setTokenActivacion(null);
+    window.history.replaceState(null, '', window.location.pathname);
+  };
 
   // Si la sesión termina (token vencido o contraseña cambiada en cualquier dispositivo),
   // se sale del aplicativo de inmediato y se muestra el motivo en el inicio de sesión.
@@ -76,6 +85,20 @@ export default function App() {
   useEffect(() => {
     if (usuario && !vistaPermitida) setCurrentView(vistaInicial(usuario));
   }, [usuario, vistaPermitida]);
+
+  // 0. ACTIVAR CUENTA (enlace del correo de invitación; no necesita sesión)
+  if (tokenActivacion) {
+    return (
+      <>
+        <Toaster position="top-right" richColors />
+        <ActivarCuentaView
+          token={tokenActivacion}
+          onActivada={(u) => { quitarTokenDeLaUrl(); setUsuario(u); setMensajeLogin(''); setCurrentView(vistaInicial(u)); }}
+          onIrALogin={() => { quitarTokenDeLaUrl(); setCurrentView(usuario ? vistaInicial(usuario) : 'login'); }}
+        />
+      </>
+    );
+  }
 
   // 1. SI LA VISTA ES 'landing', MUESTRA LA LANDING PAGE
   if (currentView === 'landing') {
@@ -161,6 +184,7 @@ export default function App() {
       {currentView === 'procesos' && <Procesos dark={dark} />}
       {currentView === 'asistencia' && <AsistenciaView dark={dark} />}
       {currentView === 'empleados' && <EmpleadosView dark={dark} />}
+      {currentView === 'usuarios' && <UsuariosView dark={dark} onNavegar={setCurrentView} />}
       {currentView === 'roles' && <Roles dark={dark} />}
 
       {/* LICENCIAS DE SOFTWARE (todos los usuarios) */}

@@ -8,7 +8,7 @@ export const api = axios.create({
 export const EVENTO_SESION_CERRADA = "eslabon:sesion-cerrada";
 
 // Endpoints públicos: un 401 ahí es "credenciales incorrectas", no "sesión cerrada"
-const RUTAS_PUBLICAS = ["/auth/login", "/auth/registro", "/auth/recuperar", "/auth/reenviar-codigo", "/auth/verificar-codigo", "/auth/restablecer"];
+const RUTAS_PUBLICAS = ["/auth/login", "/auth/registro", "/auth/recuperar", "/auth/reenviar-codigo", "/auth/verificar-codigo", "/auth/restablecer", "/auth/invitacion", "/auth/activar-cuenta"];
 
 // Agrega el token de la sesión a cada petición
 api.interceptors.request.use((config) => {

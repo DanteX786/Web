@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass
@@ -15,3 +16,7 @@ class Cliente:
     estado: str
     tipo_documento: str = "NIT"           # NIT | CC | CE | PA | PPT
     nombre_contacto: str | None = None    # persona a contactar (obligatoria si es NIT)
+    # De la tabla maestra tb_usuarios (script 21)
+    estado_cuenta: str = "Activa"         # Sin acceso | Invitado | Activa
+    origen: str | None = None             # Autoregistro | Creado por el taller
+    fecha_invitacion: datetime | None = None

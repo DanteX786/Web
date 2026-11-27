@@ -16,7 +16,9 @@ class BcryptHasher(IHasher):
     def hashear(self, texto: str) -> str:
         return bcrypt.hashpw(texto.encode("utf-8"), bcrypt.gensalt(self.rondas)).decode("utf-8")
 
-    def verificar(self, texto: str, hash_guardado: str) -> bool:
+    def verificar(self, texto: str, hash_guardado: str | None) -> bool:
+        if not hash_guardado:
+            return False  # cliente creado por el taller que aún no activa su cuenta
         try:
             return bcrypt.checkpw(texto.encode("utf-8"), hash_guardado.encode("utf-8"))
         except ValueError:

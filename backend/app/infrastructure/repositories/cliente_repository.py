@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.domain.entities.cliente import Cliente
 from app.domain.interfaces.cliente_repository import IClienteRepository
+from app.infrastructure.database.sesion import fijar_responsable
 
 # Todo cliente se guarda con el rol "Cliente" (tabla roles). Se busca por nombre
 # y no por id, para no depender de que siempre sea ROL00003.
@@ -11,8 +12,10 @@ ROL_CLIENTE = "Cliente"
 
 SELECT_CLIENTES = """
     SELECT c.nit, c.nombre, c.direccion, c.correo, c.telefono, c.estado,
-           c.tipo_documento, c.nombre_contacto
+           c.tipo_documento, c.nombre_contacto,
+           COALESCE(u.estado_cuenta, 'Activa') AS estado_cuenta, u.origen, u.fecha_invitacion
       FROM tb_clientes c
+      LEFT JOIN tb_usuarios u ON u.nit_cliente = c.nit
 """
 
 # Campo que llega desde la API -> columna real en la tabla.
@@ -62,10 +65,11 @@ class ClienteRepository(IClienteRepository):
         return Cliente(**fila) if fila else None
 
     def existe_correo(self, correo: str, excluir_nit: str | None = None) -> bool:
-        sql = "SELECT EXISTS (SELECT 1 FROM tb_clientes WHERE LOWER(correo) = LOWER(:correo)"
+        """Busca en la tabla maestra: el correo no puede estar ni en otro cliente ni en un empleado."""
+        sql = "SELECT EXISTS (SELECT 1 FROM tb_usuarios WHERE LOWER(correo) = LOWER(:correo)"
         params = {"correo": correo}
         if excluir_nit:
-            sql += " AND nit <> :excluir"
+            sql += " AND nit_cliente IS DISTINCT FROM :excluir"
             params["excluir"] = excluir_nit
         sql += ")"
         return bool(self.db.execute(text(sql), params).scalar())
@@ -77,8 +81,10 @@ class ClienteRepository(IClienteRepository):
             {"nit": nit},
         ).scalar())
 
-    def crear(self, datos: dict) -> Cliente:
+    def crear(self, datos: dict, id_empleado: str | None = None) -> Cliente:
         datos = _preparar(datos)
+        if id_empleado:
+            fijar_responsable(self.db, id_empleado)  # tb_usuarios guarda quién lo creó (origen: taller)
         campos = [c for c in CAMPOS_EDITABLES if c in datos]
         sql = f"""
             INSERT INTO tb_clientes (nit, tipo_documento, id_rol, {", ".join(CAMPOS_EDITABLES[c] for c in campos)})

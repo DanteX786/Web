@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 
 from core.config import settings
 from app.application.auth_service import MENSAJE_CODIGO_ENVIADO, AuthService, Sesion
 from app.domain.entities.usuario import Usuario
 from app.presentation.dependencies.auth_dependencies import get_auth_service, get_usuario_actual
 from app.presentation.schemas.auth_schema import (
-    CambiarContrasenaEntrada, CodigoEnviadoRespuesta, ContrasenaActualEntrada,
+    ActivarCuentaEntrada, CambiarContrasenaEntrada, CodigoEnviadoRespuesta, InvitacionRespuesta, ContrasenaActualEntrada,
     ContrasenaActualRespuesta, CorreoEntrada, LoginEntrada,
     MensajeRespuesta, PerfilEntrada, PrimerCambioEntrada, RegistroClienteEntrada, RestablecerEntrada, SesionRespuesta,
     TokenRestablecerRespuesta, UsuarioRespuesta, VerificarCodigoEntrada,
@@ -57,6 +57,21 @@ def registro(datos: RegistroClienteEntrada, service: AuthService = Depends(get_a
         tipo_telefono=datos.tipo_telefono, telefono=datos.telefono, direccion=datos.direccion,
         contrasena=datos.contrasena, confirmar=datos.confirmar_contrasena,
     ))
+
+
+# ------------------------------------------------------------------ Activación (clientes registrados por el taller)
+@router.get("/invitacion", response_model=InvitacionRespuesta,
+            summary="Datos del cliente invitado, a partir del enlace del correo (público)")
+def invitacion(token: str = Query(..., description="El token que llega en el enlace ?activar=..."),
+               service: AuthService = Depends(get_auth_service)):
+    return service.info_invitacion(token)
+
+
+@router.post("/activar-cuenta", response_model=SesionRespuesta,
+             summary="El cliente invitado crea su contraseña y entra (el enlace sirve una sola vez)")
+def activar_cuenta(datos: ActivarCuentaEntrada, service: AuthService = Depends(get_auth_service)):
+    return _sesion(service.activar_cuenta(datos.token, datos.contrasena, datos.confirmar_contrasena,
+                                          datos.acepta_tratamiento_datos))
 
 
 # ------------------------------------------------------------------ Recuperación

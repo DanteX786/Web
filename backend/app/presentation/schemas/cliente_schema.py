@@ -1,4 +1,5 @@
 import re
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -43,7 +44,10 @@ class ClienteCrear(BaseModel):
     correo: str = Field(max_length=100)
     telefono: str | None = Field(default=None, max_length=20)
     estado: Estado = "Activo"
-    contrasena: str = Field(min_length=6, max_length=72, description="Se guarda encriptada")
+    contrasena: str | None = Field(
+        default=None, min_length=6, max_length=72,
+        description="Se guarda encriptada. Si no se envía, el cliente queda SIN cuenta y se le invita por correo "
+                    "al crearle su primera remisión.")
 
     _limpiar_textos = field_validator(*TEXTOS, mode="before")(lambda cls, v: _limpiar(v))
 
@@ -92,3 +96,6 @@ class ClienteRespuesta(BaseModel):
     estado: str
     tipo_documento: str
     nombre_contacto: str | None
+    estado_cuenta: str = "Activa"          # Sin acceso | Invitado | Activa
+    origen: str | None = None
+    fecha_invitacion: datetime | None = None

@@ -1,5 +1,5 @@
 import { api } from "../../../shared/utils/api";
-import type { TipoDocumento } from "../../auth/services/authService";
+import type { EstadoCuenta, TipoDocumento } from "../../auth/services/authService";
 
 export type EstadoCliente = "Activo" | "Inactivo";
 
@@ -12,6 +12,10 @@ export interface Cliente {
   estado: EstadoCliente;
   tipo_documento: TipoDocumento;
   nombre_contacto: string | null; // persona a contactar (empresas con NIT)
+  /** Tabla maestra de usuarios: "Sin acceso" = lo registró el taller y aún no tiene cuenta. */
+  estado_cuenta: EstadoCuenta;
+  origen: "Autoregistro" | "Creado por el taller" | null;
+  fecha_invitacion: string | null;
 }
 
 /** El rol "Cliente" lo asigna el backend automáticamente. */
@@ -24,7 +28,8 @@ export interface ClienteCrearDatos {
   correo: string;
   telefono?: string | null;
   estado?: EstadoCliente;
-  contrasena: string; // obligatoria al crear, se guarda encriptada
+  /** Si no se envía, el cliente queda SIN cuenta y se le invita por correo con su primera remisión. */
+  contrasena?: string;
 }
 
 /** El NIT no se edita. La contraseña solo se cambia si se envía. */
@@ -48,4 +53,8 @@ export const clienteService = {
 
   eliminar: (nit: string) =>
     api.delete(`/clientes/${nit}`).then(() => undefined),
+
+  /** Envía (o reenvía) el correo para que el cliente active su cuenta. El enlace anterior deja de servir. */
+  invitar: (nit: string) =>
+    api.post<Cliente>(`/clientes/${nit}/invitacion`).then((r) => r.data),
 };

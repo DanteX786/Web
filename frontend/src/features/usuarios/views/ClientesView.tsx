@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Plus, Trash2, Pencil, X, Search, AlertTriangle, CheckCircle 
+  Plus, Trash2, Pencil, X, Search, AlertTriangle, CheckCircle, Mail
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { BotonExcel } from '../../../shared/components/BotonExcel';
@@ -223,6 +223,11 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
   const [formCorreo, setFormCorreo] = useState('');
   const [formTelefono, setFormTelefono] = useState('');
   const [formEstado, setFormEstado] = useState<EstadoCliente>('Activo');
+  // Cliente que llamó o vino al taller: se registra SIN contraseña y se le invita por correo
+  // a activar su cuenta cuando se le crea la primera remisión (tabla maestra de usuarios).
+  const [formSinCuenta, setFormSinCuenta] = useState(true);
+  const [paraInvitar, setParaInvitar] = useState<Cliente | null>(null);
+  const [invitando, setInvitando] = useState(false);
 
   // Cerrar el desplegable si se hace clic fuera
   useEffect(() => {
@@ -258,7 +263,23 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       setFormEstado('Activo');
     }
     setFormContrasena('');
+    setFormSinCuenta(true);
     setModalForm(true);
+  };
+
+  const confirmarInvitacion = async () => {
+    if (!paraInvitar) return;
+    setInvitando(true);
+    try {
+      const actualizado = await clienteService.invitar(paraInvitar.nit);
+      setClientes(clientes.map(c => c.nit === actualizado.nit ? actualizado : c));
+      toast.success(`Le enviamos a ${actualizado.correo} el enlace para activar su cuenta.`);
+      setParaInvitar(null);
+    } catch (error) {
+      toast.error(mensajeError(error, 'No se pudo enviar la invitación.'));
+    } finally {
+      setInvitando(false);
+    }
   };
 
   const handleGuardarCliente = async () => {
@@ -270,7 +291,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
     if (problemaDoc) { toast.error(problemaDoc); return; }
     const problemaContacto = validarContacto(formTipoDoc, formContacto);
     if (problemaContacto) { toast.error(problemaContacto); return; }
-    if (!clienteEditar && formContrasena.length < 6) {
+    if (!clienteEditar && !formSinCuenta && formContrasena.length < 6) {
       toast.error('La contraseña debe tener al menos 6 caracteres.');
       return;
     }
@@ -299,10 +320,13 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
         toast.success('Cliente actualizado exitosamente');
       } else {
         const nuevo = await clienteService.crear({
-          ...datos, tipo_documento: formTipoDoc, nit: limpiarDocumento(formTipoDoc, formNit), contrasena: formContrasena,
+          ...datos, tipo_documento: formTipoDoc, nit: limpiarDocumento(formTipoDoc, formNit),
+          ...(formSinCuenta ? {} : { contrasena: formContrasena }),
         });
         setClientes([...clientes, nuevo].sort((a, b) => a.nombre.localeCompare(b.nombre)));
-        toast.success('Nuevo cliente registrado con éxito');
+        toast.success(formSinCuenta
+          ? 'Cliente registrado sin cuenta. Al crearle su primera remisión le llegará el correo para activarla.'
+          : 'Nuevo cliente registrado con éxito');
       }
       setModalForm(false);
     } catch (error) {
@@ -368,6 +392,8 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       { titulo: 'Teléfono', valor: c => c.telefono },
       { titulo: 'Dirección', valor: c => c.direccion, ancho: 36 },
       { titulo: 'Estado', valor: c => c.estado },
+      { titulo: 'Cuenta', valor: c => c.estado_cuenta },
+      { titulo: 'Origen', valor: c => c.origen },
     ],
   });
 
@@ -460,16 +486,16 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
         </div>
       </div>
 
-      <TableShell headers={['DOCUMENTO', 'NOMBRE', 'DIRECCIÓN', 'CORREO', 'TELÉFONO', 'ESTADO', 'ACCIONES']} dark={dark}>
+      <TableShell headers={['DOCUMENTO', 'NOMBRE', 'DIRECCIÓN', 'CORREO', 'TELÉFONO', 'ESTADO', 'CUENTA', 'ACCIONES']} dark={dark}>
         {cargando ? (
           <tr>
-            <td colSpan={8} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
+            <td colSpan={9} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
               Cargando clientes...
             </td>
           </tr>
         ) : clientesFiltrados.length === 0 ? (
           <tr>
-            <td colSpan={8} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
+            <td colSpan={9} style={{ textAlign: 'center', padding: 32, color: subtle, fontSize: 13 }}>
               No se encontraron registros de clientes.
             </td>
           </tr>
@@ -518,7 +544,25 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                   </select>
                 </td>
                 <td style={{ padding: '12px 14px' }}>
+                  <span title={cli.estado_cuenta === 'Activa' ? 'Puede entrar al aplicativo'
+                      : cli.estado_cuenta === 'Invitado' ? 'Se le envió el enlace y aún no activa su cuenta'
+                      : 'Lo registró el taller; todavía no tiene cuenta'}
+                    style={{
+                      fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 999, whiteSpace: 'nowrap',
+                      background: cli.estado_cuenta === 'Activa' ? SUCCESS_BG : cli.estado_cuenta === 'Invitado' ? '#FFF3E0' : '#EEEEEE',
+                      color: cli.estado_cuenta === 'Activa' ? SUCCESS_TXT : cli.estado_cuenta === 'Invitado' ? '#E8590C' : '#6B6B6B',
+                    }}>
+                    {cli.estado_cuenta ?? 'Activa'}
+                  </span>
+                </td>
+                <td style={{ padding: '12px 14px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {cli.estado_cuenta && cli.estado_cuenta !== 'Activa' && isActive && (
+                      <ActionCircleBtn variant="gold" onClick={() => setParaInvitar(cli)}
+                        title={cli.estado_cuenta === 'Invitado' ? 'Reenviar invitación' : 'Enviar invitación para activar su cuenta'}>
+                        <Mail size={14} />
+                      </ActionCircleBtn>
+                    )}
                     <ActionCircleBtn variant="gold" onClick={() => abrirFormulario(cli)} title="Editar Cliente">
                       <Pencil size={14} />
                     </ActionCircleBtn>
@@ -682,7 +726,25 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                 </Field>
               </div>
 
+              {!clienteEditar && (
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 12, color: fg, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={!formSinCuenta} onChange={(e) => setFormSinCuenta(!e.target.checked)}
+                    style={{ marginTop: 2, accentColor: GOLD }} />
+                  <span>
+                    <b>Asignarle una contraseña ahora</b>
+                    <span style={{ display: 'block', color: subtle, marginTop: 2 }}>
+                      Si no la marcas, el cliente queda sin cuenta y le enviamos un correo para que él mismo la active.
+                    </span>
+                  </span>
+                </label>
+              )}
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {!clienteEditar && formSinCuenta ? (
+                  <div style={{ fontSize: 12, color: subtle, background: `${GOLD}12`, border: `1px solid ${GOLD}40`, borderRadius: 8, padding: '10px 12px', alignSelf: 'end' }}>
+                    Sin contraseña: con su primera remisión le llegará un correo para activar su cuenta.
+                  </div>
+                ) : (
                 <Field label={clienteEditar ? 'Nueva contraseña (opcional)' : 'Contraseña'} dark={dark}>
                   <input
                     type="password"
@@ -693,6 +755,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13, backgroundColor: inputBg, color: fg, border: `1px solid ${borderNormal}`, outline: 'none', boxSizing: 'border-box' }}
                   />
                 </Field>
+                )}
                 <Field label="Estado" dark={dark}>
                   <select
                     value={formEstado}
@@ -734,6 +797,31 @@ export const ClientesView: React.FC<ClientesViewProps> = ({ dark = false }) => {
       )}
 
       {/* MODAL ELIMINAR */}
+      {paraInvitar && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: 16 }}>
+          <div style={{ width: '100%', maxWidth: 440, borderRadius: 16, backgroundColor: cardBg, padding: 28, textAlign: 'center', fontFamily: 'Montserrat, sans-serif' }}>
+            <div style={{ width: 60, height: 60, borderRadius: '50%', background: `${GOLD}1F`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+              <Mail size={26} color={GOLD} />
+            </div>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: fg, margin: '0 0 10px' }}>
+              ¿{paraInvitar.estado_cuenta === 'Invitado' ? 'Reenviar' : 'Enviar'} invitación a {paraInvitar.nombre}?
+            </h3>
+            <p style={{ fontSize: 13, color: subtle, margin: '0 0 20px' }}>
+              Le llegará a <b style={{ color: fg }}>{paraInvitar.correo}</b> un enlace para crear su contraseña (vence en 72 horas).
+              Si ya tenía uno, el anterior deja de servir.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => setParaInvitar(null)} disabled={invitando} style={{ flex: 1, padding: 11, borderRadius: 10, border: 'none', background: inputBg, color: fg, fontWeight: 700, cursor: 'pointer', fontFamily: 'Montserrat, sans-serif' }}>
+                Cancelar
+              </button>
+              <button onClick={confirmarInvitacion} disabled={invitando} style={{ flex: 1, padding: 11, borderRadius: 10, border: 'none', background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212', fontWeight: 700, cursor: invitando ? 'wait' : 'pointer', opacity: invitando ? 0.7 : 1, fontFamily: 'Montserrat, sans-serif' }}>
+                {invitando ? 'Enviando...' : 'Sí, enviar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {modalDelete && (
         <ConfirmDelete
           message={`Esta acción eliminará a ${modalDelete.nombre} de forma permanente. Si ya tiene remisiones, no se podrá eliminar: en ese caso cámbiele el estado a Inactivo.`}

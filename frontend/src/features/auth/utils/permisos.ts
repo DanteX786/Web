@@ -13,6 +13,7 @@ export const PERMISOS_POR_VISTA: Record<string, string[]> = {
   catalogoPiezas: ["Gestionar parámetros de producción"],
   procesos: ["Gestionar parámetros de producción"],
   empleados: ["Gestionar usuarios"],
+  usuarios: ["Gestionar usuarios"],
   clientes: ["Gestionar clientes"],
   remisiones: ["Gestionar remisiones", "Crear remisión (cliente)"],
   remisionEntrega: ["Gestionar remisiones de entrega"],

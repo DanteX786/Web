@@ -78,6 +78,7 @@ class UsuarioRespuesta(BaseModel):
     nombre_contacto: str | None = None
     tipo_telefono: str | None
     debe_cambiar_contrasena: bool = False
+    estado_cuenta: str = "Activa"
     permisos: list[str]
 
 
@@ -99,6 +100,22 @@ class CodigoEnviadoRespuesta(MensajeRespuesta):
 class TokenRestablecerRespuesta(BaseModel):
     token_restablecer: str
     minutos_vigencia: int
+
+
+class InvitacionRespuesta(BaseModel):
+    """Lo que muestra la pantalla "Activar cuenta" (sin datos sensibles)."""
+    nombre: str
+    correo: str
+    documento: str | None
+    tipo_documento: str | None
+
+
+class ActivarCuentaEntrada(BaseModel):
+    """El cliente invitado crea su contraseña desde el enlace del correo."""
+    token: str
+    contrasena: str = Field(max_length=72)
+    confirmar_contrasena: str = Field(max_length=72)
+    acepta_tratamiento_datos: bool = False
 
 
 class PrimerCambioEntrada(BaseModel):

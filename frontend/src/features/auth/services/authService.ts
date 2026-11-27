@@ -39,7 +39,19 @@ export interface Usuario {
   tipo_telefono: TipoTelefono | null;
   /** Empleado con contraseña temporal (la que le llegó al correo): debe crear la suya al entrar. */
   debe_cambiar_contrasena?: boolean;
+  /** Tabla maestra de usuarios: Sin acceso | Invitado | Activa */
+  estado_cuenta?: EstadoCuenta;
   permisos: string[];
+}
+
+export type EstadoCuenta = "Sin acceso" | "Invitado" | "Activa";
+
+/** Datos del cliente invitado que se muestran en "Activar cuenta". */
+export interface InvitacionInfo {
+  nombre: string;
+  correo: string;
+  documento: string | null;
+  tipo_documento: TipoDocumento | null;
 }
 
 export interface PerfilDatos {
@@ -85,6 +97,15 @@ export const authService = {
     api.post<Sesion>("/auth/registro", datos).then((r) => r.data),
 
   me: () => api.get<Usuario>("/auth/me").then((r) => r.data),
+
+  /** Cliente registrado por el taller: datos de su invitación (enlace ?activar=... del correo). */
+  infoInvitacion: (token: string) =>
+    api.get<InvitacionInfo>("/auth/invitacion", { params: { token } }).then((r) => r.data),
+
+  /** El cliente invitado crea su contraseña; devuelve la sesión para entrar de una vez. */
+  activarCuenta: (token: string, contrasena: string, confirmar_contrasena: string, acepta_tratamiento_datos: boolean) =>
+    api.post<Sesion>("/auth/activar-cuenta", { token, contrasena, confirmar_contrasena, acepta_tratamiento_datos })
+      .then((r) => r.data),
 
   recuperar: (correo: string) =>
     api.post<CodigoEnviado>("/auth/recuperar", { correo }).then((r) => r.data),

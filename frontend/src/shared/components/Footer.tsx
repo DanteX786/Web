@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   MapPin, Phone, Mail, Clock, Camera, Globe, MessageCircle, Music2, Briefcase, ArrowUp, ShieldCheck, FileText,
 } from 'lucide-react';
@@ -13,7 +13,7 @@ import logo_negro from '../../../public/images/logo negro.png';
 export const EMPRESA = {
   marca: 'Eslabón',
   razonSocial: 'Taller y Confecciones CDS',
-  eslogan: 'Confección de uniformes y dotaciones con calidad y cumplimiento.',
+  eslogan: 'Confección de uniformes, dotaciones y fast fashion con calidad y cumplimiento.',
   direccion: 'Cra 24C #90-279, Medellín, Antioquia',
   telefono: '+57 313 524 7497',
   telefonoLink: 'tel:+573135247497',
@@ -70,6 +70,16 @@ export const Footer: React.FC<FooterProps> = ({ variant, dark = false, onNavegar
   const fg = dark ? '#F3F4F6' : '#121212';
   const subtle = dark ? '#9CA3AF' : '#6B7280';
   const border = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+
+  // Botón flotante "volver arriba" de la landing: visible en cuanto se baja un poco y se queda fijo en pantalla
+  const [verSubir, setVerSubir] = useState(false);
+  useEffect(() => {
+    if (variant !== 'landing') return;
+    const alMover = () => setVerSubir(window.scrollY > 300);
+    alMover();
+    window.addEventListener('scroll', alMover, { passive: true });
+    return () => window.removeEventListener('scroll', alMover);
+  }, [variant]);
 
   // ================= PIE COMPACTO DENTRO DEL APLICATIVO =================
   if (variant === 'app') {
@@ -160,6 +170,7 @@ export const Footer: React.FC<FooterProps> = ({ variant, dark = false, onNavegar
             <span>Dotación empresarial</span>
             <span>Uniformes de seguridad privada</span>
             <span>Prendas médicas antifluido</span>
+            <span>Fast fashion para marcas y tiendas</span>
             <span>Línea casual de marca propia</span>
           </div>
         </div>
@@ -196,18 +207,28 @@ export const Footer: React.FC<FooterProps> = ({ variant, dark = false, onNavegar
           <button style={{ ...enlace, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }} {...hover} onClick={() => ir('licencias')}>
             <FileText size={14} color={GOLD} /> Licencias
           </button>
-          <button
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            title="Volver arriba"
-            style={{
-              width: 36, height: 36, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212',
-            }}
-          >
-            <ArrowUp size={16} />
-          </button>
         </div>
       </div>
+
+      {/* Volver arriba: fijo abajo a la derecha, siempre a la mano mientras se recorre la página */}
+      <button
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        title="Volver arriba"
+        aria-label="Volver arriba"
+        onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-3px)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; }}
+        style={{
+          position: 'fixed', right: 24, bottom: 24, zIndex: 60,
+          width: 48, height: 48, borderRadius: '50%', border: 'none', cursor: 'pointer',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, color: '#121212',
+          boxShadow: '0 10px 24px rgba(201,162,39,0.40)',
+          opacity: verSubir ? 1 : 0, pointerEvents: verSubir ? 'auto' : 'none',
+          transition: 'opacity 0.3s ease, transform 0.2s ease',
+        }}
+      >
+        <ArrowUp size={20} />
+      </button>
     </footer>
   );
 };

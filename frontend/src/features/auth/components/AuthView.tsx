@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import {
   Mail, Lock, User, Hash, MapPin, Phone,
   UserPlus, KeyRound, ArrowLeft, CheckCircle,
-  AlertTriangle, Eye, EyeOff, LogOut, Sun, Moon, Info, ShieldCheck, RotateCw, Timer
+  AlertTriangle, Eye, EyeOff, LogOut, Sun, Moon, Info, ShieldCheck, RotateCw, Timer,
+  FileText, Factory, Truck, Sparkles,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -37,6 +38,14 @@ interface AuthViewProps {
 type Vista = 'login' | 'register' | 'recover' | 'primer';
 type PasoRecuperar = 'correo' | 'codigo' | 'nueva';
 type CampoRegistro = 'documento' | 'nombre' | 'contacto' | 'correo' | 'telefono' | 'direccion' | 'contrasena' | 'confirmar';
+
+// Imagen y detalles del panel izquierdo
+const FOTO_PANEL = 'https://images.unsplash.com/photo-1673201229733-69d19c5c4a87?auto=format&fit=crop&w=1400&q=80';
+const DETALLES_PANEL = [
+  { Icono: FileText, titulo: 'Envía tus remisiones en línea', texto: 'Prendas, tallas, ficha técnica e insumos en un solo lugar.' },
+  { Icono: Factory, titulo: 'Revisa el avance de tu pedido', texto: 'Desde la aprobación hasta la confección de cada pieza.' },
+  { Icono: Truck, titulo: 'Recibe tus prendas a tiempo', texto: 'Con la remisión de entrega firmada por ambas partes.' },
+];
 
 const mmss = (seg: number) => `${String(Math.floor(seg / 60)).padStart(2, '0')}:${String(seg % 60).padStart(2, '0')}`;
 
@@ -104,10 +113,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
   // ---------- Colores ----------
   const bg = isDark ? "#121212" : "#F8F9FA";
   const cardBg = isDark ? "#1E1E1E" : "#FFFFFF";
-  const inputBg = isDark ? "#2A2A2A" : "#F3F3F5";
+  const inputBg = isDark ? "#242424" : "#FFFFFF";
   const fg = isDark ? "#F8F9FA" : "#121212";
   const subtle = isDark ? "#9A9A9A" : "#6B6B6B";
-  const borderNormal = isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.08)";
+  const borderNormal = isDark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)";
 
   const irA = (v: Vista) => {
     setView(v);
@@ -381,14 +390,76 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
   // ==========================================
   return (
     <div style={{
-      minHeight: '100vh', backgroundColor: bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 16, position: 'relative', overflow: 'hidden', fontFamily: FONT, transition: 'background-color 0.3s ease',
+      height: '100vh', overflow: 'hidden', backgroundColor: bg, display: 'flex', position: 'relative', fontFamily: FONT, transition: 'background-color 0.3s ease',
     }}>
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: `linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT})` }} />
+      <style>{`
+        @media (max-width: 960px) { .auth-panel { display: none !important; } }
+        .auth-form-scroll { scrollbar-width: thin; scrollbar-color: ${GOLD}55 transparent; }
+      `}</style>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: `linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT})`, zIndex: 11 }} />
+
+      {/* ================= PANEL IZQUIERDO: IMAGEN Y DETALLES ================= */}
+      <aside className="auth-panel" style={{
+        flex: '1.1 1 0', height: '100%', position: 'relative',
+        overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', background: '#121212',
+      }}>
+        <img src={FOTO_PANEL} alt="Confección en máquina industrial" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        <div aria-hidden style={{ position: 'absolute', inset: 0,
+          background: 'linear-gradient(to top, rgba(10,10,10,0.92) 0%, rgba(10,10,10,0.7) 45%, rgba(10,10,10,0.25) 100%)' }} />
+        <div aria-hidden style={{ position: 'absolute', inset: 0, background: `radial-gradient(520px 320px at 0% 100%, ${GOLD}33, transparent 70%)` }} />
+        {/* El borde derecho de la foto se oscurece para continuar en el degradado del formulario */}
+        <div aria-hidden style={{ position: 'absolute', inset: 0,
+          background: 'linear-gradient(to right, transparent 0%, transparent 60%, rgba(10,10,10,0.6) 86%, rgba(10,10,10,0.94) 100%)' }} />
+
+        <div style={{ position: 'relative', padding: '84px 56px clamp(24px, 5vh, 48px)', color: '#FFFFFF', maxWidth: 600, width: '70%', minWidth: 460, boxSizing: 'border-box' }}>
+          <img src={logo_negro} alt="Eslabón" style={{ height: 'clamp(80px, 21vh, 220px)', width: 'auto', maxWidth: '100%', objectFit: 'contain', marginBottom: 'clamp(10px, 2.5vh, 24px)', display: 'block' }} />
+          <div>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'rgba(201,162,39,0.22)', color: GOLD_LIGHT,
+              border: `1px solid ${GOLD}88`, fontWeight: 800, fontSize: 11, padding: '6px 12px', borderRadius: 999, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              <Sparkles size={13} /> Taller de Confección
+            </span>
+          </div>
+          <h2 style={{ fontSize: 'clamp(24px, 4vh, 34px)', fontWeight: 800, lineHeight: 1.15, letterSpacing: '-0.02em', margin: 'clamp(8px, 1.6vh, 16px) 0 clamp(6px, 1.2vh, 12px)', textShadow: '0 2px 18px rgba(0,0,0,0.35)' }}>
+            Confección de{' '}
+            <span style={{ background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
+              uniformes, dotaciones y fast fashion
+            </span>
+          </h2>
+          <p style={{ fontSize: 15, lineHeight: 1.7, color: 'rgba(255,255,255,0.82)', margin: '0 0 clamp(12px, 3vh, 28px)' }}>
+            Gestiona tus pedidos con Taller y Confecciones CDS desde cualquier lugar.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(8px, 1.8vh, 16px)' }}>
+            {DETALLES_PANEL.map(({ Icono, titulo, texto }) => (
+              <div key={titulo} style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                <div style={{ width: 40, height: 40, flexShrink: 0, borderRadius: 12, background: 'rgba(201,162,39,0.18)', border: `1px solid ${GOLD}55`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icono size={19} color={GOLD_LIGHT} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>{titulo}</div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>{texto}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 'clamp(14px, 3.5vh, 32px)', paddingTop: 'clamp(10px, 2vh, 18px)', borderTop: '1px solid rgba(255,255,255,0.12)', fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+            Taller y Confecciones CDS · Medellín, Antioquia
+          </div>
+        </div>
+      </aside>
+
+      {/* ================= PANEL DERECHO: FORMULARIO ================= */}
+      <main className="auth-form-scroll" style={{ flex: '1 1 0', minWidth: 0, height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column',
+        padding: '72px 40px 32px', position: 'relative', boxSizing: 'border-box',
+        background: isDark
+          ? `linear-gradient(to right, rgba(10,10,10,0.94) 0%, rgba(10,10,10,0.45) 12%, transparent 30%), radial-gradient(700px 480px at 100% 0%, ${GOLD}1F, transparent 70%), radial-gradient(600px 420px at 100% 100%, ${GOLD}12, transparent 70%)`
+          : `linear-gradient(to right, rgba(10,10,10,0.94) 0%, rgba(10,10,10,0.4) 9%, rgba(10,10,10,0.08) 20%, transparent 30%), radial-gradient(700px 480px at 100% 0%, ${GOLD}26, transparent 70%), radial-gradient(600px 420px at 100% 100%, ${GOLD_LIGHT}1A, transparent 70%)` }}>
 
       {onVolver && (
         <button onClick={onVolver} title="Volver a la página de inicio" style={{
-          position: 'absolute', top: 20, left: 20, background: cardBg, border: `1px solid ${borderNormal}`, borderRadius: 999,
+          position: 'fixed', top: 20, left: 20, background: cardBg, border: `1px solid ${borderNormal}`, borderRadius: 999,
           height: 40, padding: '0 16px 0 12px', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
           boxShadow: '0 4px 6px rgba(0,0,0,0.1)', zIndex: 10, color: fg, fontSize: 13, fontWeight: 700, fontFamily: FONT,
           transition: 'border-color 0.2s ease',
@@ -401,30 +472,32 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
       )}
 
       <button onClick={() => setIsDark(!isDark)} title="Cambiar modo" style={{
-        position: 'absolute', top: 20, right: 20, background: cardBg, border: `1px solid ${borderNormal}`, borderRadius: '50%',
+        position: 'fixed', top: 20, right: 20, background: cardBg, border: `1px solid ${borderNormal}`, borderRadius: '50%',
         width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', zIndex: 10,
       }}>
         {isDark ? <Sun size={18} color={GOLD} /> : <Moon size={18} color="#333" />}
       </button>
 
-      <div style={{ width: '100%', maxWidth: view === 'register' ? 560 : 480 }}>
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <img src={isDark ? logo_negro : logo_blanco} alt="Logo" style={{ height: 100, width: 'auto', display: 'inline-block', objectFit: 'contain' }} />
+      <div style={{ width: '100%', maxWidth: view === 'register' ? 560 : 440, margin: 'auto' }}>
+        <div className="auth-logo-form" style={{ textAlign: 'center', marginBottom: 'clamp(16px, 3vh, 26px)' }}>
+          <img src={isDark ? logo_negro : logo_blanco} alt="Logo" style={{ height: 'clamp(52px, 9vh, 76px)', width: 'auto', display: 'inline-block', objectFit: 'contain' }} />
           <div style={{ fontSize: 11, fontWeight: 700, color: subtle, textTransform: 'uppercase', letterSpacing: '0.12em', marginTop: 10 }}>
             Sistema de Gestión — Eslabón
           </div>
+          {/* Delimitador dorado */}
+          <div aria-hidden style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 'clamp(12px, 2.4vh, 20px)' }}>
+            <div style={{ flex: 1, height: 1.5, background: `linear-gradient(90deg, transparent, ${GOLD})` }} />
+            <div style={{ width: 8, height: 8, transform: 'rotate(45deg)', background: `linear-gradient(135deg, ${GOLD}, ${GOLD_LIGHT})`, borderRadius: 1 }} />
+            <div style={{ flex: 1, height: 1.5, background: `linear-gradient(90deg, ${GOLD}, transparent)` }} />
+          </div>
         </div>
 
-        <div style={{
-          background: cardBg, borderRadius: 16, border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(201,162,39,0.25)'}`,
-          boxShadow: isDark ? '0 20px 40px rgba(0,0,0,0.5)' : '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)',
-          overflow: 'hidden', position: 'relative', transition: 'background-color 0.3s ease, border-color 0.3s ease',
-        }}>
-          <div style={{ height: 2, background: `linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT}, transparent)` }} />
+        {/* Formulario integrado al fondo (sin tarjeta) */}
+        <div style={{ position: 'relative' }}>
 
           {/* ================= LOGIN ================= */}
           {view === 'login' && (
-            <div style={{ padding: 32 }}>
+            <div style={{ padding: '8px 0' }}>
               <h1 style={{ fontSize: 24, fontWeight: 800, color: fg, margin: '0 0 4px' }}>Iniciar Sesión</h1>
               <p style={{ fontSize: 13, color: subtle, margin: '0 0 24px' }}>Accede con tu correo y contraseña</p>
 
@@ -478,7 +551,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
 
           {/* ================= REGISTRO ================= */}
           {view === 'register' && (
-            <div style={{ padding: 28 }}>
+            <div style={{ padding: '8px 0' }}>
               <Volver />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <UserPlus size={18} color={GOLD} />
@@ -612,7 +685,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
           {/* ================= RECUPERAR CONTRASEÑA ================= */}
           {/* ================= PRIMER INGRESO: CREAR CONTRASEÑA ================= */}
           {view === 'primer' && sesionTemporal && (
-            <div style={{ padding: 32 }}>
+            <div style={{ padding: '8px 0' }}>
               <Volver />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <ShieldCheck size={20} color={GOLD} />
@@ -654,7 +727,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
           )}
 
           {view === 'recover' && (
-            <div style={{ padding: 32 }}>
+            <div style={{ padding: '8px 0' }}>
               <Volver />
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                 <KeyRound size={18} color={GOLD} />
@@ -742,6 +815,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onLoginSuccess, mensajeInici
           )}
         </div>
       </div>
+      </main>
     </div>
   );
 };

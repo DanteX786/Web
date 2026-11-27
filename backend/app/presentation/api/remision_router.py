@@ -1,7 +1,11 @@
+import logging
+
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 
+from app.application.auth_service import AuthService
 from app.application.remision_service import RemisionService
 from app.presentation.dependencies.auth_dependencies import (
+    get_auth_service,
     get_id_empleado_actual,
     get_id_empleado_opcional,
 )
@@ -15,6 +19,7 @@ from app.presentation.schemas.remision_schema import (
 )
 
 router = APIRouter(prefix="/api/remisiones", tags=["Remisiones"])
+log = logging.getLogger("uvicorn.error")
 
 
 @router.get("", response_model=list[RemisionRespuesta],
@@ -33,8 +38,17 @@ def obtener(id_remision: str, service: RemisionService = Depends(get_remision_se
              summary="Registrar remisión con prendas y, opcional, insumos del cliente (queda Pendiente)")
 def crear(datos: RemisionCrear,
           id_empleado: str | None = Depends(get_id_empleado_opcional),
-          service: RemisionService = Depends(get_remision_service)):
-    return service.crear(datos.model_dump(), id_empleado)
+          service: RemisionService = Depends(get_remision_service),
+          auth: AuthService = Depends(get_auth_service)):
+    remision = service.crear(datos.model_dump(), id_empleado)
+    # Si la crea el taller para un cliente sin cuenta, se le invita a activarla (una sola vez).
+    # Si el correo falla, la remisión igual queda creada; se puede reenviar desde Clientes / Usuarios.
+    if id_empleado:
+        try:
+            auth.invitar_si_corresponde(remision.nit_cliente)
+        except Exception as error:  # noqa: BLE001
+            log.warning("[INVITACION] No se pudo invitar al cliente %s: %s", remision.nit_cliente, error)
+    return remision
 
 
 @router.put("/{id_remision}", response_model=RemisionRespuesta,
