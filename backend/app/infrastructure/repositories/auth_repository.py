@@ -6,21 +6,22 @@ from sqlalchemy.orm import Session
 from app.domain.entities.usuario import CodigoRecuperacion, NuevoCliente, PerfilCliente, TipoUsuario, Usuario
 from app.domain.interfaces.auth_repository import IAuthRepository
 
-# Empleados y clientes con la misma forma, para buscar por correo o por id.
+# Todos los usuarios salen de la tabla maestra tb_usuarios (script 21). La contraseña
+# y el version_token siguen en empleados / tb_clientes, por eso se unen aquí.
 _SQL_USUARIOS = """
     SELECT * FROM (
-        SELECT e.id_empleados AS id, 'Empleado' AS tipo, e.nombre, e.correo,
-               e.contrasena AS contrasena_hash, e.estado, e.id_rol,
-               r.descripcion_rol AS rol, e.version_token, e.telefono, e.direccion,
-               e.identificacion AS documento, NULL AS tipo_documento, NULL AS nombre_contacto,
-               NULL AS tipo_telefono, e.debe_cambiar_contrasena
-          FROM empleados e LEFT JOIN roles r ON r.id_rol = e.id_rol
-        UNION ALL
-        SELECT c.nit, 'Cliente', c.nombre, c.correo,
-               c.contrasena, c.estado, c.id_rol,
-               COALESCE(r.descripcion_rol, 'Cliente'), c.version_token, c.telefono, c.direccion,
-               c.nit, c.tipo_documento, c.nombre_contacto, c.tipo_telefono, FALSE
-          FROM tb_clientes c LEFT JOIN roles r ON r.id_rol = c.id_rol
+        SELECT COALESCE(us.id_empleado, us.nit_cliente) AS id, us.tipo_usuario AS tipo,
+               us.nombre, us.correo,
+               COALESCE(e.contrasena, c.contrasena) AS contrasena_hash, us.estado, us.id_rol,
+               r.descripcion_rol AS rol, COALESCE(e.version_token, c.version_token) AS version_token,
+               us.telefono, us.direccion, us.documento, us.tipo_documento,
+               c.nombre_contacto, c.tipo_telefono,
+               COALESCE(e.debe_cambiar_contrasena, FALSE) AS debe_cambiar_contrasena,
+               us.id_usuario, us.estado_cuenta, us.fecha_invitacion
+          FROM tb_usuarios us
+          LEFT JOIN empleados e ON e.id_empleados = us.id_empleado
+          LEFT JOIN tb_clientes c ON c.nit = us.nit_cliente
+          LEFT JOIN roles r ON r.id_rol = us.id_rol
     ) u
 """
 
@@ -134,6 +135,35 @@ class AuthRepository(IAuthRepository):
         ).scalar()
         self.db.commit()
         return version
+
+    # ------------------------------------------------------------------ Invitación de clientes
+    def marcar_invitado(self, id_usuario: str) -> datetime:
+        """Cuenta "Invitado" con la fecha de la invitación (una invitación nueva anula la anterior)."""
+        fecha = self.db.execute(
+            text("""UPDATE tb_usuarios
+                        SET estado_cuenta = 'Invitado', fecha_invitacion = clock_timestamp()
+                      WHERE id_usuario = :id AND estado_cuenta <> 'Activa'
+                  RETURNING fecha_invitacion"""),
+            {"id": id_usuario},
+        ).scalar()
+        self.db.commit()
+        return fecha
+
+    def activar_cliente(self, nit: str, contrasena_hash: str) -> None:
+        """Guarda la contraseña del cliente (la cuenta pasa sola a "Activa") y la aceptación de datos."""
+        self.db.execute(
+            text("""UPDATE tb_clientes
+                        SET contrasena = :hash, version_token = version_token + 1
+                      WHERE nit = :nit AND contrasena IS NULL"""),
+            {"hash": contrasena_hash, "nit": nit},
+        )
+        self.db.execute(
+            text("""UPDATE tb_usuarios
+                        SET acepto_tratamiento_datos = TRUE, fecha_aceptacion_datos = now()
+                      WHERE nit_cliente = :nit"""),
+            {"nit": nit},
+        )
+        self.db.commit()
 
     # ------------------------------------------------------------------ Códigos
     def guardar_codigo(self, correo: str, tipo: TipoUsuario, codigo_hash: str, expira: datetime) -> None:

@@ -44,3 +44,9 @@ class IAuthRepository(ABC):
 
     @abstractmethod
     def marcar_codigos_usados(self, correo: str) -> None: ...
+
+    @abstractmethod
+    def marcar_invitado(self, id_usuario: str) -> datetime: ...
+
+    @abstractmethod
+    def activar_cliente(self, nit: str, contrasena_hash: str) -> None: ...

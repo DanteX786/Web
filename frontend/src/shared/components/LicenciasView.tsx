@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft, ExternalLink, FileText, Layers, Package, Scale, Search, Server, ShieldCheck, Wrench, Globe,
-  Palette, Bell, Zap, Lock, Upload, MailCheck, Network, Database,
+  Palette, Bell, Zap, Lock, Upload, MailCheck, Network, Database, Sun, Moon,
 } from 'lucide-react';
 
 import { EMPRESA } from './Footer';
@@ -73,7 +73,19 @@ const ChipLicencia: React.FC<{ codigo: CodigoLicencia }> = ({ codigo }) => {
   );
 };
 
-export const LicenciasView: React.FC<LicenciasViewProps> = ({ dark = false, onVolver }) => {
+export const LicenciasView: React.FC<LicenciasViewProps> = ({ dark: darkApp = false, onVolver }) => {
+  // En la página pública (con "Volver") el modo claro/oscuro es propio y se comparte con la landing;
+  // dentro del aplicativo se usa el del aplicativo.
+  const esPublica = !!onVolver;
+  const [darkPublico, setDarkPublico] = useState<boolean>(() => {
+    try { return localStorage.getItem('landing-oscuro') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    if (!esPublica) return;
+    try { localStorage.setItem('landing-oscuro', darkPublico ? '1' : '0'); } catch { /* sin almacenamiento */ }
+  }, [darkPublico, esPublica]);
+  const dark = esPublica ? darkPublico : darkApp;
+
   const t = {
     bg: dark ? '#121212' : '#F8F9FA',
     card: dark ? '#1E1E1E' : '#FFFFFF',
@@ -117,18 +129,32 @@ export const LicenciasView: React.FC<LicenciasViewProps> = ({ dark = false, onVo
     .filter((g) => g.items.length > 0);
 
   return (
-    <div style={{ background: t.bg, color: t.fg, minHeight: '100vh', fontFamily: FONT }}>
+    <div style={{ background: t.bg, color: t.fg, minHeight: '100vh', fontFamily: FONT, transition: 'background-color 0.3s ease, color 0.3s ease' }}>
+      {esPublica && <style>{`html, body { background: ${t.bg}; }`}</style>}
       {/* Encabezado */}
       <div style={{ height: 4, background: `linear-gradient(90deg, ${GOLD}, ${GOLD_LIGHT}, ${GOLD})` }} />
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 24px 64px' }}>
         {onVolver && (
-          <button onClick={onVolver} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8, background: 'none', border: `1px solid ${GOLD}`,
-            color: GOLD, borderRadius: 999, padding: '8px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-            fontFamily: FONT, marginBottom: 24,
-          }}>
-            <ArrowLeft size={16} /> Volver al inicio
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 24 }}>
+            <button onClick={onVolver} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8, background: 'none', border: `1px solid ${GOLD}`,
+              color: GOLD, borderRadius: 999, padding: '8px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer',
+              fontFamily: FONT,
+            }}>
+              <ArrowLeft size={16} /> Volver al inicio
+            </button>
+            <button
+              onClick={() => setDarkPublico(!darkPublico)}
+              title={dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              aria-label={dark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+              style={{
+                width: 40, height: 40, borderRadius: '50%', border: `1px solid ${t.border}`, background: t.card, cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.08)',
+              }}
+            >
+              {dark ? <Sun size={18} color={GOLD} /> : <Moon size={18} color={t.fg} />}
+            </button>
+          </div>
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 8 }}>

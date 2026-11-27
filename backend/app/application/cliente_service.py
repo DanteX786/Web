@@ -21,7 +21,7 @@ class ClienteService:
     def _validar(self, datos: dict, excluir_nit: str | None = None) -> None:
         correo = datos.get("correo")
         if correo and self.repo.existe_correo(correo, excluir_nit):
-            raise ConflictError(f"Ya existe un cliente con el correo {correo}.")
+            raise ConflictError(f"El correo {correo} ya lo usa otro usuario (cliente o empleado).")
 
     def listar(self, estado: str | None = None) -> list[Cliente]:
         return self.repo.listar(estado)
@@ -32,7 +32,9 @@ class ClienteService:
             raise NotFoundError(f"No existe el cliente con NIT {nit}.")
         return cliente
 
-    def crear(self, datos: dict) -> Cliente:
+    def crear(self, datos: dict, id_empleado: str | None = None) -> Cliente:
+        """Sin contraseña = cliente registrado por el taller sin cuenta ("Sin acceso").
+        Al crearle su primera remisión se le envía la invitación para activarla."""
         tipo = datos.get("tipo_documento", "NIT")
         datos["nit"] = normalizar_documento(tipo, datos["nit"])
         for problema in (problema_documento(tipo, datos["nit"]),
@@ -44,7 +46,7 @@ class ClienteService:
         if self.repo.obtener(datos["nit"]):
             raise ConflictError(f"Ya existe un cliente con el NIT {datos['nit']}.")
         self._validar(datos)
-        return self.repo.crear(datos)
+        return self.repo.crear(datos, id_empleado)
 
     def actualizar(self, nit: str, datos: dict) -> Cliente:
         actual = self.obtener(nit)  # lanza 404 si no existe

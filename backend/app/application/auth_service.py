@@ -42,6 +42,14 @@ class ConfigAuth:
     minutos_codigo: int
     segundos_reenvio: int
     max_intentos: int
+    frontend_url: str = "http://localhost:5173"   # para armar el enlace de activación
+    horas_invitacion: int = 72                    # vigencia del enlace para activar la cuenta
+
+
+def _ocultar_correo(correo: str) -> str:
+    """juan.perez@gmail.com -> ju*******@gmail.com (para avisar a dónde llegó el correo sin revelarlo)."""
+    usuario, _, dominio = correo.partition("@")
+    return f"{usuario[:2]}{'*' * max(len(usuario) - 2, 3)}@{dominio}"
 
 
 @dataclass
@@ -72,6 +80,11 @@ class AuthService:
         if usuario is None:
             self.hasher.verificar(contrasena, _HASH_RELLENO)
             raise AuthError("Correo o contraseña incorrectos.")
+        if not usuario.tiene_cuenta:  # cliente registrado por el taller que aún no activa su cuenta
+            self.hasher.verificar(contrasena, _HASH_RELLENO)
+            raise ForbiddenError(
+                "Tu cuenta aún no está activada. Usa el enlace que te enviamos al correo, "
+                "o «¿Olvidaste tu contraseña?» para crear una.")
         if not self.hasher.verificar(contrasena, usuario.contrasena_hash):
             raise AuthError("Correo o contraseña incorrectos.")
         if not usuario.activo:  # CA_12_01 / CA_23_01
@@ -121,6 +134,14 @@ class AuthService:
         if contrasena != confirmar:
             raise ValidacionError("Las contraseñas no coinciden.")
 
+        # ¿El taller ya lo había registrado (cliente sin cuenta)? No se crea otro: se le envía
+        # la invitación al correo que el taller tiene guardado (así nadie se queda con una cuenta ajena).
+        registrado = self.repo.buscar_por_id("Cliente", numero_documento) or self.repo.buscar_por_correo(correo)
+        if registrado is not None and registrado.tipo == "Cliente" and not registrado.tiene_cuenta:
+            self.invitar_cliente(registrado)
+            raise ConflictError(
+                "El taller ya te tenía registrado. Te enviamos un enlace a "
+                f"{_ocultar_correo(registrado.correo)} para que actives tu cuenta.")
         if self.repo.existe_documento(numero_documento):  # CA_19_02
             raise ConflictError(f"Ya existe una cuenta con el documento {numero_documento}.")
         if self.repo.existe_correo(correo):
@@ -136,6 +157,69 @@ class AuthService:
             nombre_contacto=nombre_contacto if tipo_documento == "NIT" else None,
         ))
         return Sesion(self._token_sesion(usuario), usuario)
+
+    # ================================================================ Invitación de clientes (tabla usuarios)
+    def invitar_cliente(self, usuario: Usuario) -> None:
+        """Envía (o reenvía) el enlace para que un cliente registrado por el taller active su cuenta.
+        Cada invitación nueva deja sin efecto el enlace anterior."""
+        if usuario.tipo != "Cliente":
+            raise ValidacionError("Solo se invitan clientes. A los empleados se les reenvía el acceso desde Empleados.")
+        if usuario.tiene_cuenta:
+            raise ConflictError(f"{usuario.nombre} ya activó su cuenta.")
+        if not usuario.activo:
+            raise ConflictError(f"El cliente {usuario.nombre} está inactivo.")
+        fecha = self.repo.marcar_invitado(usuario.id_usuario)
+        token = self.tokens.crear(
+            {"sub": usuario.id, "tipo": "Cliente", "inv": int(fecha.timestamp()), "proposito": "activar"},
+            self.config.horas_invitacion * 60,
+        )
+        enlace = f"{self.config.frontend_url.rstrip('/')}/?activar={token}"
+        self.correo.enviar_invitacion_cliente(usuario.correo, usuario.nombre, enlace, self.config.horas_invitacion)
+
+    def invitar_cliente_por_nit(self, nit: str) -> Usuario:
+        usuario = self.repo.buscar_por_id("Cliente", nit)
+        if usuario is None:
+            raise ValidacionError(f"No existe el cliente {nit}.")
+        self.invitar_cliente(usuario)
+        return self.repo.buscar_por_id("Cliente", nit)
+
+    def invitar_si_corresponde(self, nit: str) -> bool:
+        """Al crear su primera remisión: si el cliente nunca ha sido invitado, se le invita."""
+        usuario = self.repo.buscar_por_id("Cliente", nit)
+        if usuario is None or usuario.tiene_cuenta or not usuario.activo or usuario.estado_cuenta != "Sin acceso":
+            return False
+        self.invitar_cliente(usuario)
+        return True
+
+    def _usuario_de_invitacion(self, token: str) -> Usuario:
+        datos = self.tokens.leer(token)
+        if datos.get("proposito") != "activar":
+            raise TokenInvalidoError("El enlace de activación no es válido.")
+        usuario = self.repo.buscar_por_id("Cliente", datos["sub"])
+        if usuario is None or not usuario.activo:
+            raise ValidacionError("El enlace de activación no es válido. Comunícate con el taller.")
+        if usuario.tiene_cuenta:
+            raise ConflictError("Tu cuenta ya está activa. Inicia sesión con tu correo y contraseña.")
+        # Solo sirve el enlace de la última invitación
+        if usuario.fecha_invitacion is None or int(usuario.fecha_invitacion.timestamp()) != datos.get("inv"):
+            raise ValidacionError("Este enlace fue reemplazado por uno más reciente. Usa el último correo que te enviamos.")
+        return usuario
+
+    def info_invitacion(self, token: str) -> Usuario:
+        """Datos que se muestran en la pantalla "Activar cuenta"."""
+        return self._usuario_de_invitacion(token)
+
+    def activar_cuenta(self, token: str, contrasena: str, confirmar: str, acepta_datos: bool) -> Sesion:
+        """El cliente crea su contraseña desde el enlace del correo y entra de una vez."""
+        usuario = self._usuario_de_invitacion(token)
+        if not acepta_datos:
+            raise ValidacionError("Debes aceptar la política de tratamiento de datos para activar tu cuenta.")
+        self._validar_contrasena(contrasena)
+        if contrasena != confirmar:
+            raise ValidacionError("Las contraseñas no coinciden.")
+        self.repo.activar_cliente(usuario.id, self.hasher.hashear(contrasena))
+        activo = self.repo.buscar_por_id("Cliente", usuario.id)
+        return Sesion(self._token_sesion(activo), activo)
 
     # ================================================================ Recuperación (PBI-18/19/20)
     def solicitar_codigo(self, correo: str) -> None:

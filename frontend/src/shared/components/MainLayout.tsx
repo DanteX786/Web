@@ -6,7 +6,7 @@ import {
   Factory, Scissors, Wrench, Users, FileText,
   SlidersHorizontal, Key, Truck, ShoppingBag, ClipboardList,
   ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
-  Sun, Moon, Bell, LogOut, User, Send, UserCheck, ListChecks, CalendarCheck
+  Sun, Moon, Bell, LogOut, User, Send, UserCheck, ListChecks, CalendarCheck, UsersRound
 } from "lucide-react";
 
 import logo_blanco from '../../../public/images/logo blanco.png';
@@ -305,6 +305,7 @@ export default function MainLayout({
 
           {/* PROCESO DE CONFIGURACIÓN (al final) */}
           {renderAccordionGroup("configuracion", "Configuración", SlidersHorizontal, [
+            { id: "usuarios", label: "Usuarios", icon: UsersRound },
             { id: "roles", label: "Roles y Permisos", icon: Key }
           ])}
 

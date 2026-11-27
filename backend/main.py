@@ -31,6 +31,7 @@ from app.presentation.api.tipo_pieza_router import router as tipo_pieza_router
 # ---- Routers de (tu nombre) ----
 from app.presentation.api.rol_router import router as rol_router
 from app.presentation.api.empleado_router import router as empleado_router
+from app.presentation.api.usuario_router import router as usuario_router
 from app.presentation.api.insumo_router import router as insumo_router
 
 # ---- Routers de Emerson ----
@@ -151,6 +152,7 @@ app.include_router(tipo_pieza_router, dependencies=_p([P_PARAMETROS, P_PRODUCCIO
 # Roles, empleados e insumos (Axebiel)
 app.include_router(rol_router, dependencies=_p([P_ROLES, P_USUARIOS], [P_ROLES]))
 app.include_router(empleado_router, dependencies=_p([P_USUARIOS, P_PRODUCCION], [P_USUARIOS]))
+app.include_router(usuario_router, dependencies=_p([P_USUARIOS], [P_USUARIOS]))  # tabla maestra (solo lectura)
 app.include_router(insumo_router, dependencies=_p([P_INSUMOS, P_COMPRAS, P_PRODUCCION], [P_INSUMOS]))
 
 # Clientes, categorías de insumo y compras (Emerson)

@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     CODIGO_SEGUNDOS_REENVIO: int = 15      # espera para poder reenviar
     CODIGO_MAX_INTENTOS: int = 5
 
+    # ---------- Invitación a clientes registrados por el taller ----------
+    HORAS_INVITACION_CLIENTE: int = 72     # el enlace para activar la cuenta vence a las 72 horas
+
     # ---------- Correo (Gmail con contraseña de aplicación) ----------
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PUERTO: int = 587

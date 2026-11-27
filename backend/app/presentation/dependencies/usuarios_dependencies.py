@@ -4,10 +4,12 @@ from sqlalchemy.orm import Session
 from app.application.cliente_service import ClienteService
 from app.application.empleado_service import EmpleadoService
 from app.application.rol_service import RolService
+from app.application.usuario_service import UsuarioService
 from app.infrastructure.database.database import get_db
 from app.infrastructure.repositories.cliente_repository import ClienteRepository
 from app.infrastructure.repositories.empleado_repository import EmpleadoRepository
 from app.infrastructure.repositories.rol_repository import RolRepository
+from app.infrastructure.repositories.usuario_repository import UsuarioRepository
 from app.presentation.dependencies.auth_dependencies import _correo, _verificador
 
 
@@ -21,3 +23,7 @@ def get_empleado_service(db: Session = Depends(get_db)) -> EmpleadoService:
 
 def get_cliente_service(db: Session = Depends(get_db)) -> ClienteService:
     return ClienteService(ClienteRepository(db))
+
+
+def get_usuario_service(db: Session = Depends(get_db)) -> UsuarioService:
+    return UsuarioService(UsuarioRepository(db))

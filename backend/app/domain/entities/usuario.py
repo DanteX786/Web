@@ -12,7 +12,7 @@ class Usuario:
     tipo: TipoUsuario
     nombre: str
     correo: str
-    contrasena_hash: str
+    contrasena_hash: str | None          # None = cliente creado por el taller que aún no activa su cuenta
     estado: str
     id_rol: str | None
     rol: str | None
@@ -24,6 +24,10 @@ class Usuario:
     nombre_contacto: str | None = None    # persona a contactar cuando el cliente es empresa (NIT)
     tipo_telefono: str | None = None      # Empresarial | Personal (solo clientes)
     debe_cambiar_contrasena: bool = False # empleado con contraseña temporal: debe crear la suya
+    # De la tabla maestra tb_usuarios (script 21)
+    id_usuario: str | None = None
+    estado_cuenta: str = "Activa"         # Sin acceso | Invitado | Activa
+    fecha_invitacion: datetime | None = None
     permisos: list[str] = field(default_factory=list)
 
     @property
@@ -33,6 +37,11 @@ class Usuario:
     @property
     def activo(self) -> bool:
         return self.estado == "Activo"
+
+    @property
+    def tiene_cuenta(self) -> bool:
+        """False si es un cliente que el taller registró y todavía no activa su cuenta."""
+        return bool(self.contrasena_hash)
 
 
 @dataclass

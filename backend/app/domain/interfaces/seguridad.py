@@ -30,6 +30,10 @@ class IEmailService(ABC):
     def enviar_acceso_empleado(self, correo: str, nombre: str, contrasena_temporal: str, es_nuevo: bool) -> None:
         """Envía al empleado su contraseña temporal. Lanza ServicioNoDisponibleError si no se pudo."""
 
+    @abstractmethod
+    def enviar_invitacion_cliente(self, correo: str, nombre: str, enlace: str, horas: int) -> None:
+        """Invita a un cliente registrado por el taller a activar su cuenta (enlace de un solo uso)."""
+
 
 class IVerificadorCorreo(ABC):
     @abstractmethod

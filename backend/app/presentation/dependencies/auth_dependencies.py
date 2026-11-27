@@ -27,6 +27,8 @@ _config = ConfigAuth(
     minutos_codigo=settings.CODIGO_MINUTOS_VIGENCIA,
     segundos_reenvio=settings.CODIGO_SEGUNDOS_REENVIO,
     max_intentos=settings.CODIGO_MAX_INTENTOS,
+    frontend_url=settings.FRONTEND_URL,
+    horas_invitacion=settings.HORAS_INVITACION_CLIENTE,
 )
 
 
